@@ -1,10 +1,74 @@
-{% extends "base.html" %}
-{% block content %}
-<div class="login-box">
-  <h2>Entrar</h2>
-  <form method="post">{% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">Login</button>
-  </form>
-</div>
-{% endblock %}
+<!doctype html>
+<html lang="pt-br">
+<head>
+  {% load static %}
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Entrar — ARPIA</title>
+
+  <!-- main theme -->
+  <link rel="stylesheet" href="{% static 'css/dark.css' %}">
+
+  <style>
+    /* ajustes específicos do login (complementares ao dark.css) */
+    body.arpia-dark { min-height:100vh; display:flex; align-items:center; justify-content:center; }
+    .login-wrap{ width:100%; max-width:980px; padding:2rem; box-sizing:border-box; display:flex; align-items:center; justify-content:center; }
+    .login-card{
+      width:420px; max-width:92vw; padding:2rem; border-radius:12px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.03));
+      border:1px solid rgba(255,255,255,0.04); box-shadow: 0 12px 40px rgba(2,6,23,0.6);
+    }
+    .login-logo { text-align:center; margin-bottom:12px; }
+    .login-logo img{ width:120px; height:auto; display:inline-block; }
+    h1.login-title{ margin:0 0 1rem; font-size:1.6rem; color:var(--text); }
+    label{ display:block; font-size:.88rem; color:var(--muted); margin:.5rem 0 .25rem; }
+    input[type="text"], input[type="password"]{
+      width:100%; padding:.6rem .8rem; border-radius:6px; border:1px solid rgba(255,255,255,0.04);
+      background: rgba(255,255,255,0.02); color:var(--text); box-sizing:border-box;
+    }
+    .actions{ margin-top:1rem; display:flex; gap:.5rem; align-items:center; }
+    .btn-login{ background:linear-gradient(90deg,#4fd1c5,var(--accent)); color:#021023; border:none; padding:.6rem .9rem; border-radius:8px; font-weight:700; cursor:pointer; }
+    .card-foot{ margin-top:1rem; font-size:.85rem; color:var(--muted) }
+  </style>
+</head>
+<body class="arpia-dark">
+  <div class="login-wrap">
+    <div class="login-card" role="main" aria-labelledby="loginTitle">
+      <div class="login-logo">
+        <img src="{% static 'img/logo.png' %}" alt="ARPIA logo">
+        <h1 id="loginTitle" class="login-title">ARPIA</h1>
+      </div>
+
+      <h1 id="loginTitle" class="login-title">Entrar</h1>
+
+      <form method="post" action="{% url 'login' %}">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+          <div class="errors" style="color:#ff8b8b;margin-bottom:.5rem">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <label for="{{ form.username.id_for_label }}">Usuário</label>
+        {{ form.username }}
+
+        <label for="{{ form.password.id_for_label }}">Senha</label>
+        {{ form.password }}
+
+        <div class="actions">
+          <button type="submit" class="btn-login">Entrar</button>
+          <div style="margin-left:.6rem" class="card-foot">
+            <a href="{% url 'password_reset' %}" style="color:var(--accent);text-decoration:underline">Esqueceu a senha?</a>
+          </div>
+        </div>
+
+        {# link de signup só se existir a URL #}
+        {% url 'signup' as signup_url %}
+        {% if signup_url %}
+        <div class="card-foot">
+          Ainda não tem conta? <a href="{{ signup_url }}" style="color:var(--accent);text-decoration:underline">Criar conta</a>
+        </div>
+        {% endif %}
+      </form>
+    </div>
+  </div>
+</body>
+</html>

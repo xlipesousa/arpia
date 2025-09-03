@@ -4,6 +4,15 @@ djangorestframework>=3.14
 python-dotenv>=1.0
 psycopg2-binary>=2.9
 prometheus-client>=0.16
+
+# Imagens, static serving and template helpers
+Pillow>=10.0
+whitenoise>=6.5
+django-widget-tweaks>=1.4.12
+django-crispy-forms>=2.1
+crispy-bootstrap5>=0.7
+
+# Testes
 pytest>=7.0
 pytest-django>=4.5
 

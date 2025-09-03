@@ -10,7 +10,12 @@
 <body class="arpia-dark">
 
   <aside class="sidebar collapsed" id="sidebar" aria-label="Menu lateral">
-    <div class="brand"><span class="brand-icon">ARPIA</span></div>
+    <div class="brand">
+      <!-- substituir texto pelo logo pequeno -->
+      <a href="{% url 'dashboard' %}" style="display:inline-flex;align-items:center;gap:.5rem;text-decoration:none;">
+        <img src="{% static 'img/logo-40x40.png' %}" alt="ARPIA" style="width:40px;height:40px;display:block;">
+      </a>
+    </div>
 
     <nav class="menu" role="navigation">
       <a href="{% url 'dashboard' %}" class="menu-item" title="Home">
@@ -18,8 +23,10 @@
         <span class="label">Home</span>
       </a>
 
+      <!-- menu-section removida -->
+
       <a href="{% url 'projects_list' %}" class="menu-item" title="Projetos">
-        <img src="{% static 'icons/view-grid.svg' %}" class="icon" alt="Projetos">
+        <img src="{% static 'icons/squares-2x2.svg' %}" class="icon" alt="Projetos">
         <span class="label">Projetos</span>
       </a>
 

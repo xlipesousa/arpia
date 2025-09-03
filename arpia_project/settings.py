@@ -165,3 +165,10 @@ REST_FRAMEWORK = {
 
 # templates dir já deve existir. garantir:
 TEMPLATES[0]["DIRS"] = [BASE_DIR / "templates"]
+
+# URL do login (usada por @login_required e redirecionamentos)
+LOGIN_URL = "/login/"
+LOGIN_REDIRECT_URL = "/"
+
+# redirecionar logout para a tela de login do ARPIA
+LOGOUT_REDIRECT_URL = "/login/"

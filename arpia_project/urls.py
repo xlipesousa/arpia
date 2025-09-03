@@ -16,14 +16,13 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-from rest_framework.authtoken.views import obtain_auth_token
+from django.contrib.auth import views as auth_views
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    # Token auth endpoint (POST username/password -> {"token": "..."})
-    path("api-token-auth/", obtain_auth_token, name="api-token-auth"),
-    path("api/", include("api.urls")),
-    # session auth (login/logout) para UI
+    path("login/", auth_views.LoginView.as_view(template_name="registration/login.html"), name="login"),
     path("accounts/", include("django.contrib.auth.urls")),
+
+    # delega o root para as URLs da app (contém projects_list, scripts_list, ...)
     path("", include("arpia_core.urls")),
 ]
