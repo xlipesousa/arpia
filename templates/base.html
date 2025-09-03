@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  {% load static %}
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>{% block title %}ARPIA{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'css/dark.css' %}">
+</head>
+<body class="arpia-dark">
+  <aside class="sidebar collapsed" id="sidebar">
+    <div class="brand">ARPIA</div>
+    <nav class="menu">
+      <a href="{% url 'dashboard' %}" class="menu-item">Home</a>
+      <a href="#" class="menu-item">Vulnerabilidades</a>
+      <a href="#" class="menu-item">Test Cases</a>
+      <a href="#" class="menu-item">Reporting</a>
+    </nav>
+    <button id="toggleSidebar" class="toggle-btn">☰</button>
+  </aside>
+
+  <header class="topbar">
+    <div class="top-left">
+      <button id="hamburger" class="hamburger">☰</button>
+      <span class="app-title">Acme Corp. Portal</span>
+    </div>
+    <div class="top-right">
+      {% if user.is_authenticated %}
+        <span class="user">Olá, {{ user.username }}</span>
+        <a href="{% url 'logout' %}" class="link">Sair</a>
+      {% else %}
+        <a href="{% url 'login' %}" class="link">Login</a>
+      {% endif %}
+    </div>
+  </header>
+
+  <main class="main">
+    {% block content %}{% endblock %}
+  </main>
+
+  <script>
+  document.addEventListener('DOMContentLoaded', function(){
+    const sb = document.getElementById('sidebar');
+    const btn = document.getElementById('toggleSidebar');
+    const ham = document.getElementById('hamburger');
+    function toggle(){ sb.classList.toggle('collapsed'); }
+    if(btn) btn.addEventListener('click', toggle);
+    if(ham) ham.addEventListener('click', toggle);
+  });
+  </script>
+</body>
+</html>
