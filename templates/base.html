@@ -8,33 +8,95 @@
   <link rel="stylesheet" href="{% static 'css/dark.css' %}">
 </head>
 <body class="arpia-dark">
-  <aside class="sidebar collapsed" id="sidebar">
-    <div class="brand">ARPIA</div>
-    <nav class="menu">
-      <a href="{% url 'dashboard' %}" class="menu-item">Home</a>
-      <a href="#" class="menu-item">Vulnerabilidades</a>
-      <a href="#" class="menu-item">Test Cases</a>
-      <a href="#" class="menu-item">Reporting</a>
+  <!-- SVG sprite -->
+  <svg style="display:none" aria-hidden="true">
+    <symbol id="icon-home" viewBox="0 0 24 24"><path fill="currentColor" d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></symbol>
+    <symbol id="icon-projects" viewBox="0 0 24 24"><path fill="currentColor" d="M3 13h8V3H3v10zm0 8h8v-6H3v6zM13 21h8V11h-8v10zM13 3v6h8V3h-8z"/></symbol>
+    <symbol id="icon-scripts" viewBox="0 0 24 24"><path fill="currentColor" d="M9 7h6v2H9V7zm0 4h10v2H9v-2zM4 19h16v-2H4v2zM4 5v2h12V5H4z"/></symbol>
+    <symbol id="icon-tools" viewBox="0 0 24 24"><path fill="currentColor" d="M22 12l-4-4-2 2 1 1-3 3-4-4-6 6 1 1 6-6 4 4 4-4 1 1z"/></symbol>
+    <symbol id="icon-reports" viewBox="0 0 24 24"><path fill="currentColor" d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm4 0h14v-2H7v2zM7 7v2h14V7H7zM7 11h14V9H7v2z"/></symbol>
+    <symbol id="icon-logs" viewBox="0 0 24 24"><path fill="currentColor" d="M3 3v18h18V3H3zm16 16H5V5h14v14zM7 7h10v2H7zM7 11h10v2H7z"/></symbol>
+    <symbol id="icon-settings" viewBox="0 0 24 24"><path fill="currentColor" d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.026 7.026 0 0 0-1.63-.94L14.5 2.5a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 0-.5.5l-.38 2.46c-.58.22-1.12.52-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.71 8.88a.5.5 0 0 0 .12.64l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94L2.83 15.6a.5.5 0 0 0-.12.64l1.92 3.32c.15.26.46.36.72.26l2.39-.96c.5.42 1.05.72 1.63.94l.38 2.46c.05.28.28.5.56.5h4c.28 0 .51-.22.56-.5l.38-2.46c.58-.22 1.12-.52 1.63-.94l2.39.96c.26.1.57 0 .72-.26l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z"/></symbol>
+
+  </svg>
+
+  <aside class="sidebar collapsed" id="sidebar" aria-label="Menu lateral">
+    <div class="brand">
+      <span class="brand-icon">ARPIA</span>
+    </div>
+
+    <nav class="menu" role="navigation" aria-label="Menu principal">
+      <a href="{% url 'dashboard' %}" class="menu-item" title="Home">
+        <svg class="i"><use xlink:href="#icon-home"></use></svg>
+        <span class="label">Home</span>
+      </a>
+
+      <div class="menu-section">Gerenciamento</div>
+
+      <a href="{% url 'projects_list' %}" class="menu-item" title="Projetos">
+        <svg class="i"><use xlink:href="#icon-projects"></use></svg>
+        <span class="label">Projetos</span>
+      </a>
+
+      <a href="{% url 'scripts_list' %}" class="menu-item" title="Scripts">
+        <svg class="i"><use xlink:href="#icon-scripts"></use></svg>
+        <span class="label">Scripts</span>
+      </a>
+
+      <a href="{% url 'tools_list' %}" class="menu-item" title="Ferramentas">
+        <svg class="i"><use xlink:href="#icon-tools"></use></svg>
+        <span class="label">Ferramentas</span>
+      </a>
+
+      <a href="{% url 'reports_list' %}" class="menu-item" title="Relatórios">
+        <svg class="i"><use xlink:href="#icon-reports"></use></svg>
+        <span class="label">Relatórios</span>
+      </a>
+
+      <a href="{% url 'logs_list' %}" class="menu-item" title="Logs">
+        <svg class="i"><use xlink:href="#icon-logs"></use></svg>
+        <span class="label">Logs</span>
+      </a>
+
     </nav>
-    <button id="toggleSidebar" class="toggle-btn">☰</button>
+
+    <div class="sidebar-footer">
+      <a href="{% url 'admin:index' %}" class="menu-item small" title="Administração">
+        <svg class="i"><use xlink:href="#icon-settings"></use></svg>
+        <span class="label">Admin</span>
+      </a>
+    </div>
+
+    <button id="toggleSidebar" class="toggle-btn" aria-label="Expandir menu">☰</button>
   </aside>
 
   <header class="topbar">
     <div class="top-left">
-      <button id="hamburger" class="hamburger">☰</button>
-      <span class="app-title">Acme Corp. Portal</span>
+      <button id="hamburger" class="hamburger" aria-label="abrir menu">☰</button>
+      <div class="module-switch">
+        <a href="#" class="module active">Scan</a>
+        <a href="#" class="module">Vuln</a>
+        <a href="#" class="module">Hunt</a>
+        <a href="#" class="module">Pentest</a>
+      </div>
     </div>
+
     <div class="top-right">
-      {% if user.is_authenticated %}
-        <span class="user">Olá, {{ user.username }}</span>
-        <a href="{% url 'logout' %}" class="link">Sair</a>
-      {% else %}
-        <a href="{% url 'login' %}" class="link">Login</a>
-      {% endif %}
+      <div class="search">
+        <input placeholder="Buscar..." aria-label="buscar"/>
+      </div>
+      <div class="user-area">
+        {% if user.is_authenticated %}
+          <span class="user">Olá, {{ user.username }}</span>
+          <a href="{% url 'logout' %}" class="link">Sair</a>
+        {% else %}
+          <a href="{% url 'login' %}" class="link">Login</a>
+        {% endif %}
+      </div>
     </div>
   </header>
 
-  <main class="main">
+  <main class="main" id="main">
     {% block content %}{% endblock %}
   </main>
 
@@ -43,7 +105,7 @@
     const sb = document.getElementById('sidebar');
     const btn = document.getElementById('toggleSidebar');
     const ham = document.getElementById('hamburger');
-    function toggle(){ sb.classList.toggle('collapsed'); }
+    function toggle(){ sb.classList.toggle('collapsed'); document.getElementById('main').classList.toggle('sidebar-expanded'); }
     if(btn) btn.addEventListener('click', toggle);
     if(ham) ham.addEventListener('click', toggle);
   });

@@ -1,6 +1,12 @@
 from django.urls import path
-from django.views.generic import RedirectView
-from .views import DashboardView
+from .views import (
+    DashboardView,
+    ProjectsListView,
+    ScriptsListView,
+    ToolsListView,
+    ReportsListView,
+    LogsListView,
+)
 from rest_framework.views import APIView
 from django.http import JsonResponse
 from rest_framework import status
@@ -14,7 +20,11 @@ class HealthCheck(APIView):
 
 
 urlpatterns = [
-    path("", RedirectView.as_view(url="/api/", permanent=False)),
+    path("", DashboardView.as_view(), name="dashboard"),
     path("health/", HealthCheck.as_view(), name="arpia-core-health"),
-    path("dashboard/", DashboardView.as_view(), name="dashboard"),
+    path("projects/", ProjectsListView.as_view(), name="projects_list"),
+    path("scripts/", ScriptsListView.as_view(), name="scripts_list"),
+    path("tools/", ToolsListView.as_view(), name="tools_list"),
+    path("reports/", ReportsListView.as_view(), name="reports_list"),
+    path("logs/", LogsListView.as_view(), name="logs_list"),
 ]
