@@ -8,62 +8,50 @@
   <link rel="stylesheet" href="{% static 'css/dark.css' %}">
 </head>
 <body class="arpia-dark">
-  <!-- SVG sprite -->
+  <!-- Modern SVG sprite (Heroicons-like minimal set) -->
   <svg style="display:none" aria-hidden="true">
-    <symbol id="icon-home" viewBox="0 0 24 24"><path fill="currentColor" d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></symbol>
-    <symbol id="icon-projects" viewBox="0 0 24 24"><path fill="currentColor" d="M3 13h8V3H3v10zm0 8h8v-6H3v6zM13 21h8V11h-8v10zM13 3v6h8V3h-8z"/></symbol>
-    <symbol id="icon-scripts" viewBox="0 0 24 24"><path fill="currentColor" d="M9 7h6v2H9V7zm0 4h10v2H9v-2zM4 19h16v-2H4v2zM4 5v2h12V5H4z"/></symbol>
-    <symbol id="icon-tools" viewBox="0 0 24 24"><path fill="currentColor" d="M22 12l-4-4-2 2 1 1-3 3-4-4-6 6 1 1 6-6 4 4 4-4 1 1z"/></symbol>
-    <symbol id="icon-reports" viewBox="0 0 24 24"><path fill="currentColor" d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm4 0h14v-2H7v2zM7 7v2h14V7H7zM7 11h14V9H7v2z"/></symbol>
-    <symbol id="icon-logs" viewBox="0 0 24 24"><path fill="currentColor" d="M3 3v18h18V3H3zm16 16H5V5h14v14zM7 7h10v2H7zM7 11h10v2H7z"/></symbol>
-    <symbol id="icon-settings" viewBox="0 0 24 24"><path fill="currentColor" d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.026 7.026 0 0 0-1.63-.94L14.5 2.5a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 0-.5.5l-.38 2.46c-.58.22-1.12.52-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.71 8.88a.5.5 0 0 0 .12.64l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94L2.83 15.6a.5.5 0 0 0-.12.64l1.92 3.32c.15.26.46.36.72.26l2.39-.96c.5.42 1.05.72 1.63.94l.38 2.46c.05.28.28.5.56.5h4c.28 0 .51-.22.56-.5l.38-2.46c.58-.22 1.12-.52 1.63-.94l2.39.96c.26.1.57 0 .72-.26l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z"/></symbol>
-
+    <symbol id="i-home" viewBox="0 0 24 24"><path fill="currentColor" d="M3 11.5 12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1V11.5z"/></symbol>
+    <symbol id="i-projects" viewBox="0 0 24 24"><path fill="currentColor" d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10-8h8V3h-8v10zm0 8h8v-6h-8v6z"/></symbol>
+    <symbol id="i-scripts" viewBox="0 0 24 24"><path fill="currentColor" d="M4 4h16v2H4V4zm0 6h12v2H4v-2zm0 6h16v2H4v-2z"/></symbol>
+    <symbol id="i-tools" viewBox="0 0 24 24"><path fill="currentColor" d="M21 7 17 3l-2 2 4 4 2-2zM3 21l6-6 3 3-6 6H3v-3z"/></symbol>
+    <symbol id="i-reports" viewBox="0 0 24 24"><path fill="currentColor" d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zM7 7h14v2H7V7zM7 11h14v2H7v-2z"/></symbol>
+    <symbol id="i-logs" viewBox="0 0 24 24"><path fill="currentColor" d="M3 3v18h18V3H3zm2 4h14v2H5V7zm0 4h10v2H5v-2z"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path fill="currentColor" d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM19.4 15a7.9 7.9 0 0 0 .1-1 7.9 7.9 0 0 0-.1-1l2.1-1.6-2-3.4-2.4.7a8 8 0 0 0-1.8-1L14 3h-4l-.6 2.7a8 8 0 0 0-1.8 1L4.2 6.7 2.2 10l2.1 1.6a7.9 7.9 0 0 0 0 2l-2.1 1.6 2 3.4 2.4-.7a8 8 0 0 0 1.8 1L10 21h4l.6-2.7a8 8 0 0 0 1.8-1l2.4.7 2-3.4-2.6-1.6z"/></symbol>
   </svg>
 
   <aside class="sidebar collapsed" id="sidebar" aria-label="Menu lateral">
-    <div class="brand">
-      <span class="brand-icon">ARPIA</span>
-    </div>
+    <div class="brand"><span class="brand-icon">ARPIA</span></div>
 
-    <nav class="menu" role="navigation" aria-label="Menu principal">
+    <nav class="menu" role="navigation">
       <a href="{% url 'dashboard' %}" class="menu-item" title="Home">
-        <svg class="i"><use xlink:href="#icon-home"></use></svg>
-        <span class="label">Home</span>
+        <svg class="i"><use xlink:href="#i-home"></use></svg><span class="label">Home</span>
       </a>
 
-      <div class="menu-section">Gerenciamento</div>
-
       <a href="{% url 'projects_list' %}" class="menu-item" title="Projetos">
-        <svg class="i"><use xlink:href="#icon-projects"></use></svg>
-        <span class="label">Projetos</span>
+        <svg class="i"><use xlink:href="#i-projects"></use></svg><span class="label">Projetos</span>
       </a>
 
       <a href="{% url 'scripts_list' %}" class="menu-item" title="Scripts">
-        <svg class="i"><use xlink:href="#icon-scripts"></use></svg>
-        <span class="label">Scripts</span>
+        <svg class="i"><use xlink:href="#i-scripts"></use></svg><span class="label">Scripts</span>
       </a>
 
       <a href="{% url 'tools_list' %}" class="menu-item" title="Ferramentas">
-        <svg class="i"><use xlink:href="#icon-tools"></use></svg>
-        <span class="label">Ferramentas</span>
+        <svg class="i"><use xlink:href="#i-tools"></use></svg><span class="label">Ferramentas</span>
       </a>
 
       <a href="{% url 'reports_list' %}" class="menu-item" title="Relatórios">
-        <svg class="i"><use xlink:href="#icon-reports"></use></svg>
-        <span class="label">Relatórios</span>
+        <svg class="i"><use xlink:href="#i-reports"></use></svg><span class="label">Relatórios</span>
       </a>
 
       <a href="{% url 'logs_list' %}" class="menu-item" title="Logs">
-        <svg class="i"><use xlink:href="#icon-logs"></use></svg>
-        <span class="label">Logs</span>
+        <svg class="i"><use xlink:href="#i-logs"></use></svg><span class="label">Logs</span>
       </a>
 
     </nav>
 
     <div class="sidebar-footer">
-      <a href="{% url 'admin:index' %}" class="menu-item small" title="Administração">
-        <svg class="i"><use xlink:href="#icon-settings"></use></svg>
-        <span class="label">Admin</span>
+      <a href="{% url 'admin:index' %}" class="menu-item small" title="Admin">
+        <svg class="i"><use xlink:href="#i-settings"></use></svg><span class="label">Admin</span>
       </a>
     </div>
 
@@ -82,9 +70,7 @@
     </div>
 
     <div class="top-right">
-      <div class="search">
-        <input placeholder="Buscar..." aria-label="buscar"/>
-      </div>
+      <div class="search"><input placeholder="Buscar..." aria-label="buscar"/></div>
       <div class="user-area">
         {% if user.is_authenticated %}
           <span class="user">Olá, {{ user.username }}</span>
@@ -100,6 +86,9 @@
     {% block content %}{% endblock %}
   </main>
 
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="{% static 'js/dashboard.js' %}"></script>
   <script>
   document.addEventListener('DOMContentLoaded', function(){
     const sb = document.getElementById('sidebar');

@@ -1,31 +1,80 @@
 {% extends "base.html" %}
 {% block title %}Dashboard - ARPIA{% endblock %}
 {% block content %}
-<div class="dashboard">
-  <section class="overview">
-    <div class="card">
-      <h3>Overview</h3>
-      <p>Dashboard principal — area de widgets (gráficos, KPIs)</p>
-    </div>
-    <div class="card">
-      <h3>Priority</h3>
-      <p>Gráfico placeholder</p>
-    </div>
-    <div class="card">
-      <h3>Test Cases</h3>
-      <p>Contagem e status</p>
-    </div>
-  </section>
+<div class="dashboard-frame">
 
-  <aside>
-    <div class="card">
-      <h4>Project</h4>
-      <p>Selecionado: —</p>
+  <!-- Top KPI row -->
+  <div class="kpi-row">
+    <div class="kpi card">
+      <div class="kpi-label">Total Vulnerabilities</div>
+      <div class="kpi-value" id="kpi-total">342</div>
     </div>
-    <div class="card">
-      <h4>Retesting Rounds</h4>
-      <p>—</p>
+    <div class="kpi card">
+      <div class="kpi-label">High Severity</div>
+      <div class="kpi-value" id="kpi-high">78</div>
     </div>
-  </aside>
+    <div class="kpi card">
+      <div class="kpi-label">Medium Severity</div>
+      <div class="kpi-value" id="kpi-medium">190</div>
+    </div>
+    <div class="kpi card">
+      <div class="kpi-label">Low Severity</div>
+      <div class="kpi-value" id="kpi-low">74</div>
+    </div>
+  </div>
+
+  <!-- Charts + side panels -->
+  <div class="content-grid">
+    <section class="main-charts">
+      <div class="card chart-card">
+        <h4>Vulnerabilities by Severity</h4>
+        <canvas id="sevBar" height="140"></canvas>
+      </div>
+
+      <div class="card chart-card">
+        <h4>Vulnerabilities by Type</h4>
+        <canvas id="typeDonut" height="140"></canvas>
+      </div>
+
+      <div class="card chart-card wide">
+        <h4>Vulnerability Trends</h4>
+        <canvas id="trendLine" height="90"></canvas>
+      </div>
+    </section>
+
+    <aside class="side-panels">
+      <div class="card">
+        <h4>Top Vulnerabilities</h4>
+        <table class="table-compact" id="topVulns">
+          <thead><tr><th>Vulnerability</th><th>Severity</th><th>Count</th></tr></thead>
+          <tbody>
+            <tr><td>SQL Injection</td><td class="sev high">High</td><td>12</td></tr>
+            <tr><td>Cross-Site Scripting</td><td class="sev medium">Medium</td><td>10</td></tr>
+            <tr><td>Buffer Overflow</td><td class="sev high">High</td><td>8</td></tr>
+            <tr><td>Directory Traversal</td><td class="sev medium">Medium</td><td>7</td></tr>
+            <tr><td>Weak Password</td><td class="sev low">Low</td><td>3</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h4>Recent Scans</h4>
+        <ul class="recent-scans" id="recentScans">
+          <li>Network Scan — 2025-08-30</li>
+          <li>Web App Scan — 2025-08-28</li>
+          <li>Infrastructure Scan — 2025-08-24</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>Project Summary</h4>
+        <ul class="quick-stats">
+          <li>Projects: <strong id="stat-projects">7</strong></li>
+          <li>Active Scans: <strong id="stat-scans">3</strong></li>
+          <li>Open Findings: <strong id="stat-open">31</strong></li>
+        </ul>
+      </div>
+    </aside>
+  </div>
 </div>
 {% endblock %}
