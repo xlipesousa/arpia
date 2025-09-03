@@ -82,6 +82,13 @@ body.arpia-dark{
 .quick-stats{ list-style:none; padding:0; margin:0; color:var(--muted); }
 .quick-stats li{ padding:.35rem 0; }
 
+/* adicione estas regras (append) */
+.menu-item .icon { width:20px; height:20px; display:inline-block; filter: invert(1) hue-rotate(180deg) saturate(0.6); }
+.menu-item .label { margin-left:.6rem; vertical-align:middle; }
+.menu-item img.icon { flex: 0 0 20px; }
+.sidebar:not(.collapsed) .menu-item .label { display:inline-block; }
+.sidebar.collapsed .menu-item .label { display:none; }
+
 /* responsive */
 @media (max-width:900px){
   .sidebar:not(.collapsed){ width:64px; }

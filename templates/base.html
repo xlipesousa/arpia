@@ -8,50 +8,46 @@
   <link rel="stylesheet" href="{% static 'css/dark.css' %}">
 </head>
 <body class="arpia-dark">
-  <!-- Modern SVG sprite (Heroicons-like minimal set) -->
-  <svg style="display:none" aria-hidden="true">
-    <symbol id="i-home" viewBox="0 0 24 24"><path fill="currentColor" d="M3 11.5 12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1V11.5z"/></symbol>
-    <symbol id="i-projects" viewBox="0 0 24 24"><path fill="currentColor" d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10-8h8V3h-8v10zm0 8h8v-6h-8v6z"/></symbol>
-    <symbol id="i-scripts" viewBox="0 0 24 24"><path fill="currentColor" d="M4 4h16v2H4V4zm0 6h12v2H4v-2zm0 6h16v2H4v-2z"/></symbol>
-    <symbol id="i-tools" viewBox="0 0 24 24"><path fill="currentColor" d="M21 7 17 3l-2 2 4 4 2-2zM3 21l6-6 3 3-6 6H3v-3z"/></symbol>
-    <symbol id="i-reports" viewBox="0 0 24 24"><path fill="currentColor" d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zM7 7h14v2H7V7zM7 11h14v2H7v-2z"/></symbol>
-    <symbol id="i-logs" viewBox="0 0 24 24"><path fill="currentColor" d="M3 3v18h18V3H3zm2 4h14v2H5V7zm0 4h10v2H5v-2z"/></symbol>
-    <symbol id="i-settings" viewBox="0 0 24 24"><path fill="currentColor" d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM19.4 15a7.9 7.9 0 0 0 .1-1 7.9 7.9 0 0 0-.1-1l2.1-1.6-2-3.4-2.4.7a8 8 0 0 0-1.8-1L14 3h-4l-.6 2.7a8 8 0 0 0-1.8 1L4.2 6.7 2.2 10l2.1 1.6a7.9 7.9 0 0 0 0 2l-2.1 1.6 2 3.4 2.4-.7a8 8 0 0 0 1.8 1L10 21h4l.6-2.7a8 8 0 0 0 1.8-1l2.4.7 2-3.4-2.6-1.6z"/></symbol>
-  </svg>
 
   <aside class="sidebar collapsed" id="sidebar" aria-label="Menu lateral">
     <div class="brand"><span class="brand-icon">ARPIA</span></div>
 
     <nav class="menu" role="navigation">
       <a href="{% url 'dashboard' %}" class="menu-item" title="Home">
-        <svg class="i"><use xlink:href="#i-home"></use></svg><span class="label">Home</span>
+        <img src="{% static 'icons/home.svg' %}" class="icon" alt="Home">
+        <span class="label">Home</span>
       </a>
 
       <a href="{% url 'projects_list' %}" class="menu-item" title="Projetos">
-        <svg class="i"><use xlink:href="#i-projects"></use></svg><span class="label">Projetos</span>
+        <img src="{% static 'icons/view-grid.svg' %}" class="icon" alt="Projetos">
+        <span class="label">Projetos</span>
       </a>
 
       <a href="{% url 'scripts_list' %}" class="menu-item" title="Scripts">
-        <svg class="i"><use xlink:href="#i-scripts"></use></svg><span class="label">Scripts</span>
+        <img src="{% static 'icons/code-bracket.svg' %}" class="icon" alt="Scripts">
+        <span class="label">Scripts</span>
       </a>
 
       <a href="{% url 'tools_list' %}" class="menu-item" title="Ferramentas">
-        <svg class="i"><use xlink:href="#i-tools"></use></svg><span class="label">Ferramentas</span>
+        <img src="{% static 'icons/wrench-screwdriver.svg' %}" class="icon" alt="Ferramentas">
+        <span class="label">Ferramentas</span>
       </a>
 
       <a href="{% url 'reports_list' %}" class="menu-item" title="Relatórios">
-        <svg class="i"><use xlink:href="#i-reports"></use></svg><span class="label">Relatórios</span>
+        <img src="{% static 'icons/chart-pie.svg' %}" class="icon" alt="Relatórios">
+        <span class="label">Relatórios</span>
       </a>
 
       <a href="{% url 'logs_list' %}" class="menu-item" title="Logs">
-        <svg class="i"><use xlink:href="#i-logs"></use></svg><span class="label">Logs</span>
+        <img src="{% static 'icons/document-text.svg' %}" class="icon" alt="Logs">
+        <span class="label">Logs</span>
       </a>
-
     </nav>
 
     <div class="sidebar-footer">
       <a href="{% url 'admin:index' %}" class="menu-item small" title="Admin">
-        <svg class="i"><use xlink:href="#i-settings"></use></svg><span class="label">Admin</span>
+        <img src="{% static 'icons/cog-6-tooth.svg' %}" class="icon" alt="Admin">
+        <span class="label">Admin</span>
       </a>
     </div>
 
