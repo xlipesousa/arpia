@@ -1,0 +1,11 @@
+# Dependências Python do projeto ARPIA
+Django>=4.2,<5
+djangorestframework>=3.14
+python-dotenv>=1.0
+psycopg2-binary>=2.9
+prometheus-client>=0.16
+pytest>=7.0
+pytest-django>=4.5
+
+# Observação: 'jq' é utilitário do sistema (não via pip). Instale com apt/snap/homebrew.
+# Exemplo (Debian/Ubuntu/Kali): sudo apt install -y jq
