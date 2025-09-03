@@ -9,7 +9,7 @@ Pré-requisitos
 
 Passos de instalação (rápido)
 1. Clone o repositório:
-   - git clone git@github.com:xlipesousa/arpia.git
+   - git clone https://github.com/xlipesousa/arpia.git
    - cd arpia
 
 2. Roda o instalador (cria .venv, instala dependências, aplica migrations e cria superuser demo)
