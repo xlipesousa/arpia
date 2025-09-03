@@ -142,10 +142,19 @@ USE_TZ = True
 
 
 # Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/4.2/howto/static-files/
-
 STATIC_URL = "/static/"
-STATICFILES_DIRS = [BASE_DIR / "static"]
+
+# Diretório onde 'collectstatic' copia os arquivos estáticos (obrigatório para collectstatic)
+# usa BASE_DIR definido no topo do settings.py (Pathlib Path ou str)
+STATIC_ROOT = BASE_DIR / "staticfiles"  # ex: /home/kali/arpia/staticfiles
+
+# Onde estão os assets da aplicação durante o desenvolvimento
+STATICFILES_DIRS = [
+    BASE_DIR / "static",
+]
+
+# (Opcional) storage para produção; pode manter o padrão durante desenvolvimento
+# STATICFILES_STORAGE = "django.contrib.staticfiles.storage.StaticFilesStorage"
 
 
 # Default primary key field type
