@@ -12,3 +12,4 @@ env/
 # editor
 .vscode/
 .idea/
+/tmp/

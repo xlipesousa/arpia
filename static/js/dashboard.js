@@ -1,56 +1,49 @@
-// dados fictícios para protótipo do dashboard
+// dados fictícios para protótipo do dashboard (robusto)
 document.addEventListener('DOMContentLoaded', function () {
-  // populate KPIs (fictitious)
-  document.getElementById('kpi-total').textContent = 342;
-  document.getElementById('kpi-high').textContent = 78;
-  document.getElementById('kpi-medium').textContent = 190;
-  document.getElementById('kpi-low').textContent = 74;
+  // Checar e popular KPIs com segurança
+  const setText = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = String(value);
+  };
+  setText('kpi-total', 342);
+  setText('kpi-high', 78);
+  setText('kpi-medium', 190);
+  setText('kpi-low', 74);
+  setText('stat-projects', 7);
+  setText('stat-scans', 3);
+  setText('stat-open', 31);
 
-  // Bar chart - vulnerabilities by severity (fictitious)
-  const sevCtx = document.getElementById('sevBar');
-  if (sevCtx) {
-    new Chart(sevCtx.getContext('2d'), {
-      type: 'bar',
-      data: {
-        labels: ['Critical','High','Medium','Low'],
-        datasets:[{
-          label:'Count',
-          data:[12,78,190,74],
-          backgroundColor:['#ef4444','#f97316','#8b5cf6','#06b6d4']
-        }]
-      },
-      options:{
-        plugins:{ legend:{ display:false }},
-        scales:{ x:{ ticks:{ color:'#9ca3af' } }, y:{ ticks:{ color:'#9ca3af' }, grid:{ color:'rgba(255,255,255,0.02)' } } }
-      }
-    });
-  }
+  // Helper para criar chart somente se canvas existe
+  const createChart = (selector, config) => {
+    const c = document.getElementById(selector);
+    if (!c) return null;
+    const ctx = c.getContext('2d');
+    return new Chart(ctx, config);
+  };
 
-  // Donut chart - by type
-  const typeCtx = document.getElementById('typeDonut');
-  if (typeCtx) {
-    new Chart(typeCtx.getContext('2d'), {
-      type: 'doughnut',
-      data: {
-        labels: ['Web','Network','Database','Application'],
-        datasets:[{ data:[40,25,20,15], backgroundColor:['#f97316','#ef4444','#3b82f6','#06b6d4'] }]
-      },
-      options:{ plugins:{ legend:{ position:'right', labels:{ color:'#9ca3af' } } } }
-    });
-  }
+  // Severity bar
+  createChart('sevBar', {
+    type: 'bar',
+    data: {
+      labels: ['Critical','High','Medium','Low'],
+      datasets:[{ data:[12,78,190,74], backgroundColor:['#ef4444','#f97316','#8b5cf6','#06b6d4'] }]
+    },
+    options:{ plugins:{ legend:{ display:false }}, scales:{ x:{ ticks:{ color:'#9ca3af' }}, y:{ ticks:{ color:'#9ca3af' }, grid:{ color:'rgba(255,255,255,0.02)' }}}}
+  });
 
-  // trend line (fictitious)
-  const trendCtx = document.getElementById('trendLine');
-  if (trendCtx) {
-    new Chart(trendCtx.getContext('2d'), {
-      type:'line',
-      data:{
-        labels:[1,2,3,4,5,6,7],
-        datasets:[{ label:'Vuln delta', data:[-10,20,5,60,20,80,110], borderColor:'#60a5fa', backgroundColor:'rgba(96,165,250,0.08)', fill:true, tension:0.3 }]
-      },
-      options:{ plugins:{ legend:{ display:false } }, scales:{ x:{ ticks:{ color:'#9ca3af' } }, y:{ ticks:{ color:'#9ca3af' } } } }
-    });
-  }
+  // Type donut
+  createChart('typeDonut', {
+    type: 'doughnut',
+    data: { labels:['Web','Network','Database','Application'], datasets:[{ data:[40,25,20,15], backgroundColor:['#f97316','#ef4444','#3b82f6','#06b6d4'] }] },
+    options:{ plugins:{ legend:{ position:'right', labels:{ color:'#9ca3af' } } } }
+  });
+
+  // Trend line
+  createChart('trendLine', {
+    type:'line',
+    data:{ labels:[1,2,3,4,5,6,7], datasets:[{ data:[-10,20,5,60,20,80,110], borderColor:'#60a5fa', backgroundColor:'rgba(96,165,250,0.08)', fill:true, tension:0.3 }]},
+    options:{ plugins:{ legend:{ display:false }}, scales:{ x:{ ticks:{ color:'#9ca3af' }}, y:{ ticks:{ color:'#9ca3af' }}}}
+  });
 
   // progress (line)
   const ctxP = document.getElementById('progressChart');
