@@ -3,25 +3,27 @@
 {% block content %}
 <div class="dashboard-frame">
 
+  <!-- Top KPI row -->
   <div class="kpi-row">
     <div class="kpi card">
       <div class="kpi-label">Total Vulnerabilities</div>
-      <div class="kpi-value" id="kpi-total">—</div>
+      <div class="kpi-value" id="kpi-total">342</div>
     </div>
     <div class="kpi card">
       <div class="kpi-label">High Severity</div>
-      <div class="kpi-value" id="kpi-high">—</div>
+      <div class="kpi-value" id="kpi-high">78</div>
     </div>
     <div class="kpi card">
       <div class="kpi-label">Medium Severity</div>
-      <div class="kpi-value" id="kpi-medium">—</div>
+      <div class="kpi-value" id="kpi-medium">190</div>
     </div>
     <div class="kpi card">
       <div class="kpi-label">Low Severity</div>
-      <div class="kpi-value" id="kpi-low">—</div>
+      <div class="kpi-value" id="kpi-low">74</div>
     </div>
   </div>
 
+  <!-- Charts + side panels -->
   <div class="content-grid">
     <section class="main-charts">
       <div class="card chart-card">
@@ -67,9 +69,9 @@
       <div class="card">
         <h4>Project Summary</h4>
         <ul class="quick-stats">
-          <li>Projects: <strong id="stat-projects">—</strong></li>
-          <li>Active Scans: <strong id="stat-scans">—</strong></li>
-          <li>Open Findings: <strong id="stat-open">—</strong></li>
+          <li>Projects: <strong id="stat-projects">7</strong></li>
+          <li>Active Scans: <strong id="stat-scans">3</strong></li>
+          <li>Open Findings: <strong id="stat-open">31</strong></li>
         </ul>
       </div>
     </aside>
