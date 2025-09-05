@@ -1,30 +1,13 @@
 from django.urls import path
-from .views import (
-    DashboardView,
-    ProjectsListView,
-    ScriptsListView,
-    ToolsListView,
-    ReportsListView,
-    LogsListView,
-)
-from rest_framework.views import APIView
-from django.http import JsonResponse
-from rest_framework import status
-
-class HealthCheck(APIView):
-    permission_classes = ()
-    authentication_classes = ()
-
-    def get(self, request, *args, **kwargs):
-        return JsonResponse({"status": "ok"}, status=status.HTTP_200_OK)
-
+from . import views
 
 urlpatterns = [
-    path("", DashboardView.as_view(), name="dashboard"),
-    path("health/", HealthCheck.as_view(), name="arpia-core-health"),
-    path("projects/", ProjectsListView.as_view(), name="projects_list"),
-    path("scripts/", ScriptsListView.as_view(), name="scripts_list"),
-    path("tools/", ToolsListView.as_view(), name="tools_list"),
-    path("reports/", ReportsListView.as_view(), name="reports_list"),
-    path("logs/", LogsListView.as_view(), name="logs_list"),
+    path("", views.DashboardView.as_view(), name="dashboard"),
+    path("health/", views.HealthCheck.as_view(), name="arpia-core-health"),
+    path("projects/", views.projects_list, name="projects_list"),
+    path("projects/new/", views.projects_create, name="projects_create"),
+    path("scripts/", views.ScriptsListView.as_view(), name="scripts_list"),
+    path("tools/", views.ToolsListView.as_view(), name="tools_list"),
+    path("reports/", views.ReportsListView.as_view(), name="reports_list"),
+    path("logs/", views.LogsListView.as_view(), name="logs_list"),
 ]
