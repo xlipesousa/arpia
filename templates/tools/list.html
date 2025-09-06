@@ -1,5 +1,342 @@
 {% extends "base.html" %}
-{% block title %}Ferramentas - ARPIA{% endblock %}
+{% load static %}
+{% block title %}Ferramentas — ARPIA{% endblock %}
+
 {% block content %}
-<div class="card"><h2>Ferramentas</h2><p>Configurações das ferramentas de backend.</p></div>
+<div class="main">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+    <h2 style="margin:0;color:var(--text)">Ferramentas & Wordlists</h2>
+    <div id="tools-action-area">
+      <!-- botão troca de contexto (muda conforme aba) -->
+      <a href="{% url 'tools_add' %}" id="btn-add-main" class="btn btn-primary" style="display:inline-flex;align-items:center;gap:.6rem;padding:.45rem .8rem;border-radius:8px;background:linear-gradient(90deg,#4fd1c5,var(--accent));color:#021023;text-decoration:none;font-weight:700;">
+        Adicionar Ferramenta
+      </a>
+    </div>
+  </div>
+
+  <div class="card" style="padding:.6rem;">
+    <!-- abas -->
+    <div style="display:flex;gap:.5rem;margin-bottom:.75rem;">
+      <button type="button" class="tab-btn active" data-tab="tab-tools" aria-pressed="true">Ferramentas</button>
+      <button type="button" class="tab-btn" data-tab="tab-wordlists" aria-pressed="false">Wordlists</button>
+    </div>
+
+    <!-- Conteúdo Aba: Ferramentas -->
+    <div id="tab-tools" class="tab-panel" style="display:block;">
+      <div style="overflow:auto;">
+        <table id="tools-table" class="projects-table" style="width:100%;border-collapse:collapse;color:var(--muted);">
+          <thead>
+            <tr style="text-align:left;font-weight:700;color:var(--muted);font-size:.9rem;">
+              <th class="id-col">ID</th>
+              <th class="name-col">Nome</th>
+              <th class="desc-col">Descrição</th>
+              <th class="path-col">Path</th>
+              <th class="actions-col" style="text-align:right">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tools-body">
+            <!-- dados fictícios -->
+            <tr>
+              <td class="id-col">1</td>
+              <td class="name-col">nmap</td>
+              <td class="desc-col">Scanner de portas e serviços</td>
+              <td class="path-col">/usr/bin/nmap</td>
+              <td class="actions-col">
+                <a href="{% url 'tools_configure' 1 %}" class="btn-icon btn-info" title="Configurar" aria-label="Configurar nmap">
+                  <!-- ícone engrenagem -->
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </a>
+                <a href="{% url 'tools_delete' 1 %}" class="btn-icon btn-danger" title="Excluir" aria-label="Excluir nmap">
+                  <!-- ícone lixeira -->
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 6v14a1 1 0 001 1h6a1 1 0 001-1V6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </a>
+              </td>
+            </tr>
+
+            <tr>
+              <td class="id-col">2</td>
+              <td class="name-col">rustscan</td>
+              <td class="desc-col">Scanner rápido escrito em Rust</td>
+              <td class="path-col">/usr/local/bin/rustscan</td>
+              <td class="actions-col">
+                <a href="{% url 'tools_configure' 2 %}" class="btn-icon btn-info" title="Configurar" aria-label="Configurar rustscan">
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </a>
+                <a href="{% url 'tools_delete' 2 %}" class="btn-icon btn-danger" title="Excluir" aria-label="Excluir rustscan">
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 6v14a1 1 0 001 1h6a1 1 0 001-1V6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </a>
+              </td>
+            </tr>
+
+            <tr>
+              <td class="id-col">3</td>
+              <td class="name-col">netcat</td>
+              <td class="desc-col">Ferramenta para socket TCP/UDP</td>
+              <td class="path-col">/bin/nc</td>
+              <td class="actions-col">
+                <a href="{% url 'tools_configure' 3 %}" class="btn-icon btn-info" title="Configurar" aria-label="Configurar netcat">
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </a>
+                <a href="{% url 'tools_delete' 3 %}" class="btn-icon btn-danger" title="Excluir" aria-label="Excluir netcat">
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 6v14a1 1 0 001 1h6a1 1 0 001-1V6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </a>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- paginador simples client-side -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:.7rem .3rem;margin-top:.6rem;">
+        <div>
+          Mostrar
+          <select id="tools-page-size" style="padding:.25rem .4rem;border-radius:6px;background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted);">
+            <option value="5">5</option>
+            <option value="10" selected>10</option>
+            <option value="25">25</option>
+          </select>
+          entradas
+        </div>
+
+        <div id="tools-paginator" style="display:flex;gap:.35rem;align-items:center;"></div>
+      </div>
+    </div>
+
+    <!-- Conteúdo Aba: Wordlists -->
+    <div id="tab-wordlists" class="tab-panel" style="display:none;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem;">
+        <div></div>
+        <div>
+          <a href="{% url 'wordlists_add' %}" id="btn-add-wordlist" class="btn btn-primary" style="display:inline-flex;align-items:center;gap:.6rem;padding:.35rem .7rem;border-radius:8px;background:linear-gradient(90deg,#4fd1c5,var(--accent));color:#021023;text-decoration:none;font-weight:700;">
+            Adicionar Wordlist
+          </a>
+        </div>
+      </div>
+
+      <div style="overflow:auto;">
+        <table id="wordlists-table" class="projects-table" style="width:100%;border-collapse:collapse;color:var(--muted);">
+          <thead>
+            <tr style="text-align:left;font-weight:700;color:var(--muted);font-size:.9rem;">
+              <th class="id-col">ID</th>
+              <th class="name-col">Nome</th>
+              <th class="desc-col">Descrição</th>
+              <th class="path-col">Path</th>
+              <th class="actions-col" style="text-align:right">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="wordlists-body">
+            <!-- dados fictícios -->
+            <tr>
+              <td class="id-col">101</td>
+              <td class="name-col">common-passwords</td>
+              <td class="desc-col">Lista comum de senhas</td>
+              <td class="path-col">/usr/share/wordlists/common.txt</td>
+              <td class="actions-col">
+                <a href="{% url 'wordlists_edit' 101 %}" class="btn-icon btn-success" title="Editar" aria-label="Editar wordlist common-passwords">
+                  <!-- ícone lápis -->
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 21l3-1 11-11 1-3L14 3 3 14v7z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </a>
+                <a href="{% url 'wordlists_delete' 101 %}" class="btn-icon btn-danger" title="Remover" aria-label="Remover wordlist common-passwords">
+                  <!-- ícone lixeira -->
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 6v14a1 1 0 001 1h6a1 1 0 001-1V6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </a>
+                <a href="{% url 'wordlists_download' 101 %}" class="btn-icon btn-info" title="Download" aria-label="Download wordlist common-passwords">
+                  <!-- ícone download -->
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 11l4 4 4-4" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 21H3" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </a>
+              </td>
+            </tr>
+
+            <tr>
+              <td class="id-col">102</td>
+              <td class="name-col">web-fuzz</td>
+              <td class="desc-col">Wordlist para fuzzing web</td>
+              <td class="path-col">/home/user/wordlists/web-fuzz.txt</td>
+              <td class="actions-col">
+                <a href="{% url 'wordlists_edit' 102 %}" class="btn-icon btn-success" title="Editar" aria-label="Editar wordlist web-fuzz">
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 21l3-1 11-11 1-3L14 3 3 14v7z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </a>
+                <a href="{% url 'wordlists_delete' 102 %}" class="btn-icon btn-danger" title="Remover" aria-label="Remover wordlist web-fuzz">
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 6v14a1 1 0 001 1h6a1 1 0 001-1V6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </a>
+                <a href="{% url 'wordlists_download' 102 %}" class="btn-icon btn-info" title="Download" aria-label="Download wordlist web-fuzz">
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 11l4 4 4-4" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 21H3" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </a>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:.7rem .3rem;margin-top:.6rem;">
+        <div>
+          Mostrar
+          <select id="wordlists-page-size" style="padding:.25rem .4rem;border-radius:6px;background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted);">
+            <option value="5">5</option>
+            <option value="10" selected>10</option>
+            <option value="25">25</option>
+          </select>
+          entradas
+        </div>
+
+        <div id="wordlists-paginator" style="display:flex;gap:.35rem;align-items:center;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+/* datatable dinâmico (reaproveita o padrão usado no projeto) */
+.projects-table{ table-layout:auto; width:100%; border-collapse:collapse; }
+.projects-table th, .projects-table td{ padding:.45rem .6rem; vertical-align:middle; overflow:hidden; }
+.projects-table .id-col{ min-width:56px; width:auto; text-align:center; }
+.projects-table .name-col{ min-width:140px; max-width:45%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text); }
+.projects-table .desc-col{ max-width:60ch; overflow:hidden; text-overflow:ellipsis; color:var(--muted); }
+.projects-table .path-col{ max-width:40ch; overflow:hidden; text-overflow:ellipsis; color:var(--muted); }
+.projects-table .actions-col{ min-width:160px; text-align:right; white-space:nowrap; }
+
+/* botões de ícone */
+.btn-icon{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:34px;
+  height:34px;
+  border-radius:8px;
+  border:1px solid rgba(255,255,255,0.03);
+  background:transparent;
+  color:var(--muted);
+  cursor:pointer;
+  margin-left:6px;
+  text-decoration:none;
+}
+.btn-icon svg{ display:block; width:16px; height:16px; stroke:currentColor; fill:none; stroke-width:1.4; }
+
+/* cores */
+.btn-success{ background: rgba(79,209,197,0.06); color:#4fd1c5; border-color: rgba(79,209,197,0.08); }
+.btn-info{ background: rgba(96,165,250,0.06); color:var(--accent-2); border-color: rgba(96,165,250,0.08); }
+.btn-warning{ background: rgba(255,184,93,0.06); color:#ffb85d; border-color: rgba(255,184,93,0.08); }
+.btn-danger{ background: rgba(255,139,139,0.06); color:#ff8b8b; border-color: rgba(255,139,139,0.08); }
+
+/* abas: destaque mais evidente para a aba ativa */
+.tab-btn{
+  padding:.4rem .7rem;
+  border-radius:8px;
+  border:1px solid rgba(255,255,255,0.03);
+  background:transparent;
+  color:var(--muted);
+  cursor:pointer;
+}
+.tab-btn.active{
+  background:linear-gradient(90deg, rgba(79,209,197,0.08), rgba(96,165,250,0.06));
+  color:var(--text);
+  font-weight:700;
+  box-shadow: 0 6px 18px rgba(2,16,35,0.06);
+  transform:translateY(-1px);
+}
+
+/* paginator */
+.btn-pager{ display:inline-flex; padding:.28rem .5rem; border-radius:6px; border:1px solid rgba(255,255,255,0.03); text-decoration:none; color:var(--muted); }
+.btn-pager.active{ background:rgba(255,255,255,0.03); color:var(--text); font-weight:700; }
+.btn-pager.disabled{ opacity:0.45; cursor:default; }
+</style>
+
+<script>
+(function(){
+  // abas
+  const tabs = Array.from(document.querySelectorAll('.tab-btn'));
+  tabs.forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      tabs.forEach(b=>{ b.classList.remove('active'); b.setAttribute('aria-pressed','false'); });
+      btn.classList.add('active'); btn.setAttribute('aria-pressed','true');
+      const target = document.getElementById(btn.dataset.tab);
+      document.querySelectorAll('.tab-panel').forEach(p=> p.style.display = 'none');
+      target.style.display = 'block';
+
+      // ajustar botão Add (texto e url conforme aba)
+      const addMain = document.getElementById('btn-add-main');
+      if(btn.dataset.tab === 'tab-tools'){
+        addMain.href = "{% url 'tools_add' %}";
+        addMain.textContent = 'Adicionar Ferramenta';
+        addMain.style.display = 'inline-flex';
+      } else {
+        addMain.href = "{% url 'wordlists_add' %}";
+        addMain.textContent = 'Adicionar Wordlist';
+        addMain.style.display = 'none'; // usamos botão específico dentro aba wordlists
+      }
+    });
+  });
+
+  // função de paginação client-side reutilizável
+  function makePager(tbodyId, pageSizeSelId, paginatorId){
+    const tbody = document.getElementById(tbodyId);
+    if(!tbody) return;
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    const pageSizeSel = document.getElementById(pageSizeSelId);
+    const paginator = document.getElementById(paginatorId);
+    let pageSize = parseInt(pageSizeSel.value,10);
+    let current = 1;
+
+    function render(){
+      const total = rows.length;
+      const pages = Math.max(1, Math.ceil(total / pageSize));
+      if(current > pages) current = pages;
+      const start = (current - 1) * pageSize;
+      const end = start + pageSize;
+      rows.forEach((r,i)=> r.style.display = (i>=start && i<end) ? '' : 'none');
+
+      // paginator
+      paginator.innerHTML = '';
+      function btn(label,p,disabled=false){
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = label;
+        b.className = 'btn-pager';
+        if(disabled) b.classList.add('disabled');
+        b.addEventListener('click', ()=>{ if(!disabled){ current = p; render(); }});
+        return b;
+      }
+      paginator.appendChild(btn('«',1,current===1));
+      const left = Math.max(1, current-2);
+      const right = Math.min(pages, current+2);
+      for(let p=left;p<=right;p++){
+        const b = btn(p,p,false);
+        if(p===current) b.classList.add('active');
+        paginator.appendChild(b);
+      }
+      paginator.appendChild(btn('»',pages,current===pages));
+    }
+
+    pageSizeSel.addEventListener('change', ()=>{
+      pageSize = parseInt(pageSizeSel.value,10);
+      current = 1;
+      render();
+    });
+    render();
+  }
+
+  // instanciar paginadores
+  makePager('tools-body','tools-page-size','tools-paginator');
+  makePager('wordlists-body','wordlists-page-size','wordlists-paginator');
+
+  // ações fictícias (delegation)
+  document.addEventListener('click', (ev)=>{
+    const btn = ev.target.closest('.btn-icon, button[data-action]');
+    if(!btn) return;
+    // follow normal link for anchors (delete/configure) except js-run
+    if(btn.matches('button[data-action="run"]')){
+      ev.preventDefault();
+      const id = btn.dataset.id;
+      alert('Executar (simulado): ' + id);
+      return;
+    }
+    if(btn.matches('.btn-icon')){
+      // exemplos de mensagens (não impedem navegação)
+      const title = btn.getAttribute('title') || btn.getAttribute('aria-label') || '';
+      // se for link que vai a placeholder route, deixamos seguir — se quiser, prevenir e mostrar alert:
+      // ev.preventDefault(); alert(title + ' (simulado)');
+    }
+  });
+})();
+</script>
 {% endblock %}

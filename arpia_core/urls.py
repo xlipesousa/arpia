@@ -2,8 +2,9 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
+    # rota raiz / dashboard (necessária para templates que fazem {% url 'dashboard' %})
     path("", views.DashboardView.as_view(), name="dashboard"),
-    path("health/", views.HealthCheck.as_view(), name="arpia-core-health"),
+
     path("projects/", views.projects_list, name="projects_list"),
     path("projects/new/", views.projects_create, name="projects_create"),
 
@@ -16,12 +17,20 @@ urlpatterns = [
     path("scripts/<int:pk>/reset/", views.scripts_reset, name="scripts_reset"),
     path("scripts/<int:pk>/run/", views.scripts_run, name="scripts_run"),
 
-    # Tools
-    path("tools/", views.ToolsListView.as_view(), name="tools_list"),
+    # Tools & Wordlists
+    path("tools/", views.tools_list, name="tools_list"),
+    path("tools/add/", views.tools_add, name="tools_add"),
+    path("tools/<int:pk>/configure/", views.tools_configure, name="tools_configure"),
+    path("tools/<int:pk>/delete/", views.tools_delete, name="tools_delete"),
 
-    # Reports
+    path("wordlists/add/", views.wordlists_add, name="wordlists_add"),
+    path("wordlists/<int:pk>/edit/", views.wordlists_edit, name="wordlists_edit"),
+    path("wordlists/<int:pk>/delete/", views.wordlists_delete, name="wordlists_delete"),
+    path("wordlists/<int:pk>/download/", views.wordlists_download, name="wordlists_download"),
+
+    # Adicionadas: views que o template base referencia
     path("reports/", views.ReportsListView.as_view(), name="reports_list"),
-
-    # Logs
     path("logs/", views.LogsListView.as_view(), name="logs_list"),
+
+    # ...existing app routes...
 ]

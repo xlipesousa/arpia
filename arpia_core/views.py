@@ -7,7 +7,7 @@ from django.views import View
 from django.http import JsonResponse
 from django.contrib import messages
 from django.shortcuts import get_object_or_404
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, JsonResponse
 
 
 class DashboardView(LoginRequiredMixin, TemplateView):
@@ -181,3 +181,58 @@ def scripts_reset(request, pk):
 def scripts_run(request, pk):
     # endpoint simples para executar (simulação)
     return JsonResponse({"status": "ok", "action": "run", "id": pk})
+
+
+def tools_list(request):
+    """
+    Lista a página de Tools (aponta para templates/tools/list.html).
+    Usa dados fictícios no template — view placeholder.
+    """
+    return render(request, "tools/list.html", {})
+
+
+def tools_add(request):
+    """
+    Placeholder para adicionar ferramenta.
+    """
+    messages.info(request, "Adicionar ferramenta: funcionalidade pendente (placeholder).")
+    return redirect(reverse("tools_list"))
+
+
+def tools_configure(request, pk):
+    """
+    Placeholder para configurar uma ferramenta (pk).
+    """
+    messages.info(request, f"Configurar ferramenta {pk}: funcionalidade pendente (placeholder).")
+    return redirect(reverse("tools_list"))
+
+
+def tools_delete(request, pk):
+    """
+    Placeholder para excluir ferramenta (simulado).
+    """
+    messages.success(request, f"Ferramenta {pk} removida (simulado).")
+    return redirect(reverse("tools_list"))
+
+
+def wordlists_add(request):
+    messages.info(request, "Adicionar wordlist: funcionalidade pendente (placeholder).")
+    return redirect(reverse("tools_list"))
+
+
+def wordlists_edit(request, pk):
+    messages.info(request, f"Editar wordlist {pk}: funcionalidade pendente (placeholder).")
+    return redirect(reverse("tools_list"))
+
+
+def wordlists_delete(request, pk):
+    messages.success(request, f"Wordlist {pk} removida (simulado).")
+    return redirect(reverse("tools_list"))
+
+
+def wordlists_download(request, pk):
+    """
+    Placeholder para download de wordlist.
+    Retorna JSON simulando link/estado.
+    """
+    return JsonResponse({"status": "ok", "action": "download", "id": pk})
