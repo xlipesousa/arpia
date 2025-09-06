@@ -15,164 +15,167 @@
 
   <div class="card" style="padding:0.75rem;">
     <div style="overflow:auto;">
-      <table id="projects-table" style="width:100%;border-collapse:collapse;color:var(--muted);">
+      <table id="projects-table" class="projects-table" style="width:100%;border-collapse:collapse;color:var(--muted);">
         <thead>
           <tr style="text-align:left;font-weight:700;color:var(--muted);font-size:.9rem;">
-            <th style="padding:.75rem .6rem;border-bottom:1px solid rgba(255,255,255,0.04)">ID</th>
-            <th style="padding:.75rem .6rem;border-bottom:1px solid rgba(255,255,255,0.04)">Nome</th>
-            <th style="padding:.75rem .6rem;border-bottom:1px solid rgba(255,255,255,0.04)">Dono</th>
-            <th style="padding:.75rem .6rem;border-bottom:1px solid rgba(255,255,255,0.04)">Criado em</th>
-            <th style="padding:.75rem .6rem;border-bottom:1px solid rgba(255,255,255,0.04)">Status</th>
-            <th style="padding:.75rem .6rem;border-bottom:1px solid rgba(255,255,255,0.04);width:170px">Ações</th>
+            <th class="id-col" style="padding:.45rem .5rem;border-bottom:1px solid rgba(255,255,255,0.04);min-width:56px;text-align:center">ID</th>
+            <th class="name-col" style="padding:.45rem .5rem;border-bottom:1px solid rgba(255,255,255,0.04);min-width:200px">Nome</th>
+            <th style="padding:.45rem .5rem;border-bottom:1px solid rgba(255,255,255,0.04);width:140px">Dono</th>
+            <th style="padding:.45rem .5rem;border-bottom:1px solid rgba(255,255,255,0.04);width:120px">Criado em</th>
+            <th style="padding:.45rem .5rem;border-bottom:1px solid rgba(255,255,255,0.04);width:110px">Status</th>
+            <th class="actions-col" style="padding:.45rem .5rem;border-bottom:1px solid rgba(255,255,255,0.04);width:220px;text-align:right">Ações</th>
           </tr>
         </thead>
         <tbody id="projects-body">
-          <!-- dados fictícios (substituir pela view/context real) -->
+          {% for p in projects %}
           <tr class="row">
-            <td style="padding:.6rem .6rem;">1</td>
-            <td style="padding:.6rem .6rem;color:var(--text)">Infra Red Team</td>
-            <td style="padding:.6rem .6rem;">alice</td>
-            <td style="padding:.6rem .6rem;">2025-08-01</td>
-            <td style="padding:.6rem .6rem;"><span style="padding:.18rem .45rem;border-radius:6px;background:rgba(79,209,197,0.12);color:#4fd1c5;font-weight:600">Ativo</span></td>
-            <td style="padding:.6rem .6rem;">
-              <a href="#" class="action-btn" style="margin-right:.4rem;">Ver</a>
-              <a href="#" class="action-btn" style="margin-right:.4rem;">Editar</a>
-              <a href="#" class="action-btn text-danger">Apagar</a>
+            <td class="id-col" style="padding:.45rem .5rem;text-align:center;vertical-align:middle;white-space:nowrap;">{{ p.id }}</td>
+            <td class="name-col" style="padding:.45rem .5rem;color:var(--text);vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:140px;max-width:55%;">{{ p.name }}</td>
+            <td style="padding:.45rem .5rem;vertical-align:middle;">{{ p.owner }}</td>
+            <td style="padding:.45rem .5rem;vertical-align:middle;">{{ p.created }}</td>
+            <td style="padding:.45rem .5rem;vertical-align:middle;">
+              <span style="padding:.18rem .45rem;border-radius:6px;background:rgba(255,255,255,0.02);color:var(--muted);font-weight:600">{{ p.status }}</span>
+            </td>
+            <td class="actions-col" style="padding:.45rem .5rem;vertical-align:middle;text-align:right;">
+              <!-- Botões de ação: ícones somente -->
+              <button type="button" class="btn-icon btn-info" title="Ver" data-action="view" data-id="{{ p.id }}" aria-label="Ver projeto {{ p.name }}">
+                <!-- ícone olho -->
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M12 5c-7 0-11 7-11 7s4 7 11 7 11-7 11-7-4-7-11-7z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+
+              <button type="button" class="btn-icon btn-success" title="Editar" data-action="edit" data-id="{{ p.id }}" aria-label="Editar projeto {{ p.name }}">
+                <!-- ícone lápis -->
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M3 21l3-1 11-11 1-3L14 3 3 14v7z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+
+              <button type="button" class="btn-icon btn-warning" title="Compartilhar" data-action="share" data-id="{{ p.id }}" aria-label="Compartilhar projeto {{ p.name }}">
+                <!-- ícone compartilhar -->
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 6l-4-4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 2v13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+
+              <button type="button" class="btn-icon btn-danger" title="Apagar" data-action="delete" data-id="{{ p.id }}" aria-label="Apagar projeto {{ p.name }}">
+                <!-- ícone lixeira -->
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M3 6h18" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 6v14a1 1 0 001 1h6a1 1 0 001-1V6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 11v6M14 11v6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
             </td>
           </tr>
-
-          <tr class="row">
-            <td style="padding:.6rem .6rem;">2</td>
-            <td style="padding:.6rem .6rem;color:var(--text)">Web App Audit</td>
-            <td style="padding:.6rem .6rem;">bob</td>
-            <td style="padding:.6rem .6rem;">2025-06-12</td>
-            <td style="padding:.6rem .6rem;"><span style="padding:.18rem .45rem;border-radius:6px;background:rgba(255,184,93,0.10);color:#ffb85d;font-weight:600">Em revisão</span></td>
-            <td style="padding:.6rem .6rem;">
-              <a href="#" class="action-btn" style="margin-right:.4rem;">Ver</a>
-              <a href="#" class="action-btn" style="margin-right:.4rem;">Editar</a>
-              <a href="#" class="action-btn text-danger">Apagar</a>
-            </td>
-          </tr>
-
-          <tr class="row">
-            <td style="padding:.6rem .6rem;">3</td>
-            <td style="padding:.6rem .6rem;color:var(--text)">Pentest Finance</td>
-            <td style="padding:.6rem .6rem;">carol</td>
-            <td style="padding:.6rem .6rem;">2025-07-20</td>
-            <td style="padding:.6rem .6rem;"><span style="padding:.18rem .45rem;border-radius:6px;background:rgba(255,139,139,0.08);color:#ff8b8b;font-weight:600">Concluído</span></td>
-            <td style="padding:.6rem .6rem;">
-              <a href="#" class="action-btn" style="margin-right:.4rem;">Ver</a>
-              <a href="#" class="action-btn" style="margin-right:.4rem;">Editar</a>
-              <a href="#" class="action-btn text-danger">Apagar</a>
-            </td>
-          </tr>
-
-          <tr class="row">
-            <td style="padding:.6rem .6rem;">4</td>
-            <td style="padding:.6rem .6rem;color:var(--text)">Continuous Hunt</td>
-            <td style="padding:.6rem .6rem;">dave</td>
-            <td style="padding:.6rem .6rem;">2025-05-02</td>
-            <td style="padding:.6rem .6rem;"><span style="padding:.18rem .45rem;border-radius:6px;background:rgba(79,165,250,0.08);color:#60a5fa;font-weight:600">Planejado</span></td>
-            <td style="padding:.6rem .6rem;">
-              <a href="#" class="action-btn" style="margin-right:.4rem;">Ver</a>
-              <a href="#" class="action-btn" style="margin-right:.4rem;">Editar</a>
-              <a href="#" class="action-btn text-danger">Apagar</a>
-            </td>
-          </tr>
-
-          <!-- mais linhas fictícias para testar paginação -->
-          <tr class="row"><td style="padding:.6rem .6rem;">5</td><td style="padding:.6rem .6rem;color:var(--text)">API Security</td><td style="padding:.6rem .6rem;">erin</td><td style="padding:.6rem .6rem;">2025-03-18</td><td style="padding:.6rem .6rem;"><span style="padding:.18rem .45rem;border-radius:6px;background:rgba(79,209,197,0.12);color:#4fd1c5;font-weight:600">Ativo</span></td><td style="padding:.6rem .6rem;"><a href="#" class="action-btn" style="margin-right:.4rem;">Ver</a><a href="#" class="action-btn" style="margin-right:.4rem;">Editar</a><a href="#" class="action-btn text-danger">Apagar</a></td></tr>
-          <tr class="row"><td style="padding:.6rem .6rem;">6</td><td style="padding:.6rem .6rem;color:var(--text)">Mobile Audit</td><td style="padding:.6rem .6rem;">frank</td><td style="padding:.6rem .6rem;">2025-01-09</td><td style="padding:.6rem .6rem;"><span style="padding:.18rem .45rem;border-radius:6px;background:rgba(255,184,93,0.10);color:#ffb85d;font-weight:600">Em revisão</span></td><td style="padding:.6rem .6rem;"><a href="#" class="action-btn" style="margin-right:.4rem;">Ver</a><a href="#" class="action-btn" style="margin-right:.4rem;">Editar</a><a href="#" class="action-btn text-danger">Apagar</a></td></tr>
-          <tr class="row"><td style="padding:.6rem .6rem;">7</td><td style="padding:.6rem .6rem;color:var(--text)">Retention Test</td><td style="padding:.6rem .6rem;">gina</td><td style="padding:.6rem .6rem;">2024-12-30</td><td style="padding:.6rem .6rem;"><span style="padding:.18rem .45rem;border-radius:6px;background:rgba(79,165,250,0.08);color:#60a5fa;font-weight:600">Planejado</span></td><td style="padding:.6rem .6rem;"><a href="#" class="action-btn" style="margin-right:.4rem;">Ver</a><a href="#" class="action-btn" style="margin-right:.4rem;">Editar</a><a href="#" class="action-btn text-danger">Apagar</a></td></tr>
+          {% empty %}
+          <tr><td colspan="6" style="padding:.8rem;color:var(--muted)">Nenhum projeto encontrado.</td></tr>
+          {% endfor %}
         </tbody>
       </table>
     </div>
 
-    <!-- paginador -->
+    <!-- server-side paginator -->
     <div style="display:flex;align-items:center;justify-content:space-between;padding:.7rem .3rem;margin-top:.6rem;">
       <div>
         Mostrar
-        <select id="page-size" style="padding:.25rem .4rem;border-radius:6px;background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted);">
-          <option value="5">5</option>
-          <option value="10" selected>10</option>
-          <option value="25">25</option>
+        <select id="page-size" onchange="location.search='page=1&page_size='+this.value" style="padding:.25rem .4rem;border-radius:6px;background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted);">
+          <option value="5" {% if projects_page.paginator.per_page == 5 %}selected{% endif %}>5</option>
+          <option value="10" {% if projects_page.paginator.per_page == 10 %}selected{% endif %}>10</option>
+          <option value="25" {% if projects_page.paginator.per_page == 25 %}selected{% endif %}>25</option>
         </select>
         entradas
       </div>
 
-      <div id="paginator" style="display:flex;gap:.35rem;align-items:center;"></div>
+      <div id="paginator" style="display:flex;gap:.35rem;align-items:center;">
+        {% if projects_page.has_previous %}
+          <a href="?page={{ projects_page.previous_page_number }}&page_size={{ projects_page.paginator.per_page }}" class="btn-pager">«</a>
+        {% else %}
+          <span class="btn-pager disabled">«</span>
+        {% endif %}
+
+        {% for num in projects_page.paginator.page_range %}
+          {% if num == projects_page.number %}
+            <span class="btn-pager active">{{ num }}</span>
+          {% else %}
+            <a href="?page={{ num }}&page_size={{ projects_page.paginator.per_page }}" class="btn-pager">{{ num }}</a>
+          {% endif %}
+        {% endfor %}
+
+        {% if projects_page.has_next %}
+          <a href="?page={{ projects_page.next_page_number }}&page_size={{ projects_page.paginator.per_page }}" class="btn-pager">»</a>
+        {% else %}
+          <span class="btn-pager disabled">»</span>
+        {% endif %}
+      </div>
     </div>
   </div>
 </div>
 
+<style>
+/* botões de ícone para ações (pequeno scope no template) */
+.btn-icon{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:32px;
+  height:32px;
+  border-radius:8px;
+  border:1px solid rgba(255,255,255,0.03);
+  background:transparent;
+  color:var(--muted);
+  cursor:pointer;
+  margin-right:4px;
+}
+.btn-icon svg{ display:block; }
+
+.btn-info{ background: rgba(96,165,250,0.06); color:var(--accent-2); border-color: rgba(96,165,250,0.08); }
+.btn-success{ background: rgba(79,209,197,0.06); color:#4fd1c5; border-color: rgba(79,209,197,0.08); }
+.btn-warning{ background: rgba(255,184,93,0.06); color:#ffb85d; border-color: rgba(255,184,93,0.08); }
+.btn-danger{ background: rgba(255,139,139,0.06); color:#ff8b8b; border-color: rgba(255,139,139,0.08); }
+
+/* ajuste de células da tabela */
+.projects-table th, .projects-table td{
+  padding: .45rem .5rem;
+  vertical-align:middle;
+  overflow:hidden;
+}
+.projects-table{ table-layout:auto; } /* deixar a tabela ajustar ao conteúdo */
+.projects-table .id-col{ min-width:56px; width:auto; text-align:center; }
+.projects-table .name-col{ min-width:140px; max-width:55%; }
+.projects-table .actions-col{ width:220px; text-align:right; white-space:nowrap; }
+
+/* pager simples */
+.btn-pager{
+  display:inline-flex;
+  padding:.28rem .5rem;
+  border-radius:6px;
+  border:1px solid rgba(255,255,255,0.03);
+  text-decoration:none;
+  color:var(--muted);
+}
+.btn-pager.active{ background:rgba(255,255,255,0.03); color:var(--text); font-weight:700; }
+.btn-pager.disabled{ opacity:0.45; cursor:default; }
+</style>
+
 <script>
-  // Paginação client-side simples
+  // ações fictícias: substituir por endpoints reais
   (function(){
-    const tbody = document.getElementById('projects-body');
-    const rows = Array.from(tbody.querySelectorAll('tr.row'));
-    const pageSizeSel = document.getElementById('page-size');
-    const paginator = document.getElementById('paginator');
-
-    let pageSize = parseInt(pageSizeSel.value,10);
-    let current = 1;
-
-    function render(){
-      const total = rows.length;
-      const pages = Math.max(1, Math.ceil(total / pageSize));
-      // clamp current
-      if (current > pages) current = pages;
-      const start = (current - 1) * pageSize;
-      const end = start + pageSize;
-      rows.forEach((r,i)=> r.style.display = (i>=start && i<end) ? '' : 'none');
-
-      // render paginator
-      paginator.innerHTML = '';
-      function btn(label, p, disabled=false){
-        const a = document.createElement('button');
-        a.type = 'button';
-        a.textContent = label;
-        a.style.padding = '.32rem .6rem';
-        a.style.borderRadius = '6px';
-        a.style.border = '1px solid rgba(255,255,255,0.03)';
-        a.style.background = disabled ? 'rgba(255,255,255,0.01)' : 'transparent';
-        a.style.color = disabled ? 'rgba(255,255,255,0.45)' : 'var(--muted)';
-        a.style.cursor = disabled ? 'default' : 'pointer';
-        a.addEventListener('click', ()=>{ if(!disabled){ current = p; render(); }});
-        return a;
+    const table = document.getElementById('projects-body');
+    table.addEventListener('click', (ev)=>{
+      const btn = ev.target.closest('button[data-action]');
+      if(!btn) return;
+      const action = btn.dataset.action;
+      const id = btn.dataset.id;
+      if(action === 'delete'){
+        if(!confirm('Confirma apagar o projeto #' + id + '?')) return;
+        alert('Apagar: ' + id + ' (implemente endpoint)');
+        return;
       }
-
-      paginator.appendChild(btn('«', 1, current===1));
-      const left = Math.max(1, current-2);
-      const right = Math.min(pages, current+2);
-      for(let p=left; p<=right; p++){
-        const b = btn(p, p, false);
-        if(p===current){
-          b.style.background = 'rgba(255,255,255,0.03)';
-          b.style.fontWeight = '700';
-          b.style.color = 'var(--text)';
-        }
-        paginator.appendChild(b);
+      if(action === 'share'){
+        // exemplo: abrir modal ou copiar link
+        const shareUrl = location.origin + '/projects/' + id + '/share/';
+        navigator.clipboard?.writeText(shareUrl).then(()=> {
+          alert('Link de compartilhamento copiado: ' + shareUrl);
+        }).catch(()=> {
+          prompt('Copie o link:', shareUrl);
+        });
+        return;
       }
-      paginator.appendChild(btn('»', pages, current===pages));
-    }
-
-    pageSizeSel.addEventListener('change', ()=>{
-      pageSize = parseInt(pageSizeSel.value,10);
-      current = 1;
-      render();
+      // view / edit placeholders
+      alert(action.charAt(0).toUpperCase() + action.slice(1) + ': ' + id + ' (implemente navegação)');
     });
-
-    // ações fictícias (delegation)
-    tbody.addEventListener('click', (ev)=>{
-      const target = ev.target;
-      if(target.matches('.action-btn')){
-        ev.preventDefault();
-        alert('Ação: ' + target.textContent + '\\n(implemente a ação via endpoints)');
-      }
-    });
-
-    render();
   })();
 </script>
-
 {% endblock %}
