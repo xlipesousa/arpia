@@ -5,6 +5,9 @@ from django.core.paginator import Paginator
 from django.urls import reverse
 from django.views import View
 from django.http import JsonResponse
+from django.contrib import messages
+from django.shortcuts import get_object_or_404
+from django.http import HttpResponseRedirect
 
 
 class DashboardView(LoginRequiredMixin, TemplateView):
@@ -104,3 +107,77 @@ def projects_create(request):
     Por enquanto redireciona para a lista. Se quiser, posso criar o formulário.
     """
     return redirect(reverse("projects_list"))
+
+
+def scripts_list(request):
+    """
+    Lista scripts (default + personalizados). Usa modelo Script quando existir,
+    caso contrário fornece dados fictícios. Paginação via querystring page/page_size.
+    """
+    items = []
+    try:
+        from .models import Script  # noqa: WPS433
+        qs = Script.objects.all().order_by('-id')
+        for s in qs:
+            items.append({
+                "id": getattr(s, "id", ""),
+                "name": getattr(s, "name", getattr(s, "title", str(s))),
+                "description": getattr(s, "description", "") or "",
+                "type": "custom" if getattr(s, "is_user", False) else "default",
+            })
+    except Exception:
+        # dados fictícios
+        items = [
+            {"id": 1, "name": "nmap-scan-basic", "description": "Nmap scan rápido", "type": "default"},
+            {"id": 2, "name": "sqlmap-detect", "description": "Scan básico SQLi", "type": "default"},
+            {"id": 3, "name": "hydra-brute-ssh", "description": "Brute-force SSH (demo)", "type": "default"},
+            {"id": 101, "name": "minha-varredura-web", "description": "Script personalizado para sites", "type": "custom"},
+            {"id": 102, "name": "lista-hosts", "description": "Meu script de inventário", "type": "custom"},
+        ]
+
+    # paginação
+    page = request.GET.get("page", 1)
+    try:
+        page_size = int(request.GET.get("page_size", 10))
+    except (TypeError, ValueError):
+        page_size = 10
+
+    paginator = Paginator(items, page_size)
+    page_obj = paginator.get_page(page)
+
+    return render(request, "scripts/list.html", {"scripts_page": page_obj, "scripts": page_obj.object_list})
+
+
+def scripts_create(request):
+    # placeholder: aqui implementaremos form de criação
+    messages.info(request, "Criar script: funcionalidade pendente (placeholder).")
+    return redirect("scripts_list")
+
+
+def scripts_edit(request, pk):
+    # placeholder: form de edição
+    messages.info(request, f"Editar script {pk}: funcionalidade pendente (placeholder).")
+    return redirect("scripts_list")
+
+
+def scripts_delete(request, pk):
+    # placeholder: excluir (apenas feedback)
+    messages.success(request, f"Script {pk} removido (simulado).")
+    return redirect("scripts_list")
+
+
+def scripts_clone(request, pk):
+    # placeholder: clonar default -> cria cópia simulada
+    messages.success(request, f"Script {pk} clonado para personalizado (simulado).")
+    return redirect("scripts_list")
+
+
+def scripts_reset(request, pk):
+    # placeholder: resetar script default a partir do original
+    messages.success(request, f"Script {pk} restaurado para default (simulado).")
+    return redirect("scripts_list")
+
+
+def scripts_run(request, pk):
+    # endpoint simples para executar (simulação)
+    return JsonResponse({"status": "ok", "action": "run", "id": pk})
