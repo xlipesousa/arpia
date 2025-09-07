@@ -6,6 +6,23 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>{% block title %}ARPIA{% endblock %}</title>
   <link rel="stylesheet" href="{% static 'css/dark.css' %}">
+  <style>
+    /* botão logout — estilo semelhante ao "Gerar Selecionados", com cor de ação de saída */
+    .btn-logout{
+      display:inline-flex;
+      align-items:center;
+      gap:.5rem;
+      padding:.4rem .7rem;
+      border-radius:8px;
+      background:rgba(255,139,139,0.06);
+      color:#ff8b8b;
+      border:1px solid rgba(255,139,139,0.08);
+      font-weight:700;
+      text-decoration:none;
+      cursor:pointer;
+    }
+    .btn-logout:hover{ background:rgba(255,139,139,0.10); color:#ff6b6b; }
+  </style>
 </head>
 <body class="arpia-dark">
 
@@ -77,7 +94,7 @@
       <div class="user-area">
         {% if user.is_authenticated %}
           <span class="user">Olá, {{ user.username }}</span>
-          <a href="{% url 'logout' %}" class="link">Sair</a>
+          <a href="{% url 'logout' %}" class="btn-logout" title="Sair">Sair</a>
         {% else %}
           <a href="{% url 'login' %}" class="link">Login</a>
         {% endif %}

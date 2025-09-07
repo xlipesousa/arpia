@@ -4,10 +4,10 @@ from django.shortcuts import render, redirect
 from django.core.paginator import Paginator
 from django.urls import reverse
 from django.views import View
-from django.http import JsonResponse
+from django.http import JsonResponse, FileResponse, HttpResponse
 from django.contrib import messages
 from django.shortcuts import get_object_or_404
-from django.http import HttpResponseRedirect, JsonResponse
+from django.views.decorators.csrf import csrf_exempt
 
 
 class DashboardView(LoginRequiredMixin, TemplateView):
@@ -34,13 +34,26 @@ class LogsListView(LoginRequiredMixin, TemplateView):
     template_name = "logs/list.html"
 
 
-class HealthCheck(View):
+# --- novos placeholders para reports ---
+class ReportDetailView(LoginRequiredMixin, TemplateView):
+    template_name = "reports/detail.html"
+
+
+class ReportGenerateView(LoginRequiredMixin, View):
     """
-    Endpoint de healthcheck simples usado por arpia_core/urls.py.
-    Retorna 200 OK com payload mínimo.
+    Placeholder que simula enfileiramento/geração do relatório.
+    Retorna JSON com estado.
     """
-    def get(self, request, *args, **kwargs):
-        return JsonResponse({"status": "ok", "service": "arpia_core"}, status=200)
+    def post(self, request, pk, *args, **kwargs):
+        # Simular processo assíncrono: retornar queued
+        return JsonResponse({"status": "queued", "id": pk})
+
+
+def reports_download(request, pk):
+    """
+    Placeholder de download: retorna JSON simulando um link ou content.
+    """
+    return JsonResponse({"status": "ok", "id": pk, "download_url": f"/media/reports/report-{pk}.pdf"})
 
 
 def projects_list(request):

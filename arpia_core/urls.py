@@ -28,8 +28,12 @@ urlpatterns = [
     path("wordlists/<int:pk>/delete/", views.wordlists_delete, name="wordlists_delete"),
     path("wordlists/<int:pk>/download/", views.wordlists_download, name="wordlists_download"),
 
-    # Adicionadas: views que o template base referencia
+    # Reports & Logs
     path("reports/", views.ReportsListView.as_view(), name="reports_list"),
+    path("reports/<int:pk>/", views.ReportDetailView.as_view(), name="reports_detail"),
+    path("reports/<int:pk>/generate/", views.ReportGenerateView.as_view(), name="reports_generate"),
+    path("reports/<int:pk>/download/", views.reports_download, name="reports_download"),
+
     path("logs/", views.LogsListView.as_view(), name="logs_list"),
 
     # ...existing app routes...
