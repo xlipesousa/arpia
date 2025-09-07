@@ -22,6 +22,15 @@
       cursor:pointer;
     }
     .btn-logout:hover{ background:rgba(255,139,139,0.10); color:#ff6b6b; }
+
+    /* perfil / dropdown */
+    .profile-dropdown{ position:relative; display:inline-block; }
+    .profile-btn{ display:inline-flex; align-items:center; gap:.5rem; padding:.35rem .6rem; border-radius:8px; background:transparent; color:var(--muted); border:1px solid rgba(255,255,255,0.03); cursor:pointer; font-weight:700; }
+    .profile-btn:hover{ color:var(--text); border-color:rgba(255,255,255,0.06); background:rgba(255,255,255,0.01); }
+    .profile-menu{ position:absolute; right:0; top:calc(100% + 6px); min-width:200px; background:rgba(2,16,35,0.95); border-radius:8px; box-shadow:0 12px 36px rgba(2,16,35,0.6); border:1px solid rgba(255,255,255,0.03); padding:.35rem; z-index:40; }
+    .profile-item{ display:block; padding:.5rem .6rem; color:var(--muted); text-decoration:none; border-radius:6px; }
+    .profile-item:hover{ background:rgba(255,255,255,0.02); color:var(--text); }
+    .profile-item.logout{ color:#ff8b8b; margin-top:.25rem; border-top:1px solid rgba(255,255,255,0.02); padding-top:.6rem; }
   </style>
 </head>
 <body class="arpia-dark">
@@ -86,7 +95,6 @@
 
   <header class="topbar">
     <div class="top-left">
-      <button id="hamburger" class="hamburger" aria-label="abrir menu">☰</button>
       <div class="module-switch">
         <a href="#" class="module active">Scan</a>
         <a href="#" class="module">Vuln</a>
@@ -96,11 +104,19 @@
     </div>
 
     <div class="top-right">
-      <div class="search"><input placeholder="Buscar..." aria-label="buscar"/></div>
       <div class="user-area">
         {% if user.is_authenticated %}
-          <span class="user">Olá, {{ user.username }}</span>
-          <a href="{% url 'logout' %}" class="btn-logout" title="Sair">Sair</a>
+          <div class="profile-dropdown" id="profileDropdown">
+            <button id="profileBtn" class="profile-btn" aria-haspopup="true" aria-expanded="false">
+              <span class="user">Olá, {{ user.username }}</span>
+              <span style="opacity:.8;">▾</span>
+            </button>
+            <div id="profileMenu" class="profile-menu" hidden>
+              <a href="/profile/" class="profile-item">Configurar perfil</a>
+              <a href="/accounts/password_change/" class="profile-item">Trocar senha</a>
+              <a href="{% url 'logout' %}" class="profile-item logout">Sair</a>
+            </div>
+          </div>
         {% else %}
           <a href="{% url 'login' %}" class="link">Login</a>
         {% endif %}
@@ -119,10 +135,22 @@
   document.addEventListener('DOMContentLoaded', function(){
     const sb = document.getElementById('sidebar');
     const btn = document.getElementById('toggleSidebar');
-    const ham = document.getElementById('hamburger');
     function toggle(){ sb.classList.toggle('collapsed'); document.getElementById('main').classList.toggle('sidebar-expanded'); }
     if(btn) btn.addEventListener('click', toggle);
-    if(ham) ham.addEventListener('click', toggle);
+
+    // profile dropdown toggle / close on outside click
+    const profileBtn = document.getElementById('profileBtn');
+    const profileMenu = document.getElementById('profileMenu');
+    if(profileBtn && profileMenu){
+      profileBtn.addEventListener('click', (ev)=>{
+        const expanded = profileBtn.getAttribute('aria-expanded') === 'true';
+        profileBtn.setAttribute('aria-expanded', String(!expanded));
+        if(expanded){ profileMenu.hidden = true; } else { profileMenu.hidden = false; }
+      });
+      document.addEventListener('click', (ev)=>{
+        if(!profileMenu.hidden && !ev.target.closest('#profileDropdown')){ profileMenu.hidden = true; profileBtn.setAttribute('aria-expanded','false'); }
+      });
+    }
   });
   </script>
 </body>
