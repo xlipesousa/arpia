@@ -2,6 +2,8 @@ from django.urls import path
 from . import views
 # novo: importar views do app arpia_log
 from arpia_log import views as arpia_log_views
+# novo: importar views do app arpia_ai
+from arpia_ai import views as arpia_ai_views
 
 urlpatterns = [
     # rota raiz / dashboard (necessária para templates que fazem {% url 'dashboard' %})
@@ -41,5 +43,7 @@ urlpatterns = [
     path("logs/api/", arpia_log_views.logs_api, name="logs_api"),
     path("logs/<int:pk>/", arpia_log_views.log_detail_api, name="logs_detail_api"),
 
+    # AI: lista inicial (placeholder)
+    path("ai/", arpia_ai_views.AIListView.as_view(), name="ai_list"),
     # ...existing app routes...
 ]

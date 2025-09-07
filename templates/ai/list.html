@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}AI — ARPIA{% endblock %}
+
+{% block content %}
+<div class="main" style="padding:1.25rem;max-width:1100px;margin:0 auto;">
+  <!-- topo: logo + modelo -->
+  <header style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+    <div style="display:flex;align-items:center;gap:.8rem;">
+      <img src="{% static 'img/logo-40x40.png' %}" width="40" height="40" alt="ARPIA" style="border-radius:6px;box-shadow:0 6px 18px rgba(2,16,35,0.05)">
+      <div>
+        <div style="font-weight:800;color:var(--text);font-size:1.05rem">ARPIA AI</div>
+        <div style="font-size:.85rem;color:var(--muted)">Assistente central — combine dados de projects, reports, logs e mais</div>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:.6rem;">
+      <label style="color:var(--muted);font-weight:700;font-size:.9rem;">Modelo</label>
+      <select id="ai-model" class="select-compact">
+        <option value="gpt-4o-mini">gpt-4o-mini</option>
+        <option value="gpt-4o">gpt-4o</option>
+        <option value="gpt-3.5-turbo" selected>gpt-3.5-turbo</option>
+      </select>
+    </div>
+  </header>
+
+  <!-- layout: chat central + painel lateral de fontes -->
+  <div style="display:grid;grid-template-columns:1fr 320px;gap:1rem;">
+    <!-- Chat central -->
+    <section aria-label="Chat" style="display:flex;flex-direction:column;gap:.6rem;">
+      <div id="chat-box" class="card" style="padding:0;border-radius:10px;display:flex;flex-direction:column;height:560px;overflow:hidden;">
+        <div id="messages" style="flex:1;overflow:auto;padding:1rem;display:flex;flex-direction:column;gap:.6rem;background:linear-gradient(180deg, rgba(255,255,255,0.006), transparent);">
+          <div class="msg system" style="color:var(--muted);font-size:.95rem">Bem-vindo ao ARPIA AI. Carregue dados dos módulos à direita e envie uma pergunta.</div>
+
+          <div class="msg user" style="align-self:flex-end;max-width:76%;background:linear-gradient(90deg,#4fd1c5,var(--accent));color:#021023;padding:.6rem .8rem;border-radius:10px;font-weight:700;">Exemplo: Resuma as vulnerabilidades do último relatório.</div>
+
+          <div class="msg assistant" style="align-self:flex-start;max-width:78%;background:rgba(255,255,255,0.02);color:var(--muted);padding:.6rem .8rem;border-radius:10px;">
+            Simulação: Carreguei dados do relatório #2 — 2 vulnerabilidades críticas. Recomendações de mitigação: aplicar validação de entrada e rate limiting.
+          </div>
+        </div>
+
+        <div style="border-top:1px solid rgba(255,255,255,0.02);padding:.75rem;display:flex;gap:.6rem;align-items:center;background:linear-gradient(180deg, transparent, rgba(2,16,35,0.02));">
+          <input id="attach" type="file" style="display:none" />
+          <button id="btn-attach" class="btn btn-ghost" title="Anexar" aria-label="Anexar">📎</button>
+
+          <textarea id="chat-input" placeholder="Pergunte algo ao assistente..." style="flex:1;min-height:44px;max-height:140px;padding:.6rem;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);resize:vertical;border-radius:8px;"></textarea>
+
+          <button id="btn-clear" class="btn btn-ghost" title="Limpar" aria-label="Limpar">Limpar</button>
+
+          <button id="btn-send" class="btn btn-primary" title="Enviar">
+            Enviar
+          </button>
+        </div>
+
+        <!-- selects por módulo: cada select permite escolher um conjunto/versão dos dados carregados -->
+        <div style="display:flex;gap:.5rem;align-items:center;padding:.6rem;border-top:1px solid rgba(255,255,255,0.02);background:linear-gradient(180deg, rgba(255,255,255,0.004), transparent);flex-wrap:wrap;">
+          <div style="display:flex;align-items:center;gap:.4rem;">
+            <label class="small-muted">Projects</label>
+            <select id="src-projects" class="select-compact">
+              <option value="">Nenhum</option>
+              <option value="infra">Infra Red Team</option>
+              <option value="webapp">Web App Audit</option>
+            </select>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:.4rem;">
+            <label class="small-muted">Reports</label>
+            <select id="src-reports" class="select-compact">
+              <option value="">Nenhum</option>
+              <option value="r2">Report #2 — Full</option>
+              <option value="r1">Report #1 — Executive</option>
+            </select>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:.4rem;">
+            <label class="small-muted">Logs</label>
+            <select id="src-logs" class="select-compact">
+              <option value="">Nenhum</option>
+              <option value="last_hour">Última hora</option>
+              <option value="last_day">Último dia</option>
+            </select>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:.4rem;">
+            <label class="small-muted">Scripts</label>
+            <select id="src-scripts" class="select-compact">
+              <option value="">Nenhum</option>
+              <option value="nmap">nmap</option>
+              <option value="gobuster">gobuster</option>
+            </select>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:.4rem;margin-left:auto;">
+            <button id="btn-load-selected" class="btn btn-primary compact">Carregar selecionados</button>
+            <button id="btn-clear-sources" class="btn btn-ghost compact">Aplicar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- opções rápidas / histórico de sessões (simples) -->
+      <div style="display:flex;gap:.6rem;align-items:center;">
+        <button id="btn-export-chat" class="btn btn-ghost">Exportar conversa</button>
+        <button id="btn-new-session" class="btn btn-primary">Nova sessão</button>
+      </div>
+    </section>
+
+    <!-- Painel lateral: fontes / módulos / controles -->
+    <aside style="display:flex;flex-direction:column;gap:.8rem;">
+      <div class="card" style="padding:.75rem;">
+        <h4 style="margin:.2rem 0;color:var(--muted)">Fontes / Módulos</h4>
+        <p style="color:var(--muted);font-size:.92rem;margin:.4rem 0 1rem 0">Selecione quais módulos quer disponibilizar ao assistente.</p>
+
+        <div style="display:flex;flex-direction:column;gap:.5rem;">
+          <label style="display:flex;align-items:center;gap:.5rem;">
+            <input type="checkbox" class="src-check" data-src="projects" checked> <span style="color:var(--muted)">Projects</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:.5rem;">
+            <input type="checkbox" class="src-check" data-src="reports" checked> <span style="color:var(--muted)">Reports</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:.5rem;">
+            <input type="checkbox" class="src-check" data-src="logs" checked> <span style="color:var(--muted)">Logs</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:.5rem;">
+            <input type="checkbox" class="src-check" data-src="scripts"> <span style="color:var(--muted)">Scripts</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:.5rem;">
+            <input type="checkbox" class="src-check" data-src="tools"> <span style="color:var(--muted)">Tools</span>
+          </label>
+        </div>
+
+        <div style="display:flex;gap:.5rem;margin-top:1rem;">
+          <button id="btn-load-selected-2" class="btn btn-primary" style="flex:1;">Carregar selecionados</button>
+          <button id="btn-clear-sources-2" class="btn btn-ghost">Limpar</button>
+        </div>
+      </div>
+
+      <div class="card" style="padding:.75rem;">
+        <h4 style="margin:.2rem 0;color:var(--muted)">Opções de contexto</h4>
+        <label style="display:flex;align-items:center;gap:.5rem;margin-top:.4rem;">
+          <input id="opt-redact" type="checkbox"> <span style="color:var(--muted)">Redact IPs</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:.5rem;margin-top:.4rem;">
+          <input id="opt-manifest" type="checkbox"> <span style="color:var(--muted)">Incluir manifest</span>
+        </label>
+
+        <div style="display:flex;gap:.5rem;margin-top:1rem;">
+          <button id="btn-apply-opts" class="btn btn-primary" style="flex:1;">Aplicar</button>
+        </div>
+      </div>
+
+      <div class="card" style="padding:.75rem;">
+        <h4 style="margin:.2rem 0;color:var(--muted)">Sessões</h4>
+        <div style="display:flex;flex-direction:column;gap:.4rem;">
+          <button class="btn session-btn" data-session="2025-09-01">Sessão 2025-09-01</button>
+          <button class="btn session-btn" data-session="2025-08-21">Sessão 2025-08-21</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<style>
+/* estilos locais reutilizáveis e correções de contraste */
+.card{ background:rgba(255,255,255,0.01); border-radius:10px; }
+.msg.user{ font-weight:700; }
+.msg.assistant{ color:var(--muted); }
+.btn{ border-radius:8px; padding:.35rem .6rem; font-weight:700; cursor:pointer; color:var(--muted); background:transparent; border:1px solid rgba(255,255,255,0.03); }
+.btn-ghost{ background:transparent; color:var(--muted); border:1px solid rgba(255,255,255,0.03); }
+.btn-primary{ font-weight:800; background:linear-gradient(90deg,#4fd1c5,var(--accent)); color:#021023; border:1px solid rgba(79,209,197,0.08); box-shadow: 0 8px 26px rgba(4,18,42,0.06); }
+.btn.primary:focus, .btn-primary:focus { outline: none; box-shadow: 0 10px 30px rgba(79,209,197,0.06); }
+.select-compact{ padding:.4rem .6rem;border-radius:8px;background:linear-gradient(180deg, rgba(255,255,255,0.018), rgba(255,255,255,0.012));border:1px solid rgba(255,255,255,0.06);color:var(--text);min-width:160px; }
+.small-muted{ color:var(--muted); font-size:.86rem; margin-right:.25rem; }
+
+/* melhorar visibilidade de botões de sessão */
+.session-btn{ text-align:left; background:transparent; border:1px solid rgba(255,255,255,0.03); color:var(--muted); padding:.45rem .6rem; border-radius:8px; }
+.session-btn:hover{ background:rgba(255,255,255,0.02); color:var(--text); border-color:rgba(255,255,255,0.06); }
+
+/* compact variant */
+.btn.compact{ padding:.32rem .5rem; font-size:.95rem; }
+</style>
+
+<script>
+(function(){
+  const messages = document.getElementById('messages');
+  const input = document.getElementById('chat-input');
+  const btnSend = document.getElementById('btn-send');
+  const btnClear = document.getElementById('btn-clear');
+  const btnAttach = document.getElementById('btn-attach');
+  const attachInput = document.getElementById('attach');
+
+  function appendMessage(kind, text){
+    const el = document.createElement('div');
+    el.className = 'msg ' + kind;
+    if(kind === 'user'){ el.style.alignSelf='flex-end'; el.style.background='linear-gradient(90deg,#4fd1c5,var(--accent))'; el.style.color='#021023'; el.style.padding='.6rem .8rem'; el.style.borderRadius='10px'; }
+    else if(kind === 'assistant'){ el.style.alignSelf='flex-start'; el.style.background='rgba(255,255,255,0.02)'; el.style.color='var(--muted)'; el.style.padding='.6rem .8rem'; el.style.borderRadius='10px'; }
+    else { el.style.color='var(--muted)'; el.style.padding='.4rem .6rem'; el.style.borderRadius='8px'; el.style.background='transparent'; }
+    el.innerText = text;
+    messages.appendChild(el);
+    messages.scrollTop = messages.scrollHeight;
+  }
+
+  btnSend.addEventListener('click', ()=>{
+    const v = input.value.trim();
+    if(!v) return;
+    appendMessage('user', v);
+    input.value = '';
+    appendMessage('assistant', 'Pensando...'); // placeholder
+    setTimeout(()=> {
+      const nodes = messages.querySelectorAll('.msg.assistant');
+      const last = nodes[nodes.length-1];
+      if(last) last.innerText = 'Resposta simulada: resumo rápido baseado nas fontes carregadas.';
+      messages.scrollTop = messages.scrollHeight;
+    }, 700);
+  });
+
+  btnClear.addEventListener('click', ()=>{ messages.innerHTML=''; appendMessage('system','Conversa limpa.'); });
+
+  btnAttach.addEventListener('click', ()=> attachInput.click());
+  attachInput.addEventListener('change', (ev)=>{
+    if(ev.target.files.length) appendMessage('system','Arquivo anexado: ' + ev.target.files[0].name);
+  });
+
+  document.getElementById('btn-load-selected')?.addEventListener('click', async ()=>{
+    const vals = [
+      document.getElementById('src-projects').value,
+      document.getElementById('src-reports').value,
+      document.getElementById('src-logs').value,
+      document.getElementById('src-scripts').value,
+    ].filter(Boolean);
+    if(!vals.length){ appendMessage('system','Nenhuma fonte selecionada.'); return; }
+    appendMessage('system','Carregando: ' + vals.join(', '));
+    await new Promise(r=>setTimeout(r, 600));
+    appendMessage('system','Fontes carregadas (simulado).');
+  });
+
+  document.getElementById('btn-export-chat')?.addEventListener('click', ()=>{
+    const texts = Array.from(messages.querySelectorAll('.msg')).map(n=>n.innerText);
+    const blob = new Blob([texts.join('\n\n')], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'arpia-ai-conversation.txt'; a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  document.getElementById('btn-new-session')?.addEventListener('click', ()=>{
+    appendMessage('system','Nova sessão criada (simulado).');
+  });
+
+  // sessões: carregar histórico visualmente
+  document.querySelectorAll('.session-btn').forEach(b=>{
+    b.addEventListener('click', ()=> {
+      const s = b.dataset.session;
+      messages.innerHTML=''; appendMessage('system',`Sessão ${s} carregada (simulado).`);
+    });
+  });
+
+  // enviar com Ctrl+Enter
+  input.addEventListener('keydown', (ev)=>{ if(ev.key === 'Enter' && (ev.ctrlKey||ev.metaKey)){ btnSend.click(); }} );
+})();
+</script>
+{% endblock %}
