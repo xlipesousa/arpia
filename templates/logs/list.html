@@ -1,5 +1,192 @@
 {% extends "base.html" %}
-{% block title %}Logs - ARPIA{% endblock %}
+{% load static %}
+{% block title %}Logs — ARPIA{% endblock %}
+
 {% block content %}
-<div class="card"><h2>Logs</h2><p>Visualização de logs e auditoria.</p></div>
+<div class="main">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+    <h2 style="margin:0;color:var(--text)">Logs</h2>
+    <div style="display:flex;gap:.6rem;align-items:center;">
+      <a href="#" id="btn-export-logs" class="btn btn-primary" style="display:inline-flex;align-items:center;gap:.6rem;padding:.45rem .8rem;border-radius:8px;background:linear-gradient(90deg,#4fd1c5,var(--accent));color:#021023;border:1px solid rgba(79,209,197,0.08);font-weight:700;text-decoration:none;">
+        Exportar
+      </a>
+    </div>
+  </div>
+
+  <div class="card" style="padding:.75rem;">
+    <div class="filters" style="display:flex;gap:.75rem;align-items:center;margin-bottom:.75rem;flex-wrap:wrap;">
+      <div><label style="color:var(--muted);margin-right:.4rem">Nivel</label>
+        <select id="filter-level">
+          <option value="">Todos</option><option>ERROR</option><option>WARN</option><option>INFO</option><option>DEBUG</option>
+        </select>
+      </div>
+
+      <div><label style="color:var(--muted);margin-right:.4rem">Fonte</label>
+        <select id="filter-source">
+          <option value="">Todas</option><option>web</option><option>scanner</option><option>agent</option><option>system</option>
+        </select>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:.35rem;">
+        <label style="color:var(--muted)">Período</label>
+        <input id="filter-from" type="date">
+        <span style="color:var(--muted)">—</span>
+        <input id="filter-to" type="date">
+      </div>
+
+      <div style="margin-left:auto;display:flex;align-items:center;gap:.5rem;">
+        <input id="q" placeholder="Pesquisar mensagem ou projeto..." style="padding:.35rem .6rem;border-radius:8px;">
+        <button id="btn-filter" class="btn" style="display:inline-flex;align-items:center;gap:.6rem;padding:.45rem .8rem;border-radius:8px;background:linear-gradient(90deg,#4fd1c5,var(--accent));color:#021023;border:1px solid rgba(79,209,197,0.08);font-weight:700;text-decoration:none;cursor:pointer;">
+          Aplicar
+        </button>
+      </div>
+    </div>
+
+    <div style="overflow:auto">
+      <table class="projects-table" style="width:100%;color:var(--muted);">
+        <thead>
+          <tr style="text-align:left;font-weight:700;color:var(--muted);">
+            <th style="width:56px;">ID</th>
+            <th style="min-width:180px">Timestamp</th>
+            <th>Projeto</th>
+            <th>Fonte</th>
+            <th>Nível</th>
+            <th>Mensagem</th>
+            <th style="text-align:right">Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in logs %}
+          <tr>
+            <td style="color:var(--muted)">{{ log.id }}</td>
+            <td style="color:var(--muted)">{{ log.timestamp }}</td>
+            <td style="color:var(--text)">{{ log.project }}</td>
+            <td style="color:var(--muted)">{{ log.source }}</td>
+            <td>
+              {% if log.level == "ERROR" %}
+                <span style="padding:.12rem .5rem;border-radius:6px;background:rgba(255,139,139,0.06);color:#ff8b8b;font-weight:700">ERROR</span>
+              {% elif log.level == "WARN" %}
+                <span style="padding:.12rem .5rem;border-radius:6px;background:rgba(255,184,93,0.06);color:#ffb85d;font-weight:700">WARN</span>
+              {% else %}
+                <span style="padding:.12rem .5rem;border-radius:6px;background:rgba(79,209,197,0.04);color:#7eeacf;font-weight:700">{{ log.level }}</span>
+              {% endif %}
+            </td>
+            <td style="color:var(--muted);max-width:50ch;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ log.message }}</td>
+            <td style="text-align:right;white-space:nowrap;">
+              <!-- Tail individual -->
+              <a href="#" title="Tail" class="btn-icon btn-primary" data-id="{{ log.id }}">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20M5 9l7-7 7 7" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </a>
+              <a href="#" title="Ver raw" class="btn-icon btn-info" data-id="{{ log.id }}">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5c-7 0-11 7-11 7s4 7 11 7 11-7 11-7-4-7-11-7z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </a>
+              <a href="#" title="JSON" class="btn-icon btn-success" data-id="{{ log.id }}">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 11l4 4 4-4" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </a>
+              <a href="#" title="Copiar" class="btn-icon btn" data-id="{{ log.id }}">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7h8v12H8z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </a>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="7" style="padding:1rem;color:var(--muted)">Nenhum log disponível.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:.7rem .3rem;margin-top:.6rem;">
+      <div>
+        Mostrar
+        <select id="logs-page-size" style="padding:.25rem .4rem;border-radius:6px;">
+          <option value="5">5</option>
+          <option value="10" selected>10</option>
+          <option value="25">25</option>
+        </select>
+        entradas
+      </div>
+
+      <div style="display:flex;gap:.35rem;align-items:center;">
+        {% if logs_page.has_previous %}
+          <a href="?page={{ logs_page.previous_page_number }}" class="btn-pager">«</a>
+        {% else %}
+          <span class="btn-pager disabled">«</span>
+        {% endif %}
+        <span class="btn-pager active">{{ logs_page.number }}</span>
+        {% if logs_page.has_next %}
+          <a href="?page={{ logs_page.next_page_number }}" class="btn-pager">»</a>
+        {% else %}
+          <span class="btn-pager disabled">»</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+/* reaproveitar estilos do projeto para consistência */
+.projects-table{ table-layout:auto; width:100%; border-collapse:collapse; }
+.projects-table th, .projects-table td{ padding:.45rem .6rem; vertical-align:middle; overflow:hidden; color:var(--muted); }
+.btn-icon{ display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:8px; border:1px solid rgba(255,255,255,0.03); background:transparent; color:var(--muted); cursor:pointer; margin-left:6px; text-decoration:none; }
+.btn-icon svg{ display:block; width:16px; height:16px; stroke:currentColor; fill:none; stroke-width:1.4; }
+.card .filters select, .card .filters input { background: linear-gradient(180deg, rgba(255,255,255,0.018), rgba(255,255,255,0.012)); border:1px solid rgba(255,255,255,0.06); color:var(--text); padding:.32rem .5rem; border-radius:8px; }
+.btn-pager{ display:inline-flex; padding:.28rem .5rem; border-radius:6px; border:1px solid rgba(255,255,255,0.03); text-decoration:none; color:var(--muted); }
+.btn-pager.active{ background:rgba(255,255,255,0.03); color:var(--text); font-weight:700; }
+.btn-pager.disabled{ opacity:0.45; cursor:default; }
+.card{ background:rgba(255,255,255,0.01); border-radius:8px; padding:.6rem; }
+</style>
+
+<script>
+(function(){
+  // hook simples para ações de linha (view / json / copy) usando dataset
+  document.addEventListener('click', async (ev)=>{
+    const a = ev.target.closest('.btn-icon');
+    if(!a) return;
+    ev.preventDefault();
+    const id = a.dataset.id;
+    if(!id) return;
+
+    // Tail: abrir stream/visualização em nova janela (placeholder)
+    if(a.title === 'Tail'){
+      // abre rota placeholder /logs/<id>/tail/ (implementar stream posteriormente)
+      window.open(`/logs/${id}/tail/`, `_blank`);
+      return;
+    }
+
+    if(a.title === 'Ver raw'){
+      const r = await fetch(`/logs/${id}/`);
+      const j = await r.json().catch(()=>null);
+      alert(JSON.stringify(j, null, 2));
+      return;
+    }
+    if(a.title === 'JSON'){
+      alert('Download JSON (simulado): /api/logs/' + id);
+      return;
+    }
+    if(a.title === 'Copiar'){
+      const r = await fetch(`/logs/${id}/`);
+      const j = await r.json().catch(()=>null);
+      if(j){ navigator.clipboard?.writeText(JSON.stringify(j)) ; alert('Copiado para a área de transferência'); }
+      return;
+    }
+  });
+
+  // botão APPLY — filtra via querystring simples (client-side)
+  document.getElementById('btn-filter')?.addEventListener('click', ()=>{
+    const q = document.getElementById('q').value;
+    const level = document.getElementById('filter-level').value;
+    const source = document.getElementById('filter-source').value;
+    const from = document.getElementById('filter-from').value;
+    const to = document.getElementById('filter-to').value;
+    const params = new URLSearchParams();
+    if(q) params.set('q', q);
+    if(level) params.set('level', level);
+    if(source) params.set('source', source);
+    if(from) params.set('from', from);
+    if(to) params.set('to', to);
+    window.location.search = params.toString();
+  });
+
+})();
+</script>
 {% endblock %}
