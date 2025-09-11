@@ -145,4 +145,4 @@ echo " - revisar mudanças: git status / git log --oneline -n 10"
 echo " - reiniciar serviços se necessário (systemd, uwsgi, gunicorn, etc.)"
 
 exit 0
-# ...existing
+# ...existing scritp
