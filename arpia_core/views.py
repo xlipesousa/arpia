@@ -8,6 +8,8 @@ from django.http import JsonResponse, FileResponse, HttpResponse
 from django.contrib import messages
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+import datetime
 
 
 class DashboardView(LoginRequiredMixin, TemplateView):
@@ -56,70 +58,104 @@ def reports_download(request, pk):
     return JsonResponse({"status": "ok", "id": pk, "download_url": f"/media/reports/report-{pk}.pdf"})
 
 
-def projects_list(request):
-    """
-    Lista paginada de projetos.
-    - tenta usar arpia_core.models.Project se existir;
-    - se não houver model/erro, usa dados fictícios.
-    """
-    items = []
-    try:
-        from .models import Project  # noqa: WPS433 - import dinâmico por compatibilidade
-        qs = Project.objects.all().order_by('-id')
-        for obj in qs:
-            # owner fallback
-            owner = getattr(obj, "owner", None) or getattr(obj, "created_by", None)
-            owner_name = getattr(owner, "username", str(owner)) if owner else "---"
-
-            # created fallback (várias convenções)
-            created = (
-                getattr(obj, "created_at", None)
-                or getattr(obj, "created", None)
-                or getattr(obj, "created_on", None)
-                or getattr(obj, "date_created", None)
-            )
-            created_str = created.strftime("%Y-%m-%d") if getattr(created, "strftime", None) else (str(created) if created else "")
-
-            status = getattr(obj, "status", None) or getattr(obj, "state", None) or "Ativo"
-
-            items.append({
-                "id": getattr(obj, "id", ""),
-                "name": getattr(obj, "name", getattr(obj, "title", str(obj))),
-                "owner": owner_name,
-                "created": created_str,
-                "status": str(status),
-            })
-    except Exception:
-        # dados fictícios
-        items = [
-            {"id": 1, "name": "Infra Red Team", "owner": "alice", "created": "2025-08-01", "status": "Ativo"},
-            {"id": 2, "name": "Web App Audit", "owner": "bob", "created": "2025-06-12", "status": "Em revisão"},
-            {"id": 3, "name": "Pentest Finance", "owner": "carol", "created": "2025-07-20", "status": "Concluído"},
-            {"id": 4, "name": "Continuous Hunt", "owner": "dave", "created": "2025-05-02", "status": "Planejado"},
-            {"id": 5, "name": "API Security", "owner": "erin", "created": "2025-03-18", "status": "Ativo"},
-            {"id": 6, "name": "Mobile Audit", "owner": "frank", "created": "2025-01-09", "status": "Em revisão"},
-            {"id": 7, "name": "Retention Test", "owner": "gina", "created": "2024-12-30", "status": "Planejado"},
-        ]
-
-    # paginação
-    page = request.GET.get("page", 1)
-    try:
-        page_size = int(request.GET.get("page_size", 10))
-    except (TypeError, ValueError):
-        page_size = 10
-
-    paginator = Paginator(items, page_size)
-    page_obj = paginator.get_page(page)
-
-    return render(request, "projects/list.html", {"projects_page": page_obj, "projects": page_obj.object_list})
-
-
+@require_http_methods(["GET", "POST"])
 def projects_create(request):
     """
-    Placeholder simples para 'Novo Projeto'.
-    Por enquanto redireciona para a lista. Se quiser, posso criar o formulário.
+    View de criação de projeto com validação server-side mínima.
+    - Campos: name (required), description, client, start, end
+    - Tenta salvar em app_project.models.Project se existir, senão grava em session (temporário)
     """
-    return redirect(reverse("projects_list"))
+    errors = {}
+    # tentar carregar clients reais, senão fallback exemplares
+    clients = []
+    try:
+        from app_project.models import Client  # app responsável conforme instrução
+        clients_qs = Client.objects.all()
+        clients = [{"id": c.id, "name": getattr(c, "name", str(c))} for c in clients_qs]
+    except Exception:
+        clients = [{"id": "infra", "name": "Infra Red Team"}, {"id": "webapp", "name": "Web App Audit"}]
+
+    form = {
+        "name": "",
+        "description": "",
+        "client": "",
+        "start": "",
+        "end": "",
+    }
+
+    if request.method == "POST":
+        form["name"] = request.POST.get("name", "").strip()
+        form["description"] = request.POST.get("description", "").strip()
+        form["client"] = request.POST.get("client", "").strip()
+        form["start"] = request.POST.get("start", "").strip()
+        form["end"] = request.POST.get("end", "").strip()
+
+        # validações
+        if not form["name"]:
+            errors["name"] = "O nome é obrigatório."
+
+        dt_start = dt_end = None
+        if form["start"]:
+            try:
+                dt_start = datetime.datetime.fromisoformat(form["start"])
+            except Exception:
+                errors["start"] = "Data/hora de início inválida."
+        if form["end"]:
+            try:
+                dt_end = datetime.datetime.fromisoformat(form["end"])
+            except Exception:
+                errors["end"] = "Data/hora de término inválida."
+
+        if dt_start and dt_end and dt_end < dt_start:
+            errors["end"] = "Data de término não pode ser anterior ao início."
+
+        if not errors:
+            # tentar persistir em modelo Project (se existir), senão guardar em sessão (temporário)
+            try:
+                from app_project.models import Project
+                p = Project(
+                    name=form["name"],
+                    description=form["description"],
+                    start=dt_start,
+                    end=dt_end
+                )
+                # se existir campo client relacionado, tentar atribuir
+                if hasattr(p, "client_id") and form["client"]:
+                    try:
+                        # tenta converter id para int, senão usa string
+                        p.client_id = int(form["client"])
+                    except Exception:
+                        p.client_id = form["client"]
+                p.save()
+            except Exception:
+                tmp = request.session.get("tmp_projects", [])
+                tmp.append({
+                    "id": len(tmp) + 1,
+                    "name": form["name"],
+                    "description": form["description"],
+                    "client": form["client"],
+                    "start": form["start"],
+                    "end": form["end"],
+                })
+                request.session["tmp_projects"] = tmp
+            return redirect("projects_list")
+
+    return render(request, "projects/new.html", {"clients": clients, "errors": errors, "form": form})
+
+
+def projects_list(request):
+    """
+    Lista simples de projetos para compatibilidade com o template projects/list.html.
+    Usa modelo Project se disponível, senão dados salvos em sessão.
+    """
+    projects = []
+    try:
+        from app_project.models import Project
+        qs = Project.objects.all().order_by("-id")
+        projects = [{"id": p.id, "name": getattr(p, "name", str(p)), "client": getattr(p, "client", None)} for p in qs]
+    except Exception:
+        projects = request.session.get("tmp_projects", [])
+    return render(request, "projects/list.html", {"projects": projects})
 
 
 def scripts_list(request):
@@ -249,3 +285,167 @@ def wordlists_download(request, pk):
     Retorna JSON simulando link/estado.
     """
     return JsonResponse({"status": "ok", "action": "download", "id": pk})
+
+
+@require_http_methods(["GET", "POST"])
+def projects_edit(request, pk):
+    """
+    Edita um projeto existente. Atualiza modelo real (se existir) ou fallback para sessão.
+    Compatível com o template projects/edit.html.
+    """
+    errors = {}
+    try:
+        from app_project.models import Client  # para compatibilidade (não obrigatório)
+        clients_qs = Client.objects.all()
+        clients = [{"id": c.id, "name": getattr(c, "name", str(c))} for c in clients_qs]
+    except Exception:
+        clients = [{"id": "infra", "name": "Infra Red Team"}, {"id": "webapp", "name": "Web App Audit"}]
+
+    project_obj = None
+    project = {}
+    # tentar carregar instância real
+    try:
+        try:
+            from app_project.models import Project as ProjectModel
+        except Exception:
+            from .models import Project as ProjectModel
+        project_obj = ProjectModel.objects.filter(pk=pk).first()
+    except Exception:
+        project_obj = None
+
+    # fallback para sessão
+    if not project_obj:
+        tmp = request.session.get("tmp_projects", [])
+        project = next((p for p in tmp if p.get("id") == pk), {}) or {}
+    else:
+        project = {
+            "id": project_obj.id,
+            "name": getattr(project_obj, "name", "") or "",
+            "description": getattr(project_obj, "description", "") or "",
+            "client": getattr(getattr(project_obj, "client", None), "id", getattr(project_obj, "client", "")) or "",
+            "start": getattr(project_obj, "start", "") or "",
+            "end": getattr(project_obj, "end", "") or "",
+            "hosts": getattr(project_obj, "hosts", "") or "",
+            "networks": getattr(project_obj, "networks", "") or "",
+            "ports": getattr(project_obj, "ports", "") or "",
+            "credentials_json": getattr(project_obj, "credentials_json", "[]") or "[]",
+            "credentials": getattr(project_obj, "credentials", []) or [],
+        }
+
+    form = {
+        "name": project.get("name", ""),
+        "description": project.get("description", ""),
+        "client": project.get("client", ""),
+        "start": project.get("start", ""),
+        "end": project.get("end", ""),
+        "hosts": project.get("hosts", ""),
+        "networks": project.get("networks", ""),
+        "ports": project.get("ports", ""),
+        "credentials_json": project.get("credentials_json", "[]"),
+        "credentials": project.get("credentials", []),
+    }
+
+    if request.method == "POST":
+        form["name"] = request.POST.get("name", "").strip()
+        form["description"] = request.POST.get("description", "").strip()
+        form["client"] = request.POST.get("client", "").strip()
+        form["start"] = request.POST.get("start", "").strip()
+        form["end"] = request.POST.get("end", "").strip()
+        form["hosts"] = request.POST.get("hosts", "").strip()
+        form["networks"] = request.POST.get("networks", "").strip()
+        form["ports"] = request.POST.get("ports", "").strip()
+        form["credentials_json"] = request.POST.get("credentials_json", form["credentials_json"])
+
+        if not form["name"]:
+            errors["name"] = "O nome é obrigatório."
+
+        dt_start = dt_end = None
+        if form["start"]:
+            try:
+                dt_start = datetime.datetime.fromisoformat(form["start"])
+            except Exception:
+                errors["start"] = "Data/hora de início inválida."
+        if form["end"]:
+            try:
+                dt_end = datetime.datetime.fromisoformat(form["end"])
+            except Exception:
+                errors["end"] = "Data/hora de término inválida."
+
+        if dt_start and dt_end and dt_end < dt_start:
+            errors["end"] = "Data de término não pode ser anterior ao início."
+
+        if not errors:
+            try:
+                # prioriza modelo real
+                try:
+                    from app_project.models import Project as ProjectModel
+                except Exception:
+                    from .models import Project as ProjectModel
+
+                if project_obj:
+                    p = project_obj
+                    p.name = form["name"]
+                    p.description = form["description"]
+                    p.start = dt_start
+                    p.end = dt_end
+                else:
+                    p = ProjectModel(
+                        name=form["name"],
+                        description=form["description"],
+                        start=dt_start,
+                        end=dt_end
+                    )
+
+                if hasattr(p, "client_id") and form["client"]:
+                    try:
+                        p.client_id = int(form["client"])
+                    except Exception:
+                        p.client_id = form["client"]
+
+                if hasattr(p, "hosts"):
+                    setattr(p, "hosts", form.get("hosts", ""))
+                if hasattr(p, "networks"):
+                    setattr(p, "networks", form.get("networks", ""))
+                if hasattr(p, "ports"):
+                    setattr(p, "ports", form.get("ports", ""))
+                if hasattr(p, "credentials_json"):
+                    setattr(p, "credentials_json", form.get("credentials_json", "[]"))
+
+                p.save()
+                messages.success(request, "Projeto salvo com sucesso.")
+                return redirect("projects_list")
+            except Exception:
+                # fallback sessão
+                tmp = request.session.get("tmp_projects", [])
+                found = False
+                for i, it in enumerate(tmp):
+                    if it.get("id") == pk:
+                        tmp[i].update({
+                            "name": form["name"],
+                            "description": form["description"],
+                            "client": form["client"],
+                            "start": form["start"],
+                            "end": form["end"],
+                            "hosts": form.get("hosts", ""),
+                            "networks": form.get("networks", ""),
+                            "ports": form.get("ports", ""),
+                        })
+                        found = True
+                        break
+                if not found:
+                    tmp.append({
+                        "id": pk,
+                        "name": form["name"],
+                        "description": form["description"],
+                        "client": form["client"],
+                        "start": form["start"],
+                        "end": form["end"],
+                        "hosts": form.get("hosts", ""),
+                        "networks": form.get("networks", ""),
+                        "ports": form.get("ports", ""),
+                    })
+                request.session["tmp_projects"] = tmp
+                messages.success(request, "Projeto salvo na sessão (fallback).")
+                return redirect("projects_list")
+
+    return render(request, "projects/edit.html", {"project": project, "form": form, "clients": clients, "errors": errors})

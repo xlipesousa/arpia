@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Novo Projeto — ARPIA{% endblock %}
+
+{% block content %}
+<div class="main" style="padding:1.25rem;max-width:900px;margin:0 auto;">
+  <h2 style="margin:0 0 1rem 0;color:var(--text)">Novo Projeto</h2>
+
+  <form action="{% url 'projects_create' %}" method="post" class="card" style="padding:1rem;display:flex;flex-direction:column;gap:.75rem;">
+    {% csrf_token %}
+
+    <label style="font-weight:700;color:var(--muted)">Nome</label>
+    <input name="name" required placeholder="Nome do projeto" style="padding:.5rem .6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);">
+
+    <label style="font-weight:700;color:var(--muted)">Descrição</label>
+    <textarea name="description" placeholder="Breve descrição" rows="4" style="padding:.6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);resize:vertical;"></textarea>
+
+    <label style="font-weight:700;color:var(--muted)">Cliente</label>
+    <input name="client" type="text" placeholder="Nome da empresa contratante" value="{{ form.client }}" style="padding:.5rem .6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);">
+
+    <div style="display:flex;gap:.75rem;flex-wrap:wrap;">
+      
+      <div style="display:flex;gap:.5rem;min-width:320px;align-items:end;">
+        <div style="flex:1">
+          <label style="font-weight:700;color:var(--muted)">Início</label>
+          <input name="start" id="proj-start" type="datetime-local" style="width:100%;padding:.45rem .6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);">
+        </div>
+        <div style="flex:1">
+          <label style="font-weight:700;color:var(--muted)">Término</label>
+          <input name="end" id="proj-end" type="datetime-local" style="width:100%;padding:.45rem .6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);">
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:.25rem;">
+      <a href="{% url 'projects_list' %}" class="btn btn-ghost">Cancelar</a>
+      <button type="submit" class="btn btn-primary">Criar Projeto</button>
+    </div>
+  </form>
+</div>
+
+<style>
+/* pequenas garantias de contraste e consistência */
+.card{ background:rgba(255,255,255,0.01); border-radius:10px; }
+.btn{ border-radius:8px; padding:.35rem .6rem; font-weight:700; cursor:pointer; color:var(--muted); background:transparent; border:1px solid rgba(255,255,255,0.03); text-decoration:none; display:inline-flex; align-items:center; gap:.4rem; }
+.btn-ghost{ background:transparent; color:var(--muted); border:1px solid rgba(255,255,255,0.03); }
+.btn-primary{ background:linear-gradient(90deg,#4fd1c5,var(--accent)); color:#021023; border:1px solid rgba(79,209,197,0.08); box-shadow:0 8px 26px rgba(4,18,42,0.06); }
+</style>
+
+<script>
+(function(){
+  const start = document.getElementById('proj-start');
+  const end = document.getElementById('proj-end');
+
+  // garantir que end >= start no client-side
+  if(start && end){
+    start.addEventListener('change', ()=> {
+      if(end.value && start.value && end.value < start.value) end.value = start.value;
+      end.min = start.value || '';
+    });
+    end.addEventListener('change', ()=> {
+      if(start.value && end.value < start.value) { alert('Data de término não pode ser anterior ao início.'); end.value = start.value; }
+    });
+  }
+})();
+</script>
+{% endblock %}

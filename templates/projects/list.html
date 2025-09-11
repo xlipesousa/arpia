@@ -39,28 +39,53 @@
             <td class="actions-col" style="padding:.45rem .5rem;vertical-align:middle;text-align:right;">
               <!-- Botões de ação: ícones somente -->
               <button type="button" class="btn-icon btn-info" title="Ver" data-action="view" data-id="{{ p.id }}" aria-label="Ver projeto {{ p.name }}">
-                <!-- ícone olho -->
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M12 5c-7 0-11 7-11 7s4 7 11 7 11-7 11-7-4-7-11-7z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </button>
 
-              <button type="button" class="btn-icon btn-success" title="Editar" data-action="edit" data-id="{{ p.id }}" aria-label="Editar projeto {{ p.name }}">
-                <!-- ícone lápis -->
+              <a href="{% url 'projects_edit' p.id %}" class="btn-icon btn-success" title="Editar" aria-label="Editar projeto {{ p.name }}">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M3 21l3-1 11-11 1-3L14 3 3 14v7z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </button>
+              </a>
 
               <button type="button" class="btn-icon btn-warning" title="Compartilhar" data-action="share" data-id="{{ p.id }}" aria-label="Compartilhar projeto {{ p.name }}">
-                <!-- ícone compartilhar -->
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 6l-4-4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 2v13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </button>
-
-              <button type="button" class="btn-icon btn-danger" title="Apagar" data-action="delete" data-id="{{ p.id }}" aria-label="Apagar projeto {{ p.name }}">
-                <!-- ícone lixeira -->
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M3 6h18" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 6v14a1 1 0 001 1h6a1 1 0 001-1V6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 11v6M14 11v6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </button>
             </td>
           </tr>
           {% empty %}
-          <tr><td colspan="6" style="padding:.8rem;color:var(--muted)">Nenhum projeto encontrado.</td></tr>
+          <!-- exemplos fictícios para demonstração visual -->
+          <tr class="row">
+            <td class="id-col" style="padding:.45rem .5rem;text-align:center;vertical-align:middle;white-space:nowrap;">1</td>
+            <td class="name-col" style="padding:.45rem .5rem;color:var(--text);vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:140px;max-width:55%;">Executive summary — Infra Red Team</td>
+            <td style="padding:.45rem .5rem;vertical-align:middle;">Infra Red Team</td>
+            <td style="padding:.45rem .5rem;vertical-align:middle;">2025-09-01</td>
+            <td style="padding:.45rem .5rem;vertical-align:middle;">
+              <span style="padding:.18rem .45rem;border-radius:6px;background:rgba(79,209,197,0.06);color:#4fd1c5;font-weight:700">Ativo</span>
+            </td>
+            <td class="actions-col" style="padding:.45rem .5rem;vertical-align:middle;text-align:right;">
+              <button type="button" class="btn-icon btn-info" title="Ver" data-action="view" data-id="1" aria-label="Ver projeto 1">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 5c-7 0-11 7-11 7s4 7 11 7 11-7 11-7-4-7-11-7z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <a href="{% url 'projects_edit' 1 %}" class="btn-icon btn-success" title="Editar" aria-label="Editar projeto 1"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M3 21l3-1 11-11 1-3L14 3 3 14v7z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+              <button type="button" class="btn-icon btn-warning" title="Compartilhar" data-action="share" data-id="1"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 6l-4-4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 2v13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <button type="button" class="btn-icon btn-danger" title="Apagar" data-action="delete" data-id="1"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M3 6h18" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 6v14a1 1 0 001 1h6a1 1 0 001-1V6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 11v6M14 11v6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            </td>
+          </tr>
+
+          <tr class="row">
+            <td class="id-col" style="padding:.45rem .5rem;text-align:center;vertical-align:middle;white-space:nowrap;">2</td>
+            <td class="name-col" style="padding:.45rem .5rem;color:var(--text);vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:140px;max-width:55%;">Full report — Web App Audit</td>
+            <td style="padding:.45rem .5rem;vertical-align:middle;">Web App Audit</td>
+            <td style="padding:.45rem .5rem;vertical-align:middle;">2025-08-21</td>
+            <td style="padding:.45rem .5rem;vertical-align:middle;">
+              <span style="padding:.18rem .45rem;border-radius:6px;background:rgba(255,184,93,0.06);color:#ffb85d;font-weight:700">Em fila</span>
+            </td>
+            <td class="actions-col" style="padding:.45rem .5rem;vertical-align:middle;text-align:right;">
+              <button type="button" class="btn-icon btn-info" title="Ver" data-action="view" data-id="2"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 5c-7 0-11 7-11 7s4 7 11 7 11-7 11-7-4-7-11-7z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <a href="{% url 'projects_edit' 2 %}" class="btn-icon btn-success" title="Editar" aria-label="Editar projeto 2"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M3 21l3-1 11-11 1-3L14 3 3 14v7z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+              <button type="button" class="btn-icon btn-warning" title="Compartilhar" data-action="share" data-id="2"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 6l-4-4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 2v13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <button type="button" class="btn-icon btn-danger" title="Apagar" data-action="delete" data-id="2"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M3 6h18" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 6v14a1 1 0 001 1h6a1 1 0 001-1V6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 11v6M14 11v6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            </td>
+          </tr>
           {% endfor %}
         </tbody>
       </table>
