@@ -1,4 +1,3 @@
-# ...existing code...
 #!/usr/bin/env bash
 # Atualiza o repositório local a partir do remote (GitHub).
 # Uso: ./update.sh
@@ -29,9 +28,10 @@ if [ "$REMOTE_URL" != "$REPO_EXPECTED" ]; then
   warn "  origin: $REMOTE_URL"
   warn "  esperado: $REPO_EXPECTED"
   read -r -p "Continuar mesmo assim? [y/N]: " CONF
-  if [[ ! "$CONF" =~ ^[Yy]$ ]]; then
-    err "Abortado pelo usuário."
-  fi
+  case "$CONF" in
+    [Yy]* ) ;; 
+    * ) err "Abortado pelo usuário." ;;
+  esac
 fi
 
 # detectar branch atual
@@ -65,12 +65,15 @@ if [ "$DIRTY" -eq 1 ]; then
     echo
     warn "Alterações locais não comitadas foram detectadas."
     read -r -p "Deseja fazer stash automático e prosseguir? [y/N]: " ST
-    if [[ "$ST" =~ ^[Yy]$ ]]; then
-      git stash push -u -m "auto-stash/update.sh: $(date -Iseconds)"
-      STASHED=1
-    else
-      err "Commit ou stash suas mudanças antes de atualizar (ou execute com AUTO_STASH=1)."
-    fi
+    case "$ST" in
+      [Yy]* )
+        git stash push -u -m "auto-stash/update.sh: $(date -Iseconds)"
+        STASHED=1
+        ;;
+      * )
+        err "Commit ou stash suas mudanças antes de atualizar (ou execute com AUTO_STASH=1)."
+        ;;
+    esac
   fi
 fi
 
@@ -91,7 +94,7 @@ if [ -f .gitmodules ] || git submodule status >/dev/null 2>&1; then
   git submodule update --init --recursive
 fi
 
-# --- NOVO: instalar requirements.txt se existir ---
+# --- instalar requirements.txt se existir ---
 if [ -f "requirements.txt" ]; then
   info "requirements.txt encontrado — instalando dependências..."
 
@@ -145,4 +148,3 @@ echo " - revisar mudanças: git status / git log --oneline -n 10"
 echo " - reiniciar serviços se necessário (systemd, uwsgi, gunicorn, etc.)"
 
 exit 0
-# ...existing scritp
