@@ -1,4 +1,5 @@
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.decorators import login_required
 from django.views.generic import TemplateView
 from django.shortcuts import render, redirect
 from django.core.paginator import Paginator
@@ -10,6 +11,53 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 import datetime
+import os
+from pathlib import Path
+
+SCRIPTS_BASE = Path(__file__).resolve().parent / "scripts"
+
+
+def ensure_script_dirs():
+    """
+    Garante a existência da árvore de scripts:
+    arpia_core/scripts/
+      ├─ default/
+      └─ user/
+           └─ <username>/
+    Cria um script de exemplo em default se o diretório default estiver vazio.
+    """
+    try:
+        (SCRIPTS_BASE / "default").mkdir(parents=True, exist_ok=True)
+        (SCRIPTS_BASE / "user").mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
+
+    # criar um exemplo em default se estiver vazio
+    try:
+        default_dir = SCRIPTS_BASE / "default"
+        if not any(default_dir.iterdir()):
+            sample = default_dir / "example_reset.sh"
+            sample.write_text("#!/usr/bin/env bash\n\necho \"Script default de restore — exemplo\"\n", encoding="utf-8")
+            sample.chmod(0o755)
+    except Exception:
+        pass
+
+
+def safe_filename(name: str) -> str:
+    """
+    Sanitiza o nome do arquivo: remove caminhos e caracteres perigosos.
+    Retorna basename simples; se inválido, retorna empty string.
+    """
+    if not name:
+        return ""
+    name = os.path.basename(name)
+    # proibir caminhos relativos ../ e nomes com barras
+    if '/' in name or '\\' in name or name in ('.', '..'):
+        return ""
+    # limitar caracteres básicos
+    allowed = "-_.() abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    cleaned = ''.join(ch for ch in name if ch in allowed)
+    return cleaned.strip()
 
 
 class DashboardView(LoginRequiredMixin, TemplateView):
@@ -197,10 +245,13 @@ def scripts_list(request):
     return render(request, "scripts/list.html", {"scripts_page": page_obj, "scripts": page_obj.object_list})
 
 
+@login_required
 def scripts_create(request):
-    # placeholder: aqui implementaremos form de criação
-    messages.info(request, "Criar script: funcionalidade pendente (placeholder).")
-    return redirect("scripts_list")
+    """
+    Wrapper compatível com o nome de URL 'scripts_create' usado em templates.
+    Reusa a lógica do editor (scripts_new).
+    """
+    return scripts_new(request)
 
 
 def scripts_edit(request, pk):
@@ -449,3 +500,48 @@ def projects_edit(request, pk):
                 return redirect("projects_list")
 
     return render(request, "projects/edit.html", {"project": project, "form": form, "clients": clients, "errors": errors})
+
+
+@login_required
+def scripts_new(request):
+    """
+    Editor simples para criar um novo script usuário.
+    Salva em arpia_core/scripts/user/<username>/<filename>.
+    """
+    ensure_script_dirs()
+    username = request.user.username or "anonymous"
+    user_dir = SCRIPTS_BASE / "user" / username
+    user_dir.mkdir(parents=True, exist_ok=True)
+
+    context = {
+        "filename": "",
+        "content": "",
+        "username": username,
+        "user_files": sorted([p.name for p in user_dir.iterdir() if p.is_file()]),
+    }
+
+    if request.method == "POST":
+        filename = request.POST.get("filename", "").strip()
+        content = request.POST.get("content", "")
+        filename = safe_filename(filename)
+        if not filename:
+            messages.error(request, "Nome de arquivo inválido.")
+            context.update({"filename": request.POST.get("filename", ""), "content": content})
+            return render(request, "scripts/new.html", context)
+
+        target = user_dir / filename
+        try:
+            target.write_text(content, encoding="utf-8")
+            # permissões padrão
+            try:
+                target.chmod(0o644)
+            except Exception:
+                pass
+            messages.success(request, f"Script salvo: {filename}")
+            return redirect("scripts_list")
+        except Exception as e:
+            messages.error(request, f"Falha ao salvar o script: {e}")
+            context.update({"filename": filename, "content": content})
+            return render(request, "scripts/new.html", context)
+
+    return render(request, "scripts/new.html", context)

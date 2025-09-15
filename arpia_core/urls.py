@@ -14,8 +14,10 @@ urlpatterns = [
     path("projects/<int:pk>/edit/", views.projects_edit, name="projects_edit"),
 
     # Scripts
-    path("scripts/", views.scripts_list, name="scripts_list"),
+    # alias compatível com templates que usam 'scripts_create'
     path("scripts/new/", views.scripts_create, name="scripts_create"),
+    path("scripts/", views.scripts_list, name="scripts_list"),
+    path("scripts/new/", views.scripts_new, name="scripts_new"),
     path("scripts/<int:pk>/edit/", views.scripts_edit, name="scripts_edit"),
     path("scripts/<int:pk>/delete/", views.scripts_delete, name="scripts_delete"),
     path("scripts/<int:pk>/clone/", views.scripts_clone, name="scripts_clone"),
