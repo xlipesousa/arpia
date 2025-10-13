@@ -181,3 +181,7 @@ LOGIN_REDIRECT_URL = "/"
 
 # redirecionar logout para a tela de login do ARPIA
 LOGOUT_REDIRECT_URL = "/login/"
+
+
+# Token opcional para ingestão de logs via API (Header: Authorization: Token <valor>)
+ARPIA_LOG_INGEST_TOKEN = os.getenv("ARPIA_LOG_INGEST_TOKEN", "") or None

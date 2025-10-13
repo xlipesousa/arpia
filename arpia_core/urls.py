@@ -14,9 +14,9 @@ urlpatterns = [
     path("projects/<int:pk>/edit/", views.projects_edit, name="projects_edit"),
 
     # Scripts
-    # alias compatível com templates que usam 'scripts_create'
-    path("scripts/new/", views.scripts_create, name="scripts_create"),
     path("scripts/", views.scripts_list, name="scripts_list"),
+    # alias compatível com templates que usam 'scripts_create'
+    path("scripts/create/", views.scripts_create, name="scripts_create"),
     path("scripts/new/", views.scripts_new, name="scripts_new"),
     path("scripts/<int:pk>/edit/", views.scripts_edit, name="scripts_edit"),
     path("scripts/<int:pk>/delete/", views.scripts_delete, name="scripts_delete"),
@@ -44,6 +44,9 @@ urlpatterns = [
     # Logs: delega para arpia_log.views
     path("logs/", arpia_log_views.LogsListView.as_view(), name="logs_list"),
     path("logs/api/", arpia_log_views.logs_api, name="logs_api"),
+    path("logs/api/ingest/", arpia_log_views.LogIngestView.as_view(), name="logs_ingest"),
+    path("logs/api/bulk/", arpia_log_views.LogBulkIngestView.as_view(), name="logs_bulk_ingest"),
+    path("logs/api/stats/", arpia_log_views.LogStatsView.as_view(), name="logs_stats"),
     path("logs/<int:pk>/", arpia_log_views.log_detail_api, name="logs_detail_api"),
 
     # AI: lista inicial (placeholder)
