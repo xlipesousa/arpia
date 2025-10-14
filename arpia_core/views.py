@@ -15,6 +15,13 @@ import datetime
 import os
 from pathlib import Path
 
+from .project_logging import (
+    log_project_created,
+    log_project_member_added,
+    log_project_member_removed,
+    log_project_member_updated,
+)
+
 SCRIPTS_BASE = Path(__file__).resolve().parent / "scripts"
 
 
@@ -173,6 +180,7 @@ def projects_create(request):
                 user=request.user,
                 defaults={"role": ProjectMembership.Role.OWNER, "invited_by": request.user},
             )
+            log_project_created(project, request=request)
             messages.success(request, "Projeto criado com sucesso.")
             return redirect("projects_edit", pk=project.pk)
 
@@ -278,6 +286,7 @@ def projects_share(request, pk):
             elif membership.user_id == project.owner_id:
                 errors["membership"] = "Não é possível remover o proprietário do projeto."
             else:
+                log_project_member_removed(project, membership, request=request)
                 membership.delete()
                 messages.success(request, "Acesso revogado com sucesso.")
                 return redirect("projects_share", pk=project.pk)
@@ -294,9 +303,12 @@ def projects_share(request, pk):
             elif role not in valid_roles:
                 errors["membership"] = "Permissão inválida."
             else:
+                previous_role = membership.role
                 membership.role = role
                 membership.invited_by = request.user
                 membership.save(update_fields=["role", "invited_by", "updated_at"])
+                if previous_role != membership.role:
+                    log_project_member_updated(project, membership, previous_role=previous_role, request=request)
                 messages.success(request, "Permissões atualizadas.")
                 return redirect("projects_share", pk=project.pk)
 
@@ -327,9 +339,14 @@ def projects_share(request, pk):
                     defaults={"role": role, "invited_by": request.user},
                 )
                 if not created and membership.role != role:
+                    previous_role = membership.role
                     membership.role = role
                     membership.invited_by = request.user
                     membership.save(update_fields=["role", "invited_by", "updated_at"])
+                    log_project_member_updated(project, membership, previous_role=previous_role, request=request)
+                else:
+                    if created:
+                        log_project_member_added(project, membership, request=request)
                 messages.success(request, "Compartilhamento atualizado.")
                 return redirect("projects_share", pk=project.pk)
 

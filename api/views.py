@@ -7,6 +7,11 @@ from rest_framework.views import APIView
 from arpia_core.models import Asset, ObservedEndpoint, Project
 from arpia_core.serializers import AssetSerializer, ObservedEndpointSerializer, ProjectSerializer
 from arpia_core.services import reconcile_endpoint
+from arpia_core.project_logging import (
+    log_project_created,
+    log_project_deleted,
+    log_project_updated,
+)
 
 
 class HealthCheck(APIView):
@@ -38,6 +43,25 @@ class ProjectViewSet(viewsets.ModelViewSet):
             user=self.request.user,
             defaults={"role": "owner", "invited_by": self.request.user},
         )
+        log_project_created(project, request=self.request)
+
+    def perform_update(self, serializer):
+        instance = serializer.instance
+        original_values = {
+            field: getattr(instance, field)
+            for field in serializer.validated_data.keys()
+        }
+        project = serializer.save()
+        changes = {}
+        for field, old_value in original_values.items():
+            new_value = getattr(project, field)
+            if old_value != new_value:
+                changes[field] = (old_value, new_value)
+        log_project_updated(project, changes=changes, request=self.request)
+
+    def perform_destroy(self, instance):
+        log_project_deleted(instance, request=self.request)
+        super().perform_destroy(instance)
 
 
 class AssetViewSet(viewsets.ModelViewSet):

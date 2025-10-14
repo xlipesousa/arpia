@@ -5,12 +5,15 @@ from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
 
+from arpia_log.models import LogEntry
+
 from .models import Project, ProjectMembership
 
 
 class ProjectModelTests(TestCase):
 	def setUp(self):
 		self.user = get_user_model().objects.create_user(username="owner", password="secret123")
+		LogEntry.objects.all().delete()
 
 	def test_slug_is_unique_per_owner(self):
 		project1 = Project.objects.create(owner=self.user, name="Infra", description="", client_name="")
@@ -30,6 +33,7 @@ class ProjectViewTests(TestCase):
 	def setUp(self):
 		self.user = get_user_model().objects.create_user(username="alice", password="secret123")
 		self.client.login(username="alice", password="secret123")
+		LogEntry.objects.all().delete()
 
 	def test_create_project_view_creates_membership(self):
 		response = self.client.post(
@@ -47,6 +51,7 @@ class ProjectViewTests(TestCase):
 		self.assertRedirects(response, reverse("projects_edit", kwargs={"pk": project.pk}))
 		self.assertEqual(project.owner, self.user)
 		self.assertTrue(ProjectMembership.objects.filter(project=project, user=self.user, role="owner").exists())
+		self.assertTrue(LogEntry.objects.filter(event_type="PROJECT_CREATED", details__project_id=str(project.pk)).exists())
 
 	def test_edit_view_requires_owner(self):
 		project = Project.objects.create(owner=self.user, name="Proj", description="", client_name="")
@@ -68,6 +73,7 @@ class ProjectViewTests(TestCase):
 		project = Project.objects.create(owner=self.user, name="Compart", description="", client_name="")
 		ProjectMembership.objects.create(project=project, user=self.user, role=ProjectMembership.Role.OWNER)
 		guest = get_user_model().objects.create_user(username="guest", password="secret123")
+		LogEntry.objects.all().delete()
 
 		response = self.client.post(
 			reverse("projects_share", kwargs={"pk": project.pk}),
@@ -78,12 +84,20 @@ class ProjectViewTests(TestCase):
 		self.assertTrue(
 			ProjectMembership.objects.filter(project=project, user=guest, role=ProjectMembership.Role.EDITOR).exists()
 		)
+		self.assertTrue(
+			LogEntry.objects.filter(
+				event_type="PROJECT_MEMBER_ADDED",
+				details__project_id=str(project.pk),
+				details__member_id=guest.pk,
+			).exists()
+		)
 
 	def test_share_view_updates_member_role(self):
 		project = Project.objects.create(owner=self.user, name="Compart", description="", client_name="")
 		ProjectMembership.objects.create(project=project, user=self.user, role=ProjectMembership.Role.OWNER)
 		member = get_user_model().objects.create_user(username="member", password="secret123")
 		membership = ProjectMembership.objects.create(project=project, user=member, role=ProjectMembership.Role.VIEWER)
+		LogEntry.objects.all().delete()
 
 		response = self.client.post(
 			reverse("projects_share", kwargs={"pk": project.pk}),
@@ -93,12 +107,20 @@ class ProjectViewTests(TestCase):
 		self.assertRedirects(response, reverse("projects_share", kwargs={"pk": project.pk}))
 		membership.refresh_from_db()
 		self.assertEqual(membership.role, ProjectMembership.Role.EDITOR)
+		self.assertTrue(
+			LogEntry.objects.filter(
+				event_type="PROJECT_MEMBER_UPDATED",
+				details__membership_id=membership.pk,
+				details__role__to=ProjectMembership.Role.EDITOR,
+			).exists()
+		)
 
 	def test_share_view_revokes_member(self):
 		project = Project.objects.create(owner=self.user, name="Compart", description="", client_name="")
 		ProjectMembership.objects.create(project=project, user=self.user, role=ProjectMembership.Role.OWNER)
 		member = get_user_model().objects.create_user(username="member2", password="secret123")
 		membership = ProjectMembership.objects.create(project=project, user=member, role=ProjectMembership.Role.EDITOR)
+		LogEntry.objects.all().delete()
 
 		response = self.client.post(
 			reverse("projects_share", kwargs={"pk": project.pk}),
@@ -107,6 +129,13 @@ class ProjectViewTests(TestCase):
 
 		self.assertRedirects(response, reverse("projects_share", kwargs={"pk": project.pk}))
 		self.assertFalse(ProjectMembership.objects.filter(pk=membership.pk).exists())
+		self.assertTrue(
+			LogEntry.objects.filter(
+				event_type="PROJECT_MEMBER_REMOVED",
+				details__project_id=str(project.pk),
+				details__member_id=member.pk,
+			).exists()
+		)
 
 
 class ProjectAPITests(TestCase):
@@ -116,6 +145,7 @@ class ProjectAPITests(TestCase):
 		self.project = Project.objects.create(owner=self.user, name="Alpha", description="", client_name="")
 		ProjectMembership.objects.create(project=self.project, user=self.user, role="owner")
 		self.client = APIClient()
+		LogEntry.objects.all().delete()
 
 	def test_project_list_returns_only_user_projects(self):
 		foreign = Project.objects.create(owner=self.other, name="Foreign", description="", client_name="")
@@ -139,3 +169,39 @@ class ProjectAPITests(TestCase):
 		created = Project.objects.get(name="Beta")
 		self.assertEqual(created.owner, self.user)
 		self.assertTrue(ProjectMembership.objects.filter(project=created, user=self.user, role="owner").exists())
+		self.assertTrue(
+			LogEntry.objects.filter(event_type="PROJECT_CREATED", details__project_id=str(created.pk)).exists()
+		)
+
+	def test_project_update_logs_changes(self):
+		self.client.login(username="apiuser", password="secret123")
+		payload = {"name": "Alpha Updated"}
+		response = self.client.patch(
+			reverse("project-detail", kwargs={"pk": self.project.pk}),
+			data=json.dumps(payload),
+			content_type="application/json",
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.project.refresh_from_db()
+		self.assertEqual(self.project.name, "Alpha Updated")
+		self.assertTrue(
+			LogEntry.objects.filter(
+				event_type="PROJECT_UPDATED",
+				details__changes__name__to="Alpha Updated",
+				details__project_id=str(self.project.pk),
+			).exists()
+		)
+
+	def test_project_delete_logs_event(self):
+		self.client.login(username="apiuser", password="secret123")
+		response = self.client.delete(reverse("project-detail", kwargs={"pk": self.project.pk}))
+
+		self.assertEqual(response.status_code, 204)
+		self.assertFalse(Project.objects.filter(pk=self.project.pk).exists())
+		self.assertTrue(
+			LogEntry.objects.filter(
+				event_type="PROJECT_DELETED",
+				details__project_id=str(self.project.pk),
+			).exists()
+		)
