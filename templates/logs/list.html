@@ -3,190 +3,649 @@
 {% block title %}Logs — ARPIA{% endblock %}
 
 {% block content %}
-<div class="main">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
-    <h2 style="margin:0;color:var(--text)">Logs</h2>
-    <div style="display:flex;gap:.6rem;align-items:center;">
-      <a href="#" id="btn-export-logs" class="btn btn-primary" style="display:inline-flex;align-items:center;gap:.6rem;padding:.45rem .8rem;border-radius:8px;background:linear-gradient(90deg,#4fd1c5,var(--accent));color:#021023;border:1px solid rgba(79,209,197,0.08);font-weight:700;text-decoration:none;">
-        Exportar
-      </a>
+<div class="logs-page">
+  <header class="logs-header">
+    <div>
+      <h2>Logs centralizados</h2>
+      <p>Explore eventos das aplicações ARPIA filtrados por origem, severidade e metadados.</p>
     </div>
-  </div>
-
-  <div class="card" style="padding:.75rem;">
-    <div class="filters" style="display:flex;gap:.75rem;align-items:center;margin-bottom:.75rem;flex-wrap:wrap;">
-      <div><label style="color:var(--muted);margin-right:.4rem">Nivel</label>
-        <select id="filter-level">
-          <option value="">Todos</option><option>ERROR</option><option>WARN</option><option>INFO</option><option>DEBUG</option>
-        </select>
-      </div>
-
-      <div><label style="color:var(--muted);margin-right:.4rem">Fonte</label>
-        <select id="filter-source">
-          <option value="">Todas</option><option>web</option><option>scanner</option><option>agent</option><option>system</option>
-        </select>
-      </div>
-
-      <div style="display:flex;align-items:center;gap:.35rem;">
-        <label style="color:var(--muted)">Período</label>
-        <input id="filter-from" type="date">
-        <span style="color:var(--muted)">—</span>
-        <input id="filter-to" type="date">
-      </div>
-
-      <div style="margin-left:auto;display:flex;align-items:center;gap:.5rem;">
-        <input id="q" placeholder="Pesquisar mensagem ou projeto..." style="padding:.35rem .6rem;border-radius:8px;">
-        <button id="btn-filter" class="btn" style="display:inline-flex;align-items:center;gap:.6rem;padding:.45rem .8rem;border-radius:8px;background:linear-gradient(90deg,#4fd1c5,var(--accent));color:#021023;border:1px solid rgba(79,209,197,0.08);font-weight:700;text-decoration:none;cursor:pointer;">
-          Aplicar
-        </button>
-      </div>
+    <div class="header-actions">
+      <button type="button" class="btn btn-ghost" id="logs-refresh-all" title="Atualizar tudo">Atualizar tudo</button>
     </div>
+  </header>
 
-    <div style="overflow:auto">
-      <table class="projects-table" style="width:100%;color:var(--muted);">
-        <thead>
-          <tr style="text-align:left;font-weight:700;color:var(--muted);">
-            <th style="width:56px;">ID</th>
-            <th style="min-width:180px">Timestamp</th>
-            <th>Projeto</th>
-            <th>Fonte</th>
-            <th>Nível</th>
-            <th>Mensagem</th>
-            <th style="text-align:right">Ações</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for log in logs %}
-          <tr>
-            <td style="color:var(--muted)">{{ log.id }}</td>
-            <td style="color:var(--muted)">{{ log.timestamp }}</td>
-            <td style="color:var(--text)">{{ log.project }}</td>
-            <td style="color:var(--muted)">{{ log.source }}</td>
-            <td>
-              {% if log.level == "ERROR" %}
-                <span style="padding:.12rem .5rem;border-radius:6px;background:rgba(255,139,139,0.06);color:#ff8b8b;font-weight:700">ERROR</span>
-              {% elif log.level == "WARN" %}
-                <span style="padding:.12rem .5rem;border-radius:6px;background:rgba(255,184,93,0.06);color:#ffb85d;font-weight:700">WARN</span>
-              {% else %}
-                <span style="padding:.12rem .5rem;border-radius:6px;background:rgba(79,209,197,0.04);color:#7eeacf;font-weight:700">{{ log.level }}</span>
-              {% endif %}
-            </td>
-            <td style="color:var(--muted);max-width:50ch;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ log.message }}</td>
-            <td style="text-align:right;white-space:nowrap;">
-              <!-- Tail individual -->
-              <a href="#" title="Tail" class="btn-icon btn-primary" data-id="{{ log.id }}">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20M5 9l7-7 7 7" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </a>
-              <a href="#" title="Ver raw" class="btn-icon btn-info" data-id="{{ log.id }}">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5c-7 0-11 7-11 7s4 7 11 7 11-7 11-7-4-7-11-7z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </a>
-              <a href="#" title="JSON" class="btn-icon btn-success" data-id="{{ log.id }}">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 11l4 4 4-4" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </a>
-              <a href="#" title="Copiar" class="btn-icon btn" data-id="{{ log.id }}">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7h8v12H8z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </a>
-            </td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="7" style="padding:1rem;color:var(--muted)">Nenhum log disponível.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+  <nav class="logs-tabs" role="tablist" aria-label="Origem dos logs">
+    {% for app in log_apps %}
+      <button
+        type="button"
+        class="tab-btn{% if forloop.first %} active{% endif %}"
+        id="tab-{{ app.slug }}"
+        data-app="{{ app.slug }}"
+        role="tab"
+        aria-controls="panel-{{ app.slug }}"
+        aria-selected="{% if forloop.first %}true{% else %}false{% endif %}"
+      >
+        {{ app.label }}
+      </button>
+    {% endfor %}
+  </nav>
 
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:.7rem .3rem;margin-top:.6rem;">
-      <div>
-        Mostrar
-        <select id="logs-page-size" style="padding:.25rem .4rem;border-radius:6px;">
-          <option value="5">5</option>
-          <option value="10" selected>10</option>
-          <option value="25">25</option>
-        </select>
-        entradas
-      </div>
+  <div class="tab-panels">
+    {% for app in log_apps %}
+      <section
+        class="tab-panel{% if forloop.first %} active{% endif %}"
+        id="panel-{{ app.slug }}"
+        data-panel="{{ app.slug }}"
+        role="tabpanel"
+        aria-labelledby="tab-{{ app.slug }}"
+        aria-hidden="{% if forloop.first %}false{% else %}true{% endif %}"
+      >
+        <form class="log-filters" data-filter-form="{{ app.slug }}">
+          <div class="field">
+            <label for="severity-{{ app.slug }}">Severidade</label>
+            <select id="severity-{{ app.slug }}" name="severity">
+              <option value="">Todas</option>
+              {% for opt in severity_options %}
+                <option value="{{ opt.value }}">{{ opt.label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label for="event-{{ app.slug }}">Evento</label>
+            <input type="text" id="event-{{ app.slug }}" name="event_type" placeholder="Ex: SCAN_DONE">
+          </div>
+          <div class="field">
+            <label for="component-{{ app.slug }}">Componente</label>
+            <input type="text" id="component-{{ app.slug }}" name="component" placeholder="Ex: scheduler">
+          </div>
+          <div class="field">
+            <label for="project-{{ app.slug }}">Projeto</label>
+            <input type="text" id="project-{{ app.slug }}" name="project" placeholder="Ref. de projeto">
+          </div>
+          <div class="field">
+            <label for="asset-{{ app.slug }}">Ativo</label>
+            <input type="text" id="asset-{{ app.slug }}" name="asset" placeholder="Host, IP...">
+          </div>
+          <div class="field">
+            <label for="user-{{ app.slug }}">Usuário</label>
+            <input type="text" id="user-{{ app.slug }}" name="user" placeholder="Usuário relacionado">
+          </div>
+          <div class="field">
+            <label for="channel-{{ app.slug }}">Canal</label>
+            <select id="channel-{{ app.slug }}" name="channel">
+              <option value="">Todos</option>
+              {% for opt in channel_options %}
+                <option value="{{ opt.value }}">{{ opt.label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field field-range">
+            <label>Período</label>
+            <input type="datetime-local" name="since" aria-label="Data inicial">
+            <span>—</span>
+            <input type="datetime-local" name="until" aria-label="Data final">
+          </div>
+          <div class="field field-actions">
+            <button type="submit" class="btn btn-primary">Aplicar</button>
+            <button type="button" class="btn btn-ghost" data-action="reset" aria-label="Limpar filtros">Limpar</button>
+          </div>
+        </form>
 
-      <div style="display:flex;gap:.35rem;align-items:center;">
-        {% if logs_page.has_previous %}
-          <a href="?page={{ logs_page.previous_page_number }}" class="btn-pager">«</a>
-        {% else %}
-          <span class="btn-pager disabled">«</span>
-        {% endif %}
-        <span class="btn-pager active">{{ logs_page.number }}</span>
-        {% if logs_page.has_next %}
-          <a href="?page={{ logs_page.next_page_number }}" class="btn-pager">»</a>
-        {% else %}
-          <span class="btn-pager disabled">»</span>
-        {% endif %}
-      </div>
-    </div>
+        <div class="table-wrapper">
+          <table class="logs-table" data-table="{{ app.slug }}">
+            <thead>
+              <tr>
+                <th class="col-ts">Timestamp</th>
+                <th class="col-event">Evento</th>
+                <th class="col-severity">Sev.</th>
+                <th class="col-msg">Mensagem</th>
+                <th class="col-component">Componente</th>
+                <th class="col-project">Projeto</th>
+                <th class="col-asset">Ativo</th>
+                <th class="col-user">Usuário</th>
+                <th class="col-channel">Canal</th>
+                <th class="col-actions">Ações</th>
+              </tr>
+            </thead>
+            <tbody data-table-body="{{ app.slug }}">
+              <tr class="empty-row">
+                <td colspan="10">Carregando registros...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <footer class="logs-footer">
+          <div class="summary">
+            <span data-result-summary="{{ app.slug }}">— resultados</span>
+          </div>
+          <div class="pager" data-pager="{{ app.slug }}">
+            <div class="page-size">
+              <label for="page-size-{{ app.slug }}">Mostrar</label>
+              <select id="page-size-{{ app.slug }}" data-page-size="{{ app.slug }}">
+                <option value="25">25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+              <span>por página</span>
+            </div>
+            <div class="page-nav">
+              <button type="button" data-action="prev" aria-label="Página anterior">«</button>
+              <span><strong data-page-current="{{ app.slug }}">1</strong> / <span data-page-total="{{ app.slug }}">1</span></span>
+              <button type="button" data-action="next" aria-label="Próxima página">»</button>
+            </div>
+          </div>
+        </footer>
+      </section>
+    {% endfor %}
   </div>
 </div>
 
+<div id="log-tail-modal" class="log-modal" hidden>
+  <div class="modal-content">
+    <header>
+      <h3>Tail em tempo real</h3>
+      <button type="button" class="btn btn-ghost" data-modal-close>Fechar</button>
+    </header>
+    <pre id="log-tail-content" class="modal-pre"></pre>
+  </div>
+</div>
+
+<div id="log-raw-modal" class="log-modal" hidden>
+  <div class="modal-content">
+    <header>
+      <h3>Log bruto</h3>
+      <button type="button" class="btn btn-ghost" data-modal-close>Fechar</button>
+    </header>
+    <pre id="log-raw-content" class="modal-pre"></pre>
+  </div>
+</div>
+
+<div id="log-toast" class="log-toast" role="status" aria-live="polite" hidden></div>
+
+{{ bootstrap_logs|json_script:"log-bootstrap-data" }}
+{{ severity_options|json_script:"log-severity-options" }}
+{{ channel_options|json_script:"log-channel-options" }}
+
 <style>
-/* reaproveitar estilos do projeto para consistência */
-.projects-table{ table-layout:auto; width:100%; border-collapse:collapse; }
-.projects-table th, .projects-table td{ padding:.45rem .6rem; vertical-align:middle; overflow:hidden; color:var(--muted); }
-.btn-icon{ display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:8px; border:1px solid rgba(255,255,255,0.03); background:transparent; color:var(--muted); cursor:pointer; margin-left:6px; text-decoration:none; }
-.btn-icon svg{ display:block; width:16px; height:16px; stroke:currentColor; fill:none; stroke-width:1.4; }
-.card .filters select, .card .filters input { background: linear-gradient(180deg, rgba(255,255,255,0.018), rgba(255,255,255,0.012)); border:1px solid rgba(255,255,255,0.06); color:var(--text); padding:.32rem .5rem; border-radius:8px; }
-.btn-pager{ display:inline-flex; padding:.28rem .5rem; border-radius:6px; border:1px solid rgba(255,255,255,0.03); text-decoration:none; color:var(--muted); }
-.btn-pager.active{ background:rgba(255,255,255,0.03); color:var(--text); font-weight:700; }
-.btn-pager.disabled{ opacity:0.45; cursor:default; }
-.card{ background:rgba(255,255,255,0.01); border-radius:8px; padding:.6rem; }
+.logs-page{display:flex;flex-direction:column;gap:1.5rem;color:var(--text);}
+.logs-header{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;}
+.logs-header h2{margin:0;font-size:1.8rem;}
+.logs-header p{margin:.25rem 0 0;color:var(--muted);max-width:52ch;}
+.header-actions{display:flex;align-items:center;gap:.5rem;}
+.logs-tabs{display:flex;flex-wrap:wrap;gap:.5rem;padding:.4rem;background:rgba(255,255,255,0.02);border-radius:10px;}
+.logs-tabs .tab-btn{border:none;border-radius:8px;padding:.55rem 1.1rem;background:transparent;color:var(--muted);cursor:pointer;transition:all .2s ease;font-weight:600;}
+.logs-tabs .tab-btn.active{background:linear-gradient(90deg,#4fd1c5,var(--accent));color:#021023;box-shadow:0 6px 18px rgba(79,209,197,0.22);}
+.tab-panel{display:none;flex-direction:column;gap:1rem;padding:1.1rem;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.03);}
+.tab-panel.active{display:flex;}
+.log-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;align-items:end;background:rgba(255,255,255,0.018);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:1rem;}
+.log-filters label{display:block;font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:.25rem;}
+.log-filters input,.log-filters select{width:100%;border-radius:8px;border:1px solid rgba(255,255,255,0.08);background:rgba(5,19,30,0.55);color:var(--text);padding:.55rem .75rem;}
+.log-filters input:focus,.log-filters select:focus{outline:2px solid rgba(79,209,197,0.3);outline-offset:0;}
+.log-filters .field-range{display:flex;align-items:center;gap:.4rem;}
+.log-filters .field-range input{flex:1;}
+.log-filters .field-range span{color:var(--muted);}
+.log-filters .field-actions{display:flex;gap:.6rem;justify-content:flex-end;}
+.table-wrapper{overflow:auto;border-radius:12px;border:1px solid rgba(255,255,255,0.03);background:rgba(4,18,32,0.65);}
+.logs-table{width:100%;border-collapse:collapse;min-width:960px;}
+.logs-table th,.logs-table td{padding:.65rem .85rem;text-align:left;border-bottom:1px solid rgba(255,255,255,0.05);color:var(--muted);vertical-align:top;}
+.logs-table thead th{font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;color:rgba(226,245,255,0.7);background:rgba(255,255,255,0.015);}
+.logs-table tbody tr:hover{background:rgba(79,209,197,0.08);}
+.logs-table .col-ts{min-width:160px;font-variant-numeric:tabular-nums;color:var(--text);}
+.logs-table .col-msg{max-width:360px;word-break:break-word;color:var(--text);}
+.logs-table .col-severity{width:84px;}
+.logs-table .col-actions{min-width:220px;}
+.logs-table .empty-row td{text-align:center;padding:2.4rem 1rem;}
+.severity-badge{display:inline-flex;align-items:center;justify-content:center;padding:.18rem .55rem;border-radius:999px;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;}
+.sev-error{background:rgba(255,107,107,0.18);color:#ff6b6b;}
+.sev-warn{background:rgba(255,196,101,0.18);color:#ffc465;}
+.sev-notice{background:rgba(101,182,255,0.18);color:#65b6ff;}
+.sev-info{background:rgba(79,209,197,0.18);color:#4fd1c5;}
+.sev-debug{background:rgba(180,180,196,0.18);color:#b4b4c4;}
+.sev-default{background:rgba(255,255,255,0.12);color:var(--text);}
+.action-btn{display:inline-flex;align-items:center;justify-content:center;padding:.35rem .6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:rgba(5,19,30,0.7);color:var(--muted);cursor:pointer;margin-right:.35rem;font-weight:600;}
+.action-btn:hover{color:var(--text);border-color:rgba(79,209,197,0.35);}
+.action-btn.action-danger{color:#ff6b6b;border-color:rgba(255,107,107,0.25);}
+.logs-footer{display:flex;justify-content:space-between;align-items:center;gap:1rem;padding:.75rem .35rem;color:var(--muted);}
+.logs-footer .summary{font-size:.9rem;}
+.pager{display:flex;align-items:center;gap:1rem;}
+.pager button{border:none;border-radius:6px;padding:.35rem .6rem;background:rgba(255,255,255,0.05);color:var(--muted);cursor:pointer;}
+.pager button:hover{background:rgba(79,209,197,0.18);color:var(--text);}
+.pager .page-size{display:flex;align-items:center;gap:.4rem;}
+.pager select{border-radius:6px;border:1px solid rgba(255,255,255,0.06);background:rgba(5,19,30,0.7);color:var(--text);padding:.3rem .6rem;}
+.log-modal{position:fixed;inset:0;background:rgba(4,12,22,0.78);display:flex;align-items:center;justify-content:center;padding:2rem;z-index:999;}
+.log-modal .modal-content{background:#061827;border-radius:14px;max-width:720px;width:100%;border:1px solid rgba(79,209,197,0.15);box-shadow:0 24px 48px rgba(4,12,22,0.55);display:flex;flex-direction:column;max-height:80vh;}
+.log-modal header{display:flex;justify-content:space-between;align-items:center;padding:1rem 1.25rem;border-bottom:1px solid rgba(255,255,255,0.06);}
+.log-modal header h3{margin:0;font-size:1.1rem;}
+.log-modal .modal-pre{margin:0;padding:1rem 1.25rem;background:rgba(0,0,0,0.55);color:#b5d7ff;font-family:"JetBrains Mono",monospace;font-size:.85rem;overflow:auto;}
+.log-modal[hidden]{display:none !important;}
+.log-toast{position:fixed;bottom:1.5rem;right:1.5rem;padding:.8rem 1.1rem;border-radius:10px;background:rgba(5,19,30,0.88);border:1px solid rgba(79,209,197,0.3);color:var(--text);font-weight:600;box-shadow:0 10px 24px rgba(5,19,30,0.4);}
+.log-toast[data-type="error"]{border-color:rgba(255,107,107,0.35);color:#ff9a9a;}
+.log-toast[data-type="warn"]{border-color:rgba(255,196,101,0.35);color:#ffd899;}
+@media (max-width:1080px){
+  .log-filters{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));}
+  .logs-table{min-width:100%;}
+  .tab-panel{padding:1rem;}
+}
 </style>
 
 <script>
 (function(){
-  // hook simples para ações de linha (view / json / copy) usando dataset
-  document.addEventListener('click', async (ev)=>{
-    const a = ev.target.closest('.btn-icon');
-    if(!a) return;
-    ev.preventDefault();
-    const id = a.dataset.id;
-    if(!id) return;
+  const bootstrapEl = document.getElementById('log-bootstrap-data');
+  let bootstrap = {};
+  if(bootstrapEl){
+    try{
+      bootstrap = JSON.parse(bootstrapEl.textContent || '{}');
+    } catch(err){
+      console.error('Falha ao interpretar dados de bootstrap dos logs.', err);
+    }
+  } else {
+    console.warn('Bootstrap de logs indisponível.');
+  }
 
-    // Tail: abrir stream/visualização em nova janela (placeholder)
-    if(a.title === 'Tail'){
-      // abre rota placeholder /logs/<id>/tail/ (implementar stream posteriormente)
-      window.open(`/logs/${id}/tail/`, `_blank`);
-      return;
-    }
+  const state = {};
+  const tabs = Array.from(document.querySelectorAll('.tab-btn'));
+  const tabPanels = Array.from(document.querySelectorAll('.tab-panel'));
+  const tabsContainer = document.querySelector('.logs-tabs');
+  const logsPage = document.querySelector('.logs-page');
+  const tailModal = document.getElementById('log-tail-modal');
+  const rawModal = document.getElementById('log-raw-modal');
+  const tailContent = document.getElementById('log-tail-content');
+  const rawContent = document.getElementById('log-raw-content');
+  const toast = document.getElementById('log-toast');
 
-    if(a.title === 'Ver raw'){
-      const r = await fetch(`/logs/${id}/`);
-      const j = await r.json().catch(()=>null);
-      alert(JSON.stringify(j, null, 2));
-      return;
-    }
-    if(a.title === 'JSON'){
-      alert('Download JSON (simulado): /api/logs/' + id);
-      return;
-    }
-    if(a.title === 'Copiar'){
-      const r = await fetch(`/logs/${id}/`);
-      const j = await r.json().catch(()=>null);
-      if(j){ navigator.clipboard?.writeText(JSON.stringify(j)) ; alert('Copiado para a área de transferência'); }
-      return;
-    }
-  });
+  if(tailModal){
+    tailModal.hidden = true;
+    tailModal.setAttribute('aria-hidden', 'true');
+  }
+  if(rawModal){
+    rawModal.hidden = true;
+    rawModal.setAttribute('aria-hidden', 'true');
+  }
 
-  // botão APPLY — filtra via querystring simples (client-side)
-  document.getElementById('btn-filter')?.addEventListener('click', ()=>{
-    const q = document.getElementById('q').value;
-    const level = document.getElementById('filter-level').value;
-    const source = document.getElementById('filter-source').value;
-    const from = document.getElementById('filter-from').value;
-    const to = document.getElementById('filter-to').value;
+  let tailTimer = null;
+  let tailState = null;
+
+  function initState(app){
+    if(state[app]) return;
+    state[app] = {
+      page: 1,
+      pageSize: 25,
+      totalPages: 1,
+      totalResults: 0,
+      filters: {},
+      loaded: false,
+    };
+  }
+
+  function showToast(message, type='info'){
+    if(!toast) return;
+    toast.textContent = message;
+    toast.dataset.type = type;
+    toast.hidden = false;
+    setTimeout(()=>{ toast.hidden = true; }, 4000);
+  }
+
+  function getCsrfToken(){
+    const match = document.cookie.match(/csrftoken=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : '';
+  }
+
+  function formatSeverity(value){
+    const cls = {
+      'ERROR': 'sev-error', 'CRITICAL': 'sev-error',
+      'WARN': 'sev-warn', 'NOTICE': 'sev-notice',
+      'INFO': 'sev-info', 'DEBUG': 'sev-debug'
+    };
+    const label = value || '—';
+    const klass = cls[label] || 'sev-default';
+    return `<span class="severity-badge ${klass}">${label}</span>`;
+  }
+
+  function formatField(value){
+    if(value === null || value === undefined || value === '') return '—';
+    if(Array.isArray(value)){
+      return value.join(', ');
+    }
+    if(typeof value === 'object'){
+      return `<code>${JSON.stringify(value)}</code>`;
+    }
+    return String(value);
+  }
+
+  function renderTable(app, data){
+    const tbody = document.querySelector(`[data-table-body="${app}"]`);
+    if(!tbody) return;
+    tbody.innerHTML = '';
+    if(!data.length){
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td colspan="10">Nenhum log encontrado para os filtros atuais.</td>';
+      tbody.appendChild(tr);
+      return;
+    }
+    const frag = document.createDocumentFragment();
+    data.forEach(item => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="col-ts">${formatField(item.timestamp_display || item.timestamp)}</td>
+        <td class="col-event">${formatField(item.event_type)}</td>
+        <td class="col-severity">${formatSeverity(item.severity)}</td>
+        <td class="col-msg" title="${item.message || ''}">${formatField(item.message)}</td>
+        <td class="col-component">${formatField(item.component)}</td>
+        <td class="col-project">${formatField(item.project_ref)}</td>
+        <td class="col-asset">${formatField(item.asset_ref)}</td>
+        <td class="col-user">${formatField(item.user_ref)}</td>
+        <td class="col-channel">${formatField(item.ingestion_channel)}</td>
+        <td class="col-actions">
+          <button type="button" class="action-btn" data-action="tail" data-id="${item.id}" data-app="${item.source_app}">Tail</button>
+          <button type="button" class="action-btn" data-action="raw" data-id="${item.id}">Ver raw</button>
+          <button type="button" class="action-btn" data-action="download" data-id="${item.id}">Download</button>
+          <button type="button" class="action-btn action-danger" data-action="delete" data-id="${item.id}" data-app="${item.source_app}">Excluir</button>
+        </td>`;
+      frag.appendChild(tr);
+    });
+    tbody.appendChild(frag);
+  }
+
+  function updateSummary(app){
+    const summaryEl = document.querySelector(`[data-result-summary="${app}"]`);
+    const pageCurrent = document.querySelector(`[data-page-current="${app}"]`);
+    const pageTotal = document.querySelector(`[data-page-total="${app}"]`);
+    if(summaryEl){
+      summaryEl.textContent = `${state[app].totalResults} resultados`;
+    }
+    if(pageCurrent){
+      pageCurrent.textContent = state[app].page;
+    }
+    if(pageTotal){
+      pageTotal.textContent = state[app].totalPages;
+    }
+  }
+
+  async function fetchLogs(app){
+    const panelState = state[app];
     const params = new URLSearchParams();
-    if(q) params.set('q', q);
-    if(level) params.set('level', level);
-    if(source) params.set('source', source);
-    if(from) params.set('from', from);
-    if(to) params.set('to', to);
-    window.location.search = params.toString();
+    params.set('source', app);
+    params.set('page', panelState.page);
+    params.set('page_size', panelState.pageSize);
+    Object.entries(panelState.filters).forEach(([key, value]) => {
+      if(value) params.set(key, value);
+    });
+    try{
+      const response = await fetch(`/logs/api/?${params.toString()}`);
+      if(!response.ok) throw new Error('Não foi possível carregar os logs');
+      const payload = await response.json();
+      panelState.totalResults = payload.count || 0;
+      panelState.totalPages = payload.num_pages || 1;
+      renderTable(app, payload.results || []);
+      updateSummary(app);
+      panelState.loaded = true;
+    } catch (err){
+      showToast(err.message || 'Erro ao carregar logs', 'error');
+    }
+  }
+
+  function gatherFilters(form){
+    const data = new FormData(form);
+    const filters = {};
+    for(const [key, value] of data.entries()){
+      if(value) filters[key] = value;
+    }
+    return filters;
+  }
+
+  function applyBootstrap(app){
+    const data = bootstrap[app] || [];
+    state[app].totalResults = data.length;
+    state[app].totalPages = 1;
+    renderTable(app, data);
+    updateSummary(app);
+    state[app].loaded = true;
+  }
+
+  function activateTab(tab){
+    const targetApp = tab.dataset.app;
+    if(!targetApp) return;
+
+    tabs.forEach(btn => {
+      const isActive = btn === tab;
+      btn.classList.toggle('active', isActive);
+      btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+
+    tabPanels.forEach(panel => {
+      const match = panel.dataset.panel === targetApp;
+      panel.classList.toggle('active', match);
+      panel.setAttribute('aria-hidden', match ? 'false' : 'true');
+    });
+
+    initState(targetApp);
+    if(!state[targetApp].loaded){
+      if((bootstrap[targetApp] || []).length){
+        applyBootstrap(targetApp);
+      } else {
+        fetchLogs(targetApp);
+      }
+    }
+  }
+
+  function handleTabClick(ev){
+    const btn = ev.target.closest('.tab-btn');
+    if(!btn) return;
+    activateTab(btn);
+  }
+
+  function setupFilters(){
+    document.querySelectorAll('.log-filters').forEach(form => {
+      const app = form.dataset.filterForm;
+      initState(app);
+      form.addEventListener('submit', evt => {
+        evt.preventDefault();
+        state[app].filters = gatherFilters(form);
+        state[app].page = 1;
+        fetchLogs(app);
+      });
+      const resetBtn = form.querySelector('[data-action="reset"]');
+      if(resetBtn){
+        resetBtn.addEventListener('click', ()=>{
+          form.reset();
+          state[app].filters = {};
+          state[app].page = 1;
+          fetchLogs(app);
+        });
+      }
+    });
+  }
+
+  function setupPagination(){
+    document.querySelectorAll('[data-pager]').forEach(wrapper => {
+      const app = wrapper.dataset.pager;
+      const prevBtn = wrapper.querySelector('[data-action="prev"]');
+      const nextBtn = wrapper.querySelector('[data-action="next"]');
+      const pageSizeSelect = wrapper.querySelector('[data-page-size]');
+
+      if(prevBtn){
+        prevBtn.addEventListener('click', ()=>{
+          if(state[app].page > 1){
+            state[app].page -= 1;
+            fetchLogs(app);
+          }
+        });
+      }
+      if(nextBtn){
+        nextBtn.addEventListener('click', ()=>{
+          if(state[app].page < state[app].totalPages){
+            state[app].page += 1;
+            fetchLogs(app);
+          }
+        });
+      }
+      if(pageSizeSelect){
+        pageSizeSelect.addEventListener('change', ()=>{
+          state[app].pageSize = parseInt(pageSizeSelect.value, 10) || 25;
+          state[app].page = 1;
+          fetchLogs(app);
+        });
+      }
+    });
+  }
+
+  async function handleActionClick(ev){
+    const btn = ev.target.closest('.action-btn');
+    if(!btn) return;
+    const id = btn.dataset.id;
+    const action = btn.dataset.action;
+    if(!id || !action) return;
+
+    if(action === 'tail'){
+      const app = btn.dataset.app;
+      startTail(app);
+      return;
+    }
+
+    if(action === 'raw'){
+      try{
+        const resp = await fetch(`/logs/${id}/`);
+        if(!resp.ok) throw new Error('Falha ao carregar log');
+        const payload = await resp.json();
+        rawContent.textContent = JSON.stringify(payload, null, 2);
+        openModal(rawModal);
+      } catch(err){
+        showToast(err.message || 'Erro ao carregar log', 'error');
+      }
+      return;
+    }
+
+    if(action === 'download'){
+      window.open(`/logs/${id}/download/`, '_blank');
+      return;
+    }
+
+    if(action === 'delete'){
+      if(!confirm('Confirma remover este log?')) return;
+      try{
+        const resp = await fetch(`/logs/${id}/delete/`, {
+          method: 'POST',
+          headers: {
+            'X-CSRFToken': getCsrfToken(),
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+        });
+        if(resp.status === 404){
+          showToast('Log já removido.', 'warn');
+          return;
+        }
+        if(!resp.ok) throw new Error('Falha ao excluir log');
+        showToast('Log excluído.');
+        const sourceApp = btn.dataset.app;
+        if(sourceApp){ fetchLogs(sourceApp); }
+      } catch(err){
+        showToast(err.message || 'Erro ao excluir log', 'error');
+      }
+    }
+  }
+
+  function openModal(modal){
+    if(!modal) return;
+    modal.hidden = false;
+    modal.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeModal(modal){
+    if(!modal) return;
+    modal.hidden = true;
+    modal.setAttribute('aria-hidden', 'true');
+  }
+
+  function stopTail(){
+    if(tailTimer){
+      clearInterval(tailTimer);
+      tailTimer = null;
+    }
+    tailState = null;
+    tailContent.textContent = '';
+    closeModal(tailModal);
+  }
+
+  async function fetchTailChunk(){
+    if(!tailState) return;
+    const params = new URLSearchParams();
+    params.set('source', tailState.app);
+    if(tailState.latest){
+      params.set('since', tailState.latest);
+    }
+    try{
+      const resp = await fetch(`/logs/api/tail/?${params.toString()}`);
+      if(!resp.ok) throw new Error('Erro no tail');
+      const payload = await resp.json();
+      const results = payload.results || [];
+      if(results.length){
+        results.forEach(item => {
+          const line = `[${item.timestamp_display || item.timestamp}] ${item.severity} ${item.event_type} — ${item.message}`;
+          tailContent.textContent += (tailContent.textContent ? '\n' : '') + line;
+        });
+        tailContent.scrollTop = tailContent.scrollHeight;
+        tailState.latest = payload.latest || results[results.length - 1].timestamp;
+      }
+    } catch(err){
+      showToast('Tail interrompido: ' + (err.message || ''), 'warn');
+      stopTail();
+    }
+  }
+
+  function startTail(app){
+    if(!app){
+      showToast('Origem inválida para tail', 'warn');
+      return;
+    }
+    tailState = { app, latest: null };
+    tailContent.textContent = '';
+    openModal(tailModal);
+    fetchTailChunk();
+    tailTimer = setInterval(fetchTailChunk, 5000);
+  }
+
+  document.addEventListener('click', ev => {
+    if(ev.target.matches('[data-modal-close]')){
+      if(ev.target.closest('#log-tail-modal')){
+        stopTail();
+      } else {
+        closeModal(ev.target.closest('.log-modal'));
+      }
+    }
   });
 
+  document.addEventListener('keydown', ev => {
+    if(ev.key === 'Escape'){
+      if(tailModal && !tailModal.hidden){ stopTail(); }
+      if(rawModal && !rawModal.hidden){ closeModal(rawModal); }
+    }
+  });
+
+  if(logsPage){
+    logsPage.addEventListener('click', handleActionClick);
+  }
+  if(tabsContainer){
+    tabsContainer.addEventListener('click', handleTabClick);
+  }
+
+  const refreshAll = document.getElementById('logs-refresh-all');
+  if(refreshAll){
+    refreshAll.addEventListener('click', ()=>{
+      Object.keys(state).forEach(app => {
+        state[app].page = 1;
+        fetchLogs(app);
+      });
+    });
+  }
+
+  setupFilters();
+  setupPagination();
+
+  const firstTab = tabs.find(tab => tab.classList.contains('active')) || tabs[0];
+  if(firstTab){
+    activateTab(firstTab);
+  }
 })();
 </script>
 {% endblock %}
