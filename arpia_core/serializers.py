@@ -1,42 +1,32 @@
 from rest_framework import serializers
-from .models import Project, Asset, ObservedEndpoint
+
+from .models import Asset, ObservedEndpoint, Project
 
 
 class ObservedEndpointSerializer(serializers.ModelSerializer):
-    # aceita project na criação para permitir reconciliação automática
-    project = serializers.UUIDField(write_only=True, required=False)
+    project = serializers.UUIDField(source="asset.project_id", read_only=True)
 
     class Meta:
         model = ObservedEndpoint
-        fields = "__all__"
-        read_only_fields = ("id", "first_seen", "last_seen")
-
-    def create(self, validated_data):
-        project_id = validated_data.pop("project", None)
-        asset = validated_data.get("asset", None)
-        if asset is None and project_id:
-            # import local para evitar circular imports
-            from .services import reconcile_endpoint
-            from .models import Project as ProjectModel
-
-            project = ProjectModel.objects.get(id=project_id)
-            hostnames = (validated_data.get("fingerprint") or {}).get("hostnames", [])
-            asset_obj, oe = reconcile_endpoint(
-                project=project,
-                ip=validated_data.get("ip"),
-                port=validated_data.get("port"),
-                hostnames=hostnames,
-                fingerprint=validated_data.get("fingerprint"),
-                source=validated_data.get("source", "api"),
-            )
-            # associe o asset criado ao payload para criar ObservedEndpoint via super()
-            validated_data["asset"] = asset_obj
-            # ObservedEndpoint already created inside reconcile_endpoint -> return it
-            return oe
-        return super().create(validated_data)
+        fields = [
+            "id",
+            "asset",
+            "project",
+            "ip",
+            "port",
+            "proto",
+            "service",
+            "path",
+            "raw",
+            "source",
+            "first_seen",
+            "last_seen",
+        ]
+        read_only_fields = ("id", "first_seen", "last_seen", "project")
 
 
 class AssetSerializer(serializers.ModelSerializer):
+    project = serializers.UUIDField(source="project_id", read_only=True)
     endpoints = ObservedEndpointSerializer(many=True, read_only=True)
 
     class Meta:
@@ -44,23 +34,57 @@ class AssetSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "project",
-            "logical_id",
-            "display_name",
+            "identifier",
+            "name",
             "hostnames",
-            "ip_addresses",
-            "asset_type",
-            "tags",
-            "created_at",
+            "ips",
+            "category",
+            "metadata",
+            "created",
             "last_seen",
             "endpoints",
         ]
-        read_only_fields = ("id", "created_at", "last_seen")
+        read_only_fields = ("id", "created", "last_seen", "project", "endpoints")
 
 
 class ProjectSerializer(serializers.ModelSerializer):
+    owner = serializers.CharField(source="owner.username", read_only=True)
+    members = serializers.SerializerMethodField()
     assets = AssetSerializer(many=True, read_only=True)
 
     class Meta:
         model = Project
-        fields = ["id", "name", "slug", "description", "created_at", "updated_at", "assets"]
-        read_only_fields = ("id", "created_at", "updated_at")
+        fields = [
+            "id",
+            "owner",
+            "name",
+            "slug",
+            "description",
+            "client_name",
+            "status",
+            "visibility",
+            "start_at",
+            "end_at",
+            "timezone",
+            "hosts",
+            "protected_hosts",
+            "networks",
+            "ports",
+            "credentials_json",
+            "metadata",
+            "created",
+            "modified",
+            "assets",
+            "members",
+        ]
+        read_only_fields = ("id", "owner", "slug", "created", "modified", "assets", "members")
+
+    def get_members(self, obj):
+        memberships = obj.memberships.select_related("user")
+        return [
+            {
+                "user": m.user.username,
+                "role": m.role,
+            }
+            for m in memberships
+        ]

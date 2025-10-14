@@ -32,11 +32,11 @@
     <!-- complementares -->
     <h4 style="margin:.5rem 0 .25rem 0;color:var(--muted)">Dados complementares</h4>
 
-    <label style="font-weight:700;color:var(--muted)">Hosts Alvo (separados por vírgula)</label>
-    <input name="hosts" placeholder="ex: 10.0.0.5,example.com,192.168.1.2" value="{{ project.hosts|default:form.hosts }}" style="padding:.45rem .6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);">
+  <label style="font-weight:700;color:var(--muted)">Hosts Alvo (separados por vírgula)</label>
+  <input name="hosts" placeholder="ex: 10.0.0.5,example.com,192.168.1.2" value="{{ project.hosts|default:form.hosts }}" style="padding:.45rem .6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);">
 
-    <label style="font-weight:700;color:var(--muted)">Hosts Protegidos (separados por vírgula)</label>
-    <input name="hosts" placeholder="ex: 10.0.0.5,example.com,192.168.1.2" value="{{ project.hosts|default:form.hosts }}" style="padding:.45rem .6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);">
+  <label style="font-weight:700;color:var(--muted)">Hosts Protegidos (separados por vírgula)</label>
+  <input name="protected_hosts" placeholder="ex: 10.0.0.5,example.com,192.168.1.2" value="{{ project.protected_hosts|default:form.protected_hosts }}" style="padding:.45rem .6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);">
     
     <label style="font-weight:700;color:var(--muted)">Networks (CIDR, vírgula separados)</label>
     <input name="networks" placeholder="ex: 10.0.0.0/24,192.168.0.0/16" value="{{ project.networks|default:form.networks }}" style="padding:.45rem .6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);">

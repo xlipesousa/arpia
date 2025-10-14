@@ -25,4 +25,5 @@ urlpatterns = [
 
     # delega o root para as URLs da app (contém projects_list, scripts_list, ...)
     path("", include("arpia_core.urls")),
+    path("api/", include("api.urls")),
 ]

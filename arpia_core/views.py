@@ -10,6 +10,7 @@ from django.contrib import messages
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
+from django.db.models import Q
 import datetime
 import os
 from pathlib import Path
@@ -106,23 +107,26 @@ def reports_download(request, pk):
     return JsonResponse({"status": "ok", "id": pk, "download_url": f"/media/reports/report-{pk}.pdf"})
 
 
+def _parse_datetime_local(value: str):
+    if not value:
+        return None
+    try:
+        dt = datetime.datetime.fromisoformat(value)
+        if dt.tzinfo is None:
+            from django.utils import timezone
+
+            return timezone.make_aware(dt, timezone.get_current_timezone())
+        return dt
+    except ValueError:
+        return None
+
+
+@login_required
 @require_http_methods(["GET", "POST"])
 def projects_create(request):
-    """
-    View de criação de projeto com validação server-side mínima.
-    - Campos: name (required), description, client, start, end
-    - Tenta salvar em app_project.models.Project se existir, senão grava em session (temporário)
-    """
-    errors = {}
-    # tentar carregar clients reais, senão fallback exemplares
-    clients = []
-    try:
-        from app_project.models import Client  # app responsável conforme instrução
-        clients_qs = Client.objects.all()
-        clients = [{"id": c.id, "name": getattr(c, "name", str(c))} for c in clients_qs]
-    except Exception:
-        clients = [{"id": "infra", "name": "Infra Red Team"}, {"id": "webapp", "name": "Web App Audit"}]
+    from django.utils import timezone
 
+    errors = {}
     form = {
         "name": "",
         "description": "",
@@ -138,72 +142,177 @@ def projects_create(request):
         form["start"] = request.POST.get("start", "").strip()
         form["end"] = request.POST.get("end", "").strip()
 
-        # validações
         if not form["name"]:
             errors["name"] = "O nome é obrigatório."
 
-        dt_start = dt_end = None
-        if form["start"]:
-            try:
-                dt_start = datetime.datetime.fromisoformat(form["start"])
-            except Exception:
-                errors["start"] = "Data/hora de início inválida."
-        if form["end"]:
-            try:
-                dt_end = datetime.datetime.fromisoformat(form["end"])
-            except Exception:
-                errors["end"] = "Data/hora de término inválida."
+        dt_start = _parse_datetime_local(form["start"])
+        dt_end = _parse_datetime_local(form["end"])
 
+        if form["start"] and not dt_start:
+            errors["start"] = "Data/hora de início inválida."
+        if form["end"] and not dt_end:
+            errors["end"] = "Data/hora de término inválida."
         if dt_start and dt_end and dt_end < dt_start:
             errors["end"] = "Data de término não pode ser anterior ao início."
 
         if not errors:
-            # tentar persistir em modelo Project (se existir), senão guardar em sessão (temporário)
-            try:
-                from app_project.models import Project
-                p = Project(
-                    name=form["name"],
-                    description=form["description"],
-                    start=dt_start,
-                    end=dt_end
-                )
-                # se existir campo client relacionado, tentar atribuir
-                if hasattr(p, "client_id") and form["client"]:
-                    try:
-                        # tenta converter id para int, senão usa string
-                        p.client_id = int(form["client"])
-                    except Exception:
-                        p.client_id = form["client"]
-                p.save()
-            except Exception:
-                tmp = request.session.get("tmp_projects", [])
-                tmp.append({
-                    "id": len(tmp) + 1,
-                    "name": form["name"],
-                    "description": form["description"],
-                    "client": form["client"],
-                    "start": form["start"],
-                    "end": form["end"],
-                })
-                request.session["tmp_projects"] = tmp
-            return redirect("projects_list")
+            from .models import Project, ProjectMembership
 
-    return render(request, "projects/new.html", {"clients": clients, "errors": errors, "form": form})
+            project = Project(
+                owner=request.user,
+                name=form["name"],
+                description=form["description"],
+                client_name=form["client"],
+                start_at=dt_start,
+                end_at=dt_end,
+                timezone=str(timezone.get_current_timezone()),
+            )
+            project.save()
+            ProjectMembership.objects.get_or_create(
+                project=project,
+                user=request.user,
+                defaults={"role": ProjectMembership.Role.OWNER, "invited_by": request.user},
+            )
+            messages.success(request, "Projeto criado com sucesso.")
+            return redirect("projects_edit", pk=project.pk)
+
+    return render(request, "projects/new.html", {"errors": errors, "form": form})
 
 
+@login_required
 def projects_list(request):
-    """
-    Lista simples de projetos para compatibilidade com o template projects/list.html.
-    Usa modelo Project se disponível, senão dados salvos em sessão.
-    """
-    projects = []
+    from django.db.models import Q
+    from django.utils import timezone
+
+    from .models import Project
+
+    page = request.GET.get("page", 1)
     try:
-        from app_project.models import Project
-        qs = Project.objects.all().order_by("-id")
-        projects = [{"id": p.id, "name": getattr(p, "name", str(p)), "client": getattr(p, "client", None)} for p in qs]
-    except Exception:
-        projects = request.session.get("tmp_projects", [])
-    return render(request, "projects/list.html", {"projects": projects})
+        page_size = int(request.GET.get("page_size", 10))
+    except (TypeError, ValueError):
+        page_size = 10
+
+    queryset = (
+        Project.objects.select_related("owner")
+        .filter(Q(owner=request.user) | Q(memberships__user=request.user))
+        .distinct()
+        .order_by("-created")
+    )
+
+    paginator = Paginator(queryset, page_size)
+    page_obj = paginator.get_page(page)
+
+    projects_table = []
+    for project in page_obj.object_list:
+        created = timezone.localtime(project.created)
+        projects_table.append(
+            {
+                "id": project.pk,
+                "name": project.name,
+                "owner": project.owner_display,
+                "created": created.strftime("%Y-%m-%d %H:%M"),
+                "status": project.get_status_display(),
+                "detail_url": reverse("projects_detail", kwargs={"pk": project.pk}),
+                "share_url": reverse("projects_share", kwargs={"pk": project.pk}),
+                "edit_url": reverse("projects_edit", kwargs={"pk": project.pk}),
+            }
+        )
+
+    context = {
+        "projects": projects_table,
+        "projects_page": page_obj,
+    }
+    return render(request, "projects/list.html", context)
+
+
+def _get_accessible_project(user, pk, *, owner_only=False):
+    from .models import Project
+
+    base_qs = Project.objects.select_related("owner").prefetch_related("memberships__user")
+    if owner_only:
+        return get_object_or_404(base_qs.filter(owner=user), pk=pk)
+    return get_object_or_404(
+        base_qs.filter(Q(owner=user) | Q(memberships__user=user)).distinct(),
+        pk=pk,
+    )
+
+
+@login_required
+def projects_detail(request, pk):
+    project = _get_accessible_project(request.user, pk)
+    assets = project.assets.all().order_by("-last_seen")[:100]
+    memberships = project.memberships.select_related("user").all()
+
+    context = {
+        "project": project,
+        "assets": assets,
+        "memberships": memberships,
+    }
+    return render(request, "projects/detail.html", context)
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def projects_share(request, pk):
+    from django.contrib.auth import get_user_model
+    from .models import ProjectMembership
+
+    project = _get_accessible_project(request.user, pk, owner_only=True)
+    errors = {}
+    success = False
+
+    role_choices = list(ProjectMembership.Role.choices)
+    form_data = {
+        "username": "",
+        "role": ProjectMembership.Role.VIEWER,
+    }
+
+    if request.method == "POST":
+        form_data["username"] = request.POST.get("username", "").strip()
+        form_data["role"] = request.POST.get("role", form_data["role"])
+        username = form_data["username"]
+        role = form_data["role"]
+        User = get_user_model()
+        target_user = None
+
+        if not username:
+            errors["username"] = "Informe o usuário que receberá acesso."
+        else:
+            try:
+                target_user = User.objects.get(username=username)
+            except User.DoesNotExist:
+                errors["username"] = "Usuário não encontrado."
+
+        valid_roles = {choice[0] for choice in role_choices}
+        if role not in valid_roles:
+            errors["role"] = "Tipo de acesso inválido."
+
+        if not errors:
+            membership, created = ProjectMembership.objects.get_or_create(
+                project=project,
+                user=target_user,
+                defaults={"role": role, "invited_by": request.user},
+            )
+            if not created and membership.role != role:
+                membership.role = role
+                membership.invited_by = request.user
+                membership.save(update_fields=["role", "invited_by", "updated_at"])
+            success = True
+            messages.success(request, "Compartilhamento atualizado.")
+            return redirect("projects_share", pk=project.pk)
+
+    share_url = request.build_absolute_uri(reverse("projects_share", kwargs={"pk": project.pk}))
+
+    context = {
+        "project": project,
+        "share_url": share_url,
+        "memberships": project.memberships.select_related("user").order_by("user__username"),
+        "role_choices": role_choices,
+        "form": form_data,
+        "errors": errors,
+        "success": success,
+    }
+    return render(request, "projects/share.html", context)
 
 
 def scripts_list(request):
@@ -338,63 +447,65 @@ def wordlists_download(request, pk):
     return JsonResponse({"status": "ok", "action": "download", "id": pk})
 
 
+@login_required
 @require_http_methods(["GET", "POST"])
 def projects_edit(request, pk):
-    """
-    Edita um projeto existente. Atualiza modelo real (se existir) ou fallback para sessão.
-    Compatível com o template projects/edit.html.
-    """
+    import json
+
+    from django.utils import timezone
+
+    from .models import Project
+
+    project = get_object_or_404(Project, pk=pk)
+
+    if project.owner != request.user:
+        messages.error(request, "Você não tem permissão para editar este projeto.")
+        return redirect("projects_list")
+
     errors = {}
-    try:
-        from app_project.models import Client  # para compatibilidade (não obrigatório)
-        clients_qs = Client.objects.all()
-        clients = [{"id": c.id, "name": getattr(c, "name", str(c))} for c in clients_qs]
-    except Exception:
-        clients = [{"id": "infra", "name": "Infra Red Team"}, {"id": "webapp", "name": "Web App Audit"}]
 
-    project_obj = None
-    project = {}
-    # tentar carregar instância real
-    try:
-        try:
-            from app_project.models import Project as ProjectModel
-        except Exception:
-            from .models import Project as ProjectModel
-        project_obj = ProjectModel.objects.filter(pk=pk).first()
-    except Exception:
-        project_obj = None
+    def summarize_credentials(creds):
+        summary = []
+        for cred in creds:
+            label = cred.get("type_label") or cred.get("type", "-")
+            parts = []
+            if cred.get("username"):
+                parts.append(f"user: {cred['username']}")
+            if cred.get("password"):
+                masked = cred["password"][:10] + ("…" if len(cred["password"]) > 10 else "")
+                parts.append(f"pass: {masked}")
+            if cred.get("passphrase"):
+                masked = cred["passphrase"][:10] + ("…" if len(cred["passphrase"]) > 10 else "")
+                parts.append(f"passphrase: {masked}")
+            if cred.get("pkey"):
+                masked = cred["pkey"][:30] + ("…" if len(cred["pkey"]) > 30 else "")
+                parts.append(f"pkey: {masked}")
+            summary.append({
+                "type": cred.get("type"),
+                "type_label": label,
+                "summary": " · ".join(parts) or "",
+            })
+        return summary
 
-    # fallback para sessão
-    if not project_obj:
-        tmp = request.session.get("tmp_projects", [])
-        project = next((p for p in tmp if p.get("id") == pk), {}) or {}
-    else:
-        project = {
-            "id": project_obj.id,
-            "name": getattr(project_obj, "name", "") or "",
-            "description": getattr(project_obj, "description", "") or "",
-            "client": getattr(getattr(project_obj, "client", None), "id", getattr(project_obj, "client", "")) or "",
-            "start": getattr(project_obj, "start", "") or "",
-            "end": getattr(project_obj, "end", "") or "",
-            "hosts": getattr(project_obj, "hosts", "") or "",
-            "networks": getattr(project_obj, "networks", "") or "",
-            "ports": getattr(project_obj, "ports", "") or "",
-            "credentials_json": getattr(project_obj, "credentials_json", "[]") or "[]",
-            "credentials": getattr(project_obj, "credentials", []) or [],
+    def serialize_project(p):
+        credentials = p.credentials_json or []
+        return {
+            "id": str(p.pk),
+            "name": p.name,
+            "description": p.description,
+            "client": p.client_name,
+            "start": timezone.localtime(p.start_at).strftime("%Y-%m-%dT%H:%M") if p.start_at else "",
+            "end": timezone.localtime(p.end_at).strftime("%Y-%m-%dT%H:%M") if p.end_at else "",
+            "hosts": p.hosts,
+            "protected_hosts": p.protected_hosts,
+            "networks": p.networks,
+            "ports": p.ports,
+            "credentials_json": json.dumps(credentials),
+            "credentials": summarize_credentials(credentials),
         }
 
-    form = {
-        "name": project.get("name", ""),
-        "description": project.get("description", ""),
-        "client": project.get("client", ""),
-        "start": project.get("start", ""),
-        "end": project.get("end", ""),
-        "hosts": project.get("hosts", ""),
-        "networks": project.get("networks", ""),
-        "ports": project.get("ports", ""),
-        "credentials_json": project.get("credentials_json", "[]"),
-        "credentials": project.get("credentials", []),
-    }
+    project_data = serialize_project(project)
+    form = project_data.copy()
 
     if request.method == "POST":
         form["name"] = request.POST.get("name", "").strip()
@@ -403,6 +514,7 @@ def projects_edit(request, pk):
         form["start"] = request.POST.get("start", "").strip()
         form["end"] = request.POST.get("end", "").strip()
         form["hosts"] = request.POST.get("hosts", "").strip()
+        form["protected_hosts"] = request.POST.get("protected_hosts", "").strip()
         form["networks"] = request.POST.get("networks", "").strip()
         form["ports"] = request.POST.get("ports", "").strip()
         form["credentials_json"] = request.POST.get("credentials_json", form["credentials_json"])
@@ -410,96 +522,47 @@ def projects_edit(request, pk):
         if not form["name"]:
             errors["name"] = "O nome é obrigatório."
 
-        dt_start = dt_end = None
-        if form["start"]:
-            try:
-                dt_start = datetime.datetime.fromisoformat(form["start"])
-            except Exception:
-                errors["start"] = "Data/hora de início inválida."
-        if form["end"]:
-            try:
-                dt_end = datetime.datetime.fromisoformat(form["end"])
-            except Exception:
-                errors["end"] = "Data/hora de término inválida."
+        dt_start = _parse_datetime_local(form["start"])
+        dt_end = _parse_datetime_local(form["end"])
 
+        if form["start"] and not dt_start:
+            errors["start"] = "Data/hora de início inválida."
+        if form["end"] and not dt_end:
+            errors["end"] = "Data/hora de término inválida."
         if dt_start and dt_end and dt_end < dt_start:
             errors["end"] = "Data de término não pode ser anterior ao início."
 
+        try:
+            credentials_payload = json.loads(form["credentials_json"] or "[]")
+        except json.JSONDecodeError:
+            credentials_payload = []
+            errors["credentials_json"] = "Formato inválido de credenciais."
+
         if not errors:
-            try:
-                # prioriza modelo real
-                try:
-                    from app_project.models import Project as ProjectModel
-                except Exception:
-                    from .models import Project as ProjectModel
+            project.name = form["name"]
+            project.description = form["description"]
+            project.client_name = form["client"]
+            project.start_at = dt_start
+            project.end_at = dt_end
+            project.hosts = form["hosts"]
+            project.protected_hosts = form["protected_hosts"]
+            project.networks = form["networks"]
+            project.ports = form["ports"]
+            project.credentials_json = credentials_payload
+            project.metadata = {
+                **(project.metadata or {}),
+                "credentials_display": summarize_credentials(credentials_payload),
+            }
+            project.save()
+            messages.success(request, "Projeto atualizado com sucesso.")
+            return redirect("projects_edit", pk=project.pk)
 
-                if project_obj:
-                    p = project_obj
-                    p.name = form["name"]
-                    p.description = form["description"]
-                    p.start = dt_start
-                    p.end = dt_end
-                else:
-                    p = ProjectModel(
-                        name=form["name"],
-                        description=form["description"],
-                        start=dt_start,
-                        end=dt_end
-                    )
-
-                if hasattr(p, "client_id") and form["client"]:
-                    try:
-                        p.client_id = int(form["client"])
-                    except Exception:
-                        p.client_id = form["client"]
-
-                if hasattr(p, "hosts"):
-                    setattr(p, "hosts", form.get("hosts", ""))
-                if hasattr(p, "networks"):
-                    setattr(p, "networks", form.get("networks", ""))
-                if hasattr(p, "ports"):
-                    setattr(p, "ports", form.get("ports", ""))
-                if hasattr(p, "credentials_json"):
-                    setattr(p, "credentials_json", form.get("credentials_json", "[]"))
-
-                p.save()
-                messages.success(request, "Projeto salvo com sucesso.")
-                return redirect("projects_list")
-            except Exception:
-                # fallback sessão
-                tmp = request.session.get("tmp_projects", [])
-                found = False
-                for i, it in enumerate(tmp):
-                    if it.get("id") == pk:
-                        tmp[i].update({
-                            "name": form["name"],
-                            "description": form["description"],
-                            "client": form["client"],
-                            "start": form["start"],
-                            "end": form["end"],
-                            "hosts": form.get("hosts", ""),
-                            "networks": form.get("networks", ""),
-                            "ports": form.get("ports", ""),
-                        })
-                        found = True
-                        break
-                if not found:
-                    tmp.append({
-                        "id": pk,
-                        "name": form["name"],
-                        "description": form["description"],
-                        "client": form["client"],
-                        "start": form["start"],
-                        "end": form["end"],
-                        "hosts": form.get("hosts", ""),
-                        "networks": form.get("networks", ""),
-                        "ports": form.get("ports", ""),
-                    })
-                request.session["tmp_projects"] = tmp
-                messages.success(request, "Projeto salvo na sessão (fallback).")
-                return redirect("projects_list")
-
-    return render(request, "projects/edit.html", {"project": project, "form": form, "clients": clients, "errors": errors})
+    context = {
+        "project": form,
+        "form": form,
+        "errors": errors,
+    }
+    return render(request, "projects/edit.html", context)
 
 
 @login_required

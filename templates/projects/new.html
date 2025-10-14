@@ -10,10 +10,10 @@
     {% csrf_token %}
 
     <label style="font-weight:700;color:var(--muted)">Nome</label>
-    <input name="name" required placeholder="Nome do projeto" style="padding:.5rem .6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);">
+  <input name="name" required placeholder="Nome do projeto" value="{{ form.name }}" style="padding:.5rem .6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);">
 
     <label style="font-weight:700;color:var(--muted)">Descrição</label>
-    <textarea name="description" placeholder="Breve descrição" rows="4" style="padding:.6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);resize:vertical;"></textarea>
+  <textarea name="description" placeholder="Breve descrição" rows="4" style="padding:.6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);resize:vertical;">{{ form.description }}</textarea>
 
     <label style="font-weight:700;color:var(--muted)">Cliente</label>
     <input name="client" type="text" placeholder="Nome da empresa contratante" value="{{ form.client }}" style="padding:.5rem .6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);">
@@ -23,11 +23,11 @@
       <div style="display:flex;gap:.5rem;min-width:320px;align-items:end;">
         <div style="flex:1">
           <label style="font-weight:700;color:var(--muted)">Início</label>
-          <input name="start" id="proj-start" type="datetime-local" style="width:100%;padding:.45rem .6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);">
+          <input name="start" id="proj-start" type="datetime-local" value="{{ form.start }}" style="width:100%;padding:.45rem .6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);">
         </div>
         <div style="flex:1">
           <label style="font-weight:700;color:var(--muted)">Término</label>
-          <input name="end" id="proj-end" type="datetime-local" style="width:100%;padding:.45rem .6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);">
+          <input name="end" id="proj-end" type="datetime-local" value="{{ form.end }}" style="width:100%;padding:.45rem .6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);">
         </div>
       </div>
     </div>

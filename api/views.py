@@ -1,9 +1,11 @@
-from rest_framework import viewsets, permissions, status
-from rest_framework.views import APIView
-from rest_framework.response import Response
+from django.db.models import Q
 
-from arpia_core.models import Project, Asset, ObservedEndpoint
-from arpia_core.serializers import ProjectSerializer, AssetSerializer, ObservedEndpointSerializer
+from rest_framework import permissions, status, viewsets
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from arpia_core.models import Asset, ObservedEndpoint, Project
+from arpia_core.serializers import AssetSerializer, ObservedEndpointSerializer, ProjectSerializer
 from arpia_core.services import reconcile_endpoint
 
 
@@ -16,21 +18,58 @@ class HealthCheck(APIView):
 
 
 class ProjectViewSet(viewsets.ModelViewSet):
-    queryset = Project.objects.all().order_by("-created")
     serializer_class = ProjectSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if not user.is_authenticated:
+            return Project.objects.none()
+        return (
+            Project.objects.filter(Q(owner=user) | Q(memberships__user=user))
+            .select_related("owner")
+            .distinct()
+            .order_by("-created")
+        )
+
+    def perform_create(self, serializer):
+        project = serializer.save(owner=self.request.user)
+        project.memberships.get_or_create(
+            user=self.request.user,
+            defaults={"role": "owner", "invited_by": self.request.user},
+        )
 
 
 class AssetViewSet(viewsets.ModelViewSet):
-    queryset = Asset.objects.select_related("project").all().order_by("-last_seen")
     serializer_class = AssetSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if not user.is_authenticated:
+            return Asset.objects.none()
+        accessible_projects = Project.objects.filter(Q(owner=user) | Q(memberships__user=user)).values_list("id", flat=True)
+        return (
+            Asset.objects.select_related("project")
+            .filter(project_id__in=accessible_projects)
+            .order_by("-last_seen")
+        )
 
 
 class ObservedEndpointViewSet(viewsets.ModelViewSet):
-    queryset = ObservedEndpoint.objects.select_related("asset", "asset__project").all().order_by("-last_seen")
     serializer_class = ObservedEndpointSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if not user.is_authenticated:
+            return ObservedEndpoint.objects.none()
+        accessible_projects = Project.objects.filter(Q(owner=user) | Q(memberships__user=user)).values_list("id", flat=True)
+        return (
+            ObservedEndpoint.objects.select_related("asset", "asset__project")
+            .filter(asset__project_id__in=accessible_projects)
+            .order_by("-last_seen")
+        )
 
     def create(self, request, *args, **kwargs):
         """
@@ -47,12 +86,16 @@ class ObservedEndpointViewSet(viewsets.ModelViewSet):
             hostnames = raw.get("hostnames", [])
 
             try:
-                project = Project.objects.get(id=project_id)
+                target_project = Project.objects.get(id=project_id)
             except Project.DoesNotExist:
                 return Response({"project": "Projeto não encontrado."}, status=status.HTTP_400_BAD_REQUEST)
 
+            user = request.user
+            if target_project.owner != user and not target_project.memberships.filter(user=user).exists():
+                return Response({"project": "Sem permissão para atualizar este projeto."}, status=status.HTTP_403_FORBIDDEN)
+
             asset, endpoint = reconcile_endpoint(
-                project=project,
+                project=target_project,
                 ip=ip,
                 port=port,
                 hostnames=hostnames,

@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}{{ project.name }} — Projeto{% endblock %}
+
+{% block content %}
+<div class="main" style="padding:1.5rem;max-width:1100px;margin:0 auto;display:flex;flex-direction:column;gap:1.5rem;">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;">
+    <div>
+      <h2 style="margin:0;color:var(--text);display:flex;align-items:center;gap:.75rem;">
+        {{ project.name }}
+        <span style="font-size:.85rem;padding:.2rem .55rem;border-radius:999px;background:rgba(255,255,255,0.04);color:var(--muted);font-weight:600;">{{ project.get_status_display }}</span>
+      </h2>
+      <p style="margin:.35rem 0 0 0;color:var(--muted);font-size:.95rem;">Dono: {{ project.owner_display }} · Cliente: {{ project.client_name|default:"—" }}</p>
+    </div>
+    <div style="display:flex;gap:.5rem;">
+      <a href="{% url 'projects_share' project.id %}" class="btn btn-ghost">Compartilhar</a>
+      <a href="{% url 'projects_edit' project.id %}" class="btn btn-primary">Editar</a>
+    </div>
+  </div>
+
+  <section class="card" style="padding:1.2rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;">
+    <div>
+      <span class="label">Início</span>
+      <p class="value">{% if project.start_at %}{{ project.start_at|date:"d/m/Y H:i" }}{% else %}—{% endif %}</p>
+    </div>
+    <div>
+      <span class="label">Término</span>
+      <p class="value">{% if project.end_at %}{{ project.end_at|date:"d/m/Y H:i" }}{% else %}—{% endif %}</p>
+    </div>
+    <div>
+      <span class="label">Fuso horário</span>
+      <p class="value">{{ project.timezone|default:"—" }}</p>
+    </div>
+    <div>
+      <span class="label">Visibilidade</span>
+      <p class="value">{{ project.visibility|capfirst }}</p>
+    </div>
+  </section>
+
+  <section class="card" style="padding:1.2rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;">
+    <div>
+      <span class="label">Hosts alvo</span>
+      <p class="value multi">{{ project.hosts|default:"—" }}</p>
+    </div>
+    <div>
+      <span class="label">Hosts protegidos</span>
+      <p class="value multi">{{ project.protected_hosts|default:"—" }}</p>
+    </div>
+    <div>
+      <span class="label">Redes (CIDR)</span>
+      <p class="value multi">{{ project.networks|default:"—" }}</p>
+    </div>
+    <div>
+      <span class="label">Portas</span>
+      <p class="value multi">{{ project.ports|default:"—" }}</p>
+    </div>
+  </section>
+
+  <section class="card" style="padding:1.2rem;">
+    <h3 style="margin:0 0 1rem 0;color:var(--text);font-size:1.1rem;">Participantes</h3>
+    {% if memberships %}
+    <table style="width:100%;border-collapse:collapse;">
+      <thead>
+        <tr style="text-align:left;color:var(--muted);font-size:.85rem;">
+          <th style="padding:.4rem .5rem;">Usuário</th>
+          <th style="padding:.4rem .5rem;">Papel</th>
+          <th style="padding:.4rem .5rem;">Convite por</th>
+          <th style="padding:.4rem .5rem;">Desde</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for member in memberships %}
+        <tr style="border-top:1px solid rgba(255,255,255,0.03)">
+          <td style="padding:.45rem .5rem;color:var(--text);">{{ member.user.get_full_name|default:member.user.username }}</td>
+          <td style="padding:.45rem .5rem;color:var(--muted);">{{ member.get_role_display }}</td>
+          <td style="padding:.45rem .5rem;color:var(--muted);">{{ member.invited_by.get_full_name|default:member.invited_by.username|default:"—" }}</td>
+          <td style="padding:.45rem .5rem;color:var(--muted);white-space:nowrap;">{{ member.created_at|date:"d/m/Y H:i" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      <p style="margin:0;color:var(--muted);">Ainda não há colaboradores associados a este projeto.</p>
+    {% endif %}
+  </section>
+
+  <section class="card" style="padding:1.2rem;">
+    <h3 style="margin:0 0 1rem 0;color:var(--text);font-size:1.1rem;">Ativos recentes</h3>
+    {% if assets %}
+    <table style="width:100%;border-collapse:collapse;">
+      <thead>
+        <tr style="text-align:left;color:var(--muted);font-size:.85rem;">
+          <th style="padding:.4rem .5rem;">Identificador</th>
+          <th style="padding:.4rem .5rem;">Categoria</th>
+          <th style="padding:.4rem .5rem;">Hosts</th>
+          <th style="padding:.4rem .5rem;">Última observação</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for asset in assets %}
+        <tr style="border-top:1px solid rgba(255,255,255,0.03)">
+          <td style="padding:.45rem .5rem;color:var(--text);">{{ asset.name|default:asset.identifier }}</td>
+          <td style="padding:.45rem .5rem;color:var(--muted);">{{ asset.category|default:"—" }}</td>
+          <td style="padding:.45rem .5rem;color:var(--muted);">{{ asset.hostnames|join:", " }}</td>
+          <td style="padding:.45rem .5rem;color:var(--muted);white-space:nowrap;">{% if asset.last_seen %}{{ asset.last_seen|date:"d/m/Y H:i" }}{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      <p style="margin:0;color:var(--muted);">Nenhum ativo registrado ainda para este projeto.</p>
+    {% endif %}
+  </section>
+</div>
+
+<style>
+.card{ background:rgba(255,255,255,0.01); border-radius:12px; }
+.label{ font-size:.8rem; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; display:block; margin-bottom:.35rem; }
+.value{ margin:0; color:var(--text); font-weight:600; }
+.value.multi{ white-space:pre-wrap; word-break:break-word; }
+.btn{ border-radius:8px; padding:.35rem .65rem; font-weight:700; text-decoration:none; display:inline-flex; align-items:center; gap:.4rem; border:1px solid rgba(255,255,255,0.08); transition:all .2s ease; }
+.btn-ghost{ background:transparent; color:var(--muted); }
+.btn-primary{ background:linear-gradient(90deg,#4fd1c5,var(--accent)); color:#021023; border-color:rgba(79,209,197,0.12); box-shadow:0 8px 22px rgba(3,15,32,0.12); }
+</style>
+{% endblock %}
