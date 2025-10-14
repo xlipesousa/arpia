@@ -49,7 +49,10 @@ urlpatterns = [
     path("logs/api/ingest/", arpia_log_views.LogIngestView.as_view(), name="logs_ingest"),
     path("logs/api/bulk/", arpia_log_views.LogBulkIngestView.as_view(), name="logs_bulk_ingest"),
     path("logs/api/stats/", arpia_log_views.LogStatsView.as_view(), name="logs_stats"),
+    path("logs/api/tail/", arpia_log_views.log_tail_api, name="logs_tail_api"),
     path("logs/<int:pk>/", arpia_log_views.log_detail_api, name="logs_detail_api"),
+    path("logs/<int:pk>/download/", arpia_log_views.log_download_api, name="logs_download"),
+    path("logs/<int:pk>/delete/", arpia_log_views.log_delete_api, name="logs_delete"),
 
     # AI: lista inicial (placeholder)
     path("ai/", arpia_ai_views.AIListView.as_view(), name="ai_list"),
