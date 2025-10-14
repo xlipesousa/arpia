@@ -46,9 +46,9 @@
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M3 21l3-1 11-11 1-3L14 3 3 14v7z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </a>
 
-              <button type="button" class="btn-icon btn-warning" title="Compartilhar" data-action="share" data-share-url="{{ p.share_url }}" aria-label="Compartilhar projeto {{ p.name }}">
+              <a href="{{ p.share_url }}" class="btn-icon btn-warning" title="Compartilhar" aria-label="Compartilhar projeto {{ p.name }}">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 6l-4-4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 2v13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </button>
+              </a>
             </td>
           </tr>
           {% empty %}
@@ -66,7 +66,7 @@
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 5c-7 0-11 7-11 7s4 7 11 7 11-7 11-7-4-7-11-7z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </button>
               <a href="#" class="btn-icon btn-success" title="Editar" aria-label="Editar projeto 1"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M3 21l3-1 11-11 1-3L14 3 3 14v7z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-              <button type="button" class="btn-icon btn-warning" title="Compartilhar" data-action="share" data-id="1"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 6l-4-4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 2v13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <a href="#" class="btn-icon btn-warning" title="Compartilhar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 6l-4-4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 2v13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
               <button type="button" class="btn-icon btn-danger" title="Apagar" data-action="delete" data-id="1"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M3 6h18" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 6v14a1 1 0 001 1h6a1 1 0 001-1V6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 11v6M14 11v6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             </td>
           </tr>
@@ -82,7 +82,7 @@
             <td class="actions-col" style="padding:.45rem .5rem;vertical-align:middle;text-align:right;">
               <button type="button" class="btn-icon btn-info" title="Ver" data-action="view" data-id="2"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 5c-7 0-11 7-11 7s4 7 11 7 11-7 11-7-4-7-11-7z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
               <a href="#" class="btn-icon btn-success" title="Editar" aria-label="Editar projeto 2"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M3 21l3-1 11-11 1-3L14 3 3 14v7z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-              <button type="button" class="btn-icon btn-warning" title="Compartilhar" data-action="share" data-id="2"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 6l-4-4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 2v13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <a href="#" class="btn-icon btn-warning" title="Compartilhar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 6l-4-4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 2v13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
               <button type="button" class="btn-icon btn-danger" title="Apagar" data-action="delete" data-id="2"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M3 6h18" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 6v14a1 1 0 001 1h6a1 1 0 001-1V6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 11v6M14 11v6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             </td>
           </tr>
@@ -187,18 +187,6 @@
         if(!confirm('Confirma apagar o projeto #' + id + '?')) return;
         alert('Apagar: ' + id + ' (implemente endpoint)');
         return;
-      }
-      if(action === 'share'){
-        const shareUrl = btn.dataset.shareUrl;
-        if(!shareUrl){
-          alert('Não foi possível gerar o link de compartilhamento.');
-          return;
-        }
-        navigator.clipboard?.writeText(shareUrl).then(()=> {
-          alert('Link de compartilhamento copiado: ' + shareUrl);
-        }).catch(()=> {
-          prompt('Copie o link:', shareUrl);
-        });
       }
     });
   })();

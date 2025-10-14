@@ -48,24 +48,62 @@
   </section>
 
   <section class="card" style="padding:1.2rem;">
-    <h3 style="margin:0 0 1rem 0;color:var(--text);font-size:1.05rem;">Colaboradores atuais</h3>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:.75rem;margin-bottom:1rem;">
+      <h3 style="margin:0;color:var(--text);font-size:1.05rem;">Colaboradores atuais</h3>
+      {% if errors.membership %}<span class="error" style="margin:0;">{{ errors.membership }}</span>{% endif %}
+    </div>
     {% if memberships %}
       <table style="width:100%;border-collapse:collapse;">
         <thead>
           <tr style="text-align:left;color:var(--muted);font-size:.85rem;">
             <th style="padding:.4rem .5rem;">Usuário</th>
-            <th style="padding:.4rem .5rem;">Função</th>
+            <th style="padding:.4rem .5rem;">Permissão</th>
             <th style="padding:.4rem .5rem;">Adicionado por</th>
             <th style="padding:.4rem .5rem;">Desde</th>
+            <th style="padding:.4rem .5rem;text-align:right;">Ações</th>
           </tr>
         </thead>
         <tbody>
           {% for member in memberships %}
           <tr style="border-top:1px solid rgba(255,255,255,0.03);">
             <td style="padding:.45rem .5rem;color:var(--text);">{{ member.user.get_full_name|default:member.user.username }}</td>
-            <td style="padding:.45rem .5rem;color:var(--muted);">{{ member.get_role_display }}</td>
-            <td style="padding:.45rem .5rem;color:var(--muted);">{{ member.invited_by.get_full_name|default:member.invited_by.username|default:"—" }}</td>
+            <td style="padding:.45rem .5rem;color:var(--muted);">
+              {% if member.user_id == project.owner_id %}
+                {{ member.get_role_display }}
+              {% else %}
+                <form method="post" style="display:flex;gap:.5rem;align-items:center;">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="update">
+                  <input type="hidden" name="membership_id" value="{{ member.id }}">
+                  <select name="role" style="padding:.35rem .5rem;border-radius:6px;border:1px solid rgba(255,255,255,0.08);background:transparent;color:var(--text);">
+                    {% for value,label in role_choices %}
+                      <option value="{{ value }}" {% if member.role == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                  <button type="submit" class="btn btn-small">Salvar</button>
+                </form>
+              {% endif %}
+            </td>
+            <td style="padding:.45rem .5rem;color:var(--muted);">
+              {% if member.invited_by %}
+                {{ member.invited_by.get_full_name|default:member.invited_by.username }}
+              {% else %}
+                —
+              {% endif %}
+            </td>
             <td style="padding:.45rem .5rem;color:var(--muted);white-space:nowrap;">{{ member.created_at|date:"d/m/Y H:i" }}</td>
+            <td style="padding:.45rem .5rem;text-align:right;">
+              {% if member.user_id != project.owner_id %}
+              <form method="post" style="display:inline-flex;">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="remove">
+                <input type="hidden" name="membership_id" value="{{ member.id }}">
+                <button type="submit" class="btn btn-danger btn-small">Revogar</button>
+              </form>
+              {% else %}
+                <span style="color:var(--muted);font-size:.85rem;">Proprietário</span>
+              {% endif %}
+            </td>
           </tr>
           {% endfor %}
         </tbody>
@@ -79,8 +117,10 @@
 <style>
 .card{ background:rgba(255,255,255,0.01); border-radius:12px; }
 .btn{ border-radius:8px; padding:.4rem .7rem; font-weight:700; text-decoration:none; display:inline-flex; align-items:center; gap:.4rem; border:1px solid rgba(255,255,255,0.08); transition:all .2s ease; cursor:pointer; }
+.btn-small{ padding:.25rem .6rem; font-size:.8rem; }
 .btn-ghost{ background:transparent; color:var(--muted); }
 .btn-primary{ background:linear-gradient(90deg,#4fd1c5,var(--accent)); color:#021023; border-color:rgba(79,209,197,0.12); box-shadow:0 8px 22px rgba(3,15,32,0.12); }
+.btn-danger{ background:rgba(255,105,105,0.12); color:#ff8b8b; border-color:rgba(255,139,139,0.28); }
 .label{ font-size:.8rem; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; display:block; margin-bottom:.35rem; }
 .error{ display:block; color:#ff8b8b; font-size:.8rem; margin-top:.3rem; }
 </style>

@@ -73,7 +73,13 @@
         <tr style="border-top:1px solid rgba(255,255,255,0.03)">
           <td style="padding:.45rem .5rem;color:var(--text);">{{ member.user.get_full_name|default:member.user.username }}</td>
           <td style="padding:.45rem .5rem;color:var(--muted);">{{ member.get_role_display }}</td>
-          <td style="padding:.45rem .5rem;color:var(--muted);">{{ member.invited_by.get_full_name|default:member.invited_by.username|default:"—" }}</td>
+          <td style="padding:.45rem .5rem;color:var(--muted);">
+            {% if member.invited_by %}
+              {{ member.invited_by.get_full_name|default:member.invited_by.username }}
+            {% else %}
+              —
+            {% endif %}
+          </td>
           <td style="padding:.45rem .5rem;color:var(--muted);white-space:nowrap;">{{ member.created_at|date:"d/m/Y H:i" }}</td>
         </tr>
         {% endfor %}

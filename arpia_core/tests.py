@@ -64,6 +64,50 @@ class ProjectViewTests(TestCase):
 		project.refresh_from_db()
 		self.assertEqual(project.name, "Proj")
 
+	def test_share_view_adds_member(self):
+		project = Project.objects.create(owner=self.user, name="Compart", description="", client_name="")
+		ProjectMembership.objects.create(project=project, user=self.user, role=ProjectMembership.Role.OWNER)
+		guest = get_user_model().objects.create_user(username="guest", password="secret123")
+
+		response = self.client.post(
+			reverse("projects_share", kwargs={"pk": project.pk}),
+			{"action": "add", "username": "guest", "role": ProjectMembership.Role.EDITOR},
+		)
+
+		self.assertRedirects(response, reverse("projects_share", kwargs={"pk": project.pk}))
+		self.assertTrue(
+			ProjectMembership.objects.filter(project=project, user=guest, role=ProjectMembership.Role.EDITOR).exists()
+		)
+
+	def test_share_view_updates_member_role(self):
+		project = Project.objects.create(owner=self.user, name="Compart", description="", client_name="")
+		ProjectMembership.objects.create(project=project, user=self.user, role=ProjectMembership.Role.OWNER)
+		member = get_user_model().objects.create_user(username="member", password="secret123")
+		membership = ProjectMembership.objects.create(project=project, user=member, role=ProjectMembership.Role.VIEWER)
+
+		response = self.client.post(
+			reverse("projects_share", kwargs={"pk": project.pk}),
+			{"action": "update", "membership_id": membership.pk, "role": ProjectMembership.Role.EDITOR},
+		)
+
+		self.assertRedirects(response, reverse("projects_share", kwargs={"pk": project.pk}))
+		membership.refresh_from_db()
+		self.assertEqual(membership.role, ProjectMembership.Role.EDITOR)
+
+	def test_share_view_revokes_member(self):
+		project = Project.objects.create(owner=self.user, name="Compart", description="", client_name="")
+		ProjectMembership.objects.create(project=project, user=self.user, role=ProjectMembership.Role.OWNER)
+		member = get_user_model().objects.create_user(username="member2", password="secret123")
+		membership = ProjectMembership.objects.create(project=project, user=member, role=ProjectMembership.Role.EDITOR)
+
+		response = self.client.post(
+			reverse("projects_share", kwargs={"pk": project.pk}),
+			{"action": "remove", "membership_id": membership.pk},
+		)
+
+		self.assertRedirects(response, reverse("projects_share", kwargs={"pk": project.pk}))
+		self.assertFalse(ProjectMembership.objects.filter(pk=membership.pk).exists())
+
 
 class ProjectAPITests(TestCase):
 	def setUp(self):

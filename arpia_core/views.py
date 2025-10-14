@@ -268,38 +268,70 @@ def projects_share(request, pk):
     }
 
     if request.method == "POST":
-        form_data["username"] = request.POST.get("username", "").strip()
-        form_data["role"] = request.POST.get("role", form_data["role"])
-        username = form_data["username"]
-        role = form_data["role"]
-        User = get_user_model()
-        target_user = None
+        action = request.POST.get("action", "add")
 
-        if not username:
-            errors["username"] = "Informe o usuário que receberá acesso."
-        else:
-            try:
-                target_user = User.objects.get(username=username)
-            except User.DoesNotExist:
-                errors["username"] = "Usuário não encontrado."
+        if action == "remove":
+            membership_id = request.POST.get("membership_id")
+            membership = project.memberships.filter(pk=membership_id).select_related("user").first()
+            if not membership:
+                errors["membership"] = "Participante não encontrado."
+            elif membership.user_id == project.owner_id:
+                errors["membership"] = "Não é possível remover o proprietário do projeto."
+            else:
+                membership.delete()
+                messages.success(request, "Acesso revogado com sucesso.")
+                return redirect("projects_share", pk=project.pk)
 
-        valid_roles = {choice[0] for choice in role_choices}
-        if role not in valid_roles:
-            errors["role"] = "Tipo de acesso inválido."
-
-        if not errors:
-            membership, created = ProjectMembership.objects.get_or_create(
-                project=project,
-                user=target_user,
-                defaults={"role": role, "invited_by": request.user},
-            )
-            if not created and membership.role != role:
+        elif action == "update":
+            membership_id = request.POST.get("membership_id")
+            role = request.POST.get("role", ProjectMembership.Role.VIEWER)
+            membership = project.memberships.filter(pk=membership_id).select_related("user").first()
+            valid_roles = {choice[0] for choice in role_choices}
+            if not membership:
+                errors["membership"] = "Participante não encontrado."
+            elif membership.user_id == project.owner_id:
+                errors["membership"] = "O proprietário já possui acesso total."
+            elif role not in valid_roles:
+                errors["membership"] = "Permissão inválida."
+            else:
                 membership.role = role
                 membership.invited_by = request.user
                 membership.save(update_fields=["role", "invited_by", "updated_at"])
-            success = True
-            messages.success(request, "Compartilhamento atualizado.")
-            return redirect("projects_share", pk=project.pk)
+                messages.success(request, "Permissões atualizadas.")
+                return redirect("projects_share", pk=project.pk)
+
+        else:
+            form_data["username"] = request.POST.get("username", "").strip()
+            form_data["role"] = request.POST.get("role", form_data["role"])
+            username = form_data["username"]
+            role = form_data["role"]
+            User = get_user_model()
+            target_user = None
+
+            if not username:
+                errors["username"] = "Informe o usuário que receberá acesso."
+            else:
+                try:
+                    target_user = User.objects.get(username=username)
+                except User.DoesNotExist:
+                    errors["username"] = "Usuário não encontrado."
+
+            valid_roles = {choice[0] for choice in role_choices}
+            if role not in valid_roles:
+                errors["role"] = "Tipo de acesso inválido."
+
+            if not errors:
+                membership, created = ProjectMembership.objects.get_or_create(
+                    project=project,
+                    user=target_user,
+                    defaults={"role": role, "invited_by": request.user},
+                )
+                if not created and membership.role != role:
+                    membership.role = role
+                    membership.invited_by = request.user
+                    membership.save(update_fields=["role", "invited_by", "updated_at"])
+                messages.success(request, "Compartilhamento atualizado.")
+                return redirect("projects_share", pk=project.pk)
 
     share_url = request.build_absolute_uri(reverse("projects_share", kwargs={"pk": project.pk}))
 
