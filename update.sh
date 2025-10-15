@@ -125,6 +125,28 @@ if [ -f "requirements.txt" ]; then
 else
   info "Nenhum requirements.txt encontrado — pulando instalação de dependências."
 fi
+# --- aplicar migrações automaticamente ---
+if [ -z "${PYTHON:-}" ]; then
+  if [ -n "${VIRTUAL_ENV:-}" ]; then
+    PYTHON="${VIRTUAL_ENV}/bin/python"
+  elif [ -x "./.venv/bin/python" ]; then
+    PYTHON="./.venv/bin/python"
+  else
+    PYTHON="$(command -v python3 || command -v python || true)"
+  fi
+fi
+
+if [ -n "${PYTHON:-}" ] && [ -x "${PYTHON:-}" ] && [ -f "manage.py" ]; then
+  info "Aplicando migrações do Django (manage.py migrate --noinput)..."
+  if ! "$PYTHON" manage.py migrate --noinput; then
+    warn "Falha ao aplicar migrações automaticamente. Execute manualmente: $PYTHON manage.py migrate"
+  else
+    info "Migrações aplicadas com sucesso."
+  fi
+else
+  warn "Não foi possível determinar interpreter Python ou manage.py ausente — migrações não foram executadas."
+fi
+# --- fim das migrações automáticas ---
 # --- FIM da instalação de requirements ---
 
 # reaplicar stash caso tenha sido aplicado
