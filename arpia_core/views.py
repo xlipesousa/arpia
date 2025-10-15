@@ -1,71 +1,477 @@
-from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.decorators import login_required
-from django.views.generic import TemplateView
-from django.shortcuts import render, redirect
-from django.core.paginator import Paginator
-from django.urls import reverse
-from django.views import View
-from django.http import JsonResponse, FileResponse, HttpResponse
-from django.contrib import messages
-from django.shortcuts import get_object_or_404
-from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_http_methods
-from django.db.models import Q
+from __future__ import annotations
+
 import datetime
+import json
 import os
+import re
 from pathlib import Path
 
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.paginator import Paginator
+from django.db.models import Q
+from django.http import Http404, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.views.decorators.http import require_http_methods
+from django.views.generic import TemplateView, View
+
+from .forms import ScriptForm
+from .models import Project, ProjectMembership, Script
 from .project_logging import (
     log_project_created,
     log_project_member_added,
     log_project_member_removed,
     log_project_member_updated,
 )
+from .script_registry import get_default_by_slug, get_default_catalog
+from .utils import safe_filename
 
-SCRIPTS_BASE = Path(__file__).resolve().parent / "scripts"
+
+BASE_DIR = Path(__file__).resolve().parent
+SCRIPTS_BASE = BASE_DIR / "scripts"
 
 
-def ensure_script_dirs():
-    """
-    Garante a existência da árvore de scripts:
-    arpia_core/scripts/
-      ├─ default/
-      └─ user/
-           └─ <username>/
-    Cria um script de exemplo em default se o diretório default estiver vazio.
-    """
+@login_required
+def scripts_list(request):
+    sync_default_scripts()
+
+    page = request.GET.get("page", 1)
     try:
-        (SCRIPTS_BASE / "default").mkdir(parents=True, exist_ok=True)
-        (SCRIPTS_BASE / "user").mkdir(parents=True, exist_ok=True)
-    except OSError:
-        pass
+        page_size = int(request.GET.get("page_size", 10))
+    except (TypeError, ValueError):
+        page_size = 10
 
-    # criar um exemplo em default se estiver vazio
+    scripts_qs = Script.objects.for_user(request.user).order_by("kind", "name")
+    paginator = Paginator(scripts_qs, page_size)
+    page_obj = paginator.get_page(page)
+
+    scripts_table = []
+    for script in page_obj.object_list:
+        scripts_table.append(
+            {
+                "id": script.pk,
+                "name": script.name,
+                "description": script.description,
+                "type": script.kind,
+                "tags": script.tags,
+                "filename": script.filename,
+                "updated_at": script.updated_at,
+                "is_default": script.is_default,
+                "owner_id": script.owner_id,
+                "can_edit": script.owner_id == request.user.id and script.kind == Script.Kind.USER,
+                "can_delete": script.owner_id == request.user.id and script.kind == Script.Kind.USER,
+                "can_reset": script.is_default or bool(script.owner_id == request.user.id and script.source_path),
+                "can_clone": script.is_default,
+            }
+        )
+
+    projects = list(_get_user_projects(request.user))
+    project_options = [
+        {"id": str(project.pk), "name": project.name, "client": project.client_name}
+        for project in projects
+    ]
+
+    selected_project_id = request.GET.get("project", "")
+    selected_project = None
+    if selected_project_id:
+        try:
+            selected_project = _get_accessible_project(request.user, selected_project_id)
+        except Http404:
+            selected_project = None
+            selected_project_id = ""
+
+    if not selected_project and projects:
+        selected_project = projects[0]
+        selected_project_id = str(selected_project.pk)
+
+    project_macros = build_project_macros(selected_project)
+    macros_json = json.dumps(project_macros, ensure_ascii=False)
+    macro_entries = _macro_entries(project_macros)
+
+    context = {
+        "scripts_page": page_obj,
+        "scripts": scripts_table,
+        "project_options": project_options,
+        "selected_project_id": selected_project_id,
+        "project_macros": project_macros,
+        "project_macros_json": macros_json,
+        "macro_entries": macro_entries,
+        "page_size_choices": [5, 10, 25],
+    }
+    return render(request, "scripts/list.html", context)
+
+
+@login_required
+def scripts_create(request):
+    return scripts_new(request)
+
+
+@login_required
+def scripts_new(request):
+    sync_default_scripts()
+
+    form = ScriptForm(request.POST or None, owner=request.user)
+    project_id = request.GET.get("project")
+    selected_project = None
+    if project_id:
+        try:
+            selected_project = _get_accessible_project(request.user, project_id)
+        except Http404:
+            selected_project = None
+
+    if request.method == "POST" and form.is_valid():
+        script = form.save(commit=False)
+        script.owner = request.user
+        script.kind = Script.Kind.USER
+        script.tags = script.tags or []
+        script.save()
+
+        file_path = _write_user_script_file(request.user, script.filename, script.content)
+        script.source_path = str(file_path)
+        script.save(update_fields=["source_path"])
+
+        messages.success(request, "Script criado com sucesso.")
+        return redirect("scripts_list")
+
+    projects = list(_get_user_projects(request.user))
+    project_options = [
+        {"id": str(project.pk), "name": project.name}
+        for project in projects
+    ]
+    if not selected_project and projects:
+        selected_project = projects[0]
+    project_macros = build_project_macros(selected_project)
+    macros_json = json.dumps(project_macros, ensure_ascii=False)
+    macro_entries = _macro_entries(project_macros)
+
+    user_scripts = Script.objects.filter(owner=request.user).order_by("name")
+
+    context = {
+        "form": form,
+        "mode": "create",
+        "project_options": project_options,
+        "selected_project_id": str(selected_project.pk) if selected_project else "",
+        "project_macros": project_macros,
+        "project_macros_json": macros_json,
+        "macro_entries": macro_entries,
+        "user_scripts": user_scripts,
+    }
+    return render(request, "scripts/new.html", context)
+
+
+@login_required
+def scripts_edit(request, pk):
+    script = get_object_or_404(Script, pk=pk, owner=request.user, kind=Script.Kind.USER)
+    original_filename = script.filename
+
+    form = ScriptForm(request.POST or None, instance=script, owner=request.user)
+
+    project_id = request.GET.get("project")
+    selected_project = None
+    if project_id:
+        try:
+            selected_project = _get_accessible_project(request.user, project_id)
+        except Http404:
+            selected_project = None
+
+    if request.method == "POST" and form.is_valid():
+        script = form.save(commit=False)
+        script.kind = Script.Kind.USER
+        script.save()
+
+        if original_filename != script.filename:
+            old_path = _user_scripts_dir(request.user) / original_filename
+            try:
+                if old_path.exists():
+                    old_path.unlink()
+            except Exception:
+                pass
+
+        file_path = _write_user_script_file(request.user, script.filename, script.content)
+        script.source_path = str(file_path)
+        script.save(update_fields=["source_path", "updated_at"])
+
+        messages.success(request, "Script atualizado com sucesso.")
+        return redirect("scripts_list")
+
+    projects = list(_get_user_projects(request.user))
+    project_options = [
+        {"id": str(project.pk), "name": project.name}
+        for project in projects
+    ]
+    if not selected_project and projects:
+        selected_project = projects[0]
+    project_macros = build_project_macros(selected_project)
+    macros_json = json.dumps(project_macros, ensure_ascii=False)
+    macro_entries = _macro_entries(project_macros)
+
+    context = {
+        "form": form,
+        "mode": "edit",
+        "script_obj": script,
+        "project_options": project_options,
+        "selected_project_id": str(selected_project.pk) if selected_project else "",
+        "project_macros": project_macros,
+        "project_macros_json": macros_json,
+        "macro_entries": macro_entries,
+    }
+    return render(request, "scripts/new.html", context)
+
+
+@login_required
+@require_http_methods(["POST"])
+def scripts_delete(request, pk):
+    script = get_object_or_404(Script, pk=pk, owner=request.user, kind=Script.Kind.USER)
+    path = _user_scripts_dir(request.user) / script.filename
+    script.delete()
     try:
-        default_dir = SCRIPTS_BASE / "default"
-        if not any(default_dir.iterdir()):
-            sample = default_dir / "example_reset.sh"
-            sample.write_text("#!/usr/bin/env bash\n\necho \"Script default de restore — exemplo\"\n", encoding="utf-8")
-            sample.chmod(0o755)
+        if path.exists():
+            path.unlink()
     except Exception:
         pass
+    messages.success(request, "Script removido com sucesso.")
+    return redirect("scripts_list")
 
 
-def safe_filename(name: str) -> str:
-    """
-    Sanitiza o nome do arquivo: remove caminhos e caracteres perigosos.
-    Retorna basename simples; se inválido, retorna empty string.
-    """
-    if not name:
+@login_required
+@require_http_methods(["POST"])
+def scripts_clone(request, pk):
+    sync_default_scripts()
+    base_script = get_object_or_404(Script, pk=pk, owner__isnull=True, kind=Script.Kind.DEFAULT)
+
+    base_filename = base_script.filename
+    filename = base_filename
+    counter = 1
+    while Script.objects.filter(owner=request.user, filename=filename).exists():
+        name, ext = os.path.splitext(base_filename)
+        filename = f"{name}-{counter}{ext}"
+        counter += 1
+
+    clone = Script.objects.create(
+        owner=request.user,
+        name=base_script.name,
+        description=base_script.description,
+        filename=filename,
+        content=base_script.content,
+        kind=Script.Kind.USER,
+        tags=list(base_script.tags) + [f"default:{base_script.slug}"],
+        source_path=base_script.source_path,
+    )
+
+    file_path = _write_user_script_file(request.user, clone.filename, clone.content)
+    clone.source_path = str(file_path)
+    clone.save(update_fields=["source_path"])
+
+    messages.success(request, "Script clonado para o seu workspace.")
+    return redirect("scripts_list")
+
+
+@login_required
+@require_http_methods(["POST"])
+def scripts_reset(request, pk):
+    sync_default_scripts()
+    script = get_object_or_404(Script.objects.for_user(request.user), pk=pk)
+
+    if script.is_default:
+        definition = get_default_by_slug(script.slug)
+        if not definition:
+            messages.error(request, "Script default não encontrado no catálogo.")
+            return redirect("scripts_list")
+        try:
+            content = definition.read_content()
+        except FileNotFoundError:
+            content = script.content
+        script.content = content
+        script.description = definition.description
+        script.filename = definition.filename
+        script.tags = definition.tags
+        script.source_path = str(definition.source_path)
+        script.save()
+        messages.success(request, "Script default restaurado com sucesso.")
+        return redirect("scripts_list")
+
+    if script.owner_id != request.user.id:
+        messages.error(request, "Você não tem permissão para resetar este script.")
+        return redirect("scripts_list")
+
+    default_slug = None
+    for tag in script.tags or []:
+        if isinstance(tag, str) and tag.startswith("default:"):
+            default_slug = tag.split(":", 1)[1]
+            break
+
+    if default_slug:
+        definition = get_default_by_slug(default_slug)
+        if definition:
+            try:
+                script.content = definition.read_content()
+            except FileNotFoundError:
+                script.content = script.content
+    file_path = _write_user_script_file(request.user, script.filename, script.content)
+    script.source_path = str(file_path)
+    script.save(update_fields=["content", "source_path", "updated_at"])
+    messages.success(request, "Script restaurado com sucesso.")
+    return redirect("scripts_list")
+
+
+@login_required
+def scripts_run(request, pk):
+    sync_default_scripts()
+    script = get_object_or_404(Script.objects.for_user(request.user), pk=pk)
+
+    project_id = request.GET.get("project")
+    selected_project = None
+    if project_id:
+        try:
+            selected_project = _get_accessible_project(request.user, project_id)
+        except Http404:
+            selected_project = None
+
+    macros = build_project_macros(selected_project)
+    rendered_content = render_script_with_macros(script.content, macros)
+
+    return JsonResponse(
+        {
+            "status": "ok",
+            "id": script.pk,
+            "name": script.name,
+            "project": {
+                "id": str(selected_project.pk),
+                "name": selected_project.name,
+            }
+            if selected_project
+            else None,
+            "content": rendered_content,
+            "macros": macros,
+        }
+    )
+
+
+def sync_default_scripts() -> None:
+    for entry in get_default_catalog():
+        try:
+            content = entry.read_content()
+        except FileNotFoundError:
+            content = ""
+
+        defaults = {
+            "name": entry.name,
+            "description": entry.description,
+            "filename": entry.filename,
+            "content": content,
+            "kind": Script.Kind.DEFAULT,
+            "tags": entry.tags,
+            "source_path": str(entry.source_path),
+        }
+
+        Script.objects.update_or_create(
+            owner=None,
+            slug=entry.slug,
+            defaults=defaults,
+        )
+
+
+def _normalize_multiline(value: str) -> str:
+    if not value:
         return ""
-    name = os.path.basename(name)
-    # proibir caminhos relativos ../ e nomes com barras
-    if '/' in name or '\\' in name or name in ('.', '..'):
-        return ""
-    # limitar caracteres básicos
-    allowed = "-_.() abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-    cleaned = ''.join(ch for ch in name if ch in allowed)
-    return cleaned.strip()
+    separators = [",", "\r", "\n", "\t", ";"]
+    for sep in separators:
+        value = value.replace(sep, "\n")
+    items = [item.strip() for item in value.splitlines() if item.strip()]
+    return "\n".join(items)
+
+
+def _credentials_summary(credentials):
+    summary = []
+    for cred in credentials or []:
+        username = cred.get("username") or ""
+        password = cred.get("password") or cred.get("passphrase") or ""
+        target = cred.get("target") or cred.get("host") or ""
+        summary.append(
+            {
+                "type": cred.get("type") or cred.get("type_label") or "",
+                "username": username,
+                "password": password,
+                "target": target,
+            }
+        )
+    return summary
+
+
+def build_project_macros(project: Project | None) -> dict:
+    if not project:
+        return {
+            "PROJECT_NAME": "",
+            "TARGET_HOSTS": "",
+            "TARGET_NETWORKS": "",
+            "TARGET_PORTS": "",
+            "PROTECTED_HOSTS": "",
+            "CREDENTIALS_JSON": "[]",
+            "CREDENTIALS_TABLE": [],
+        }
+
+    credentials = project.credentials_json or []
+    return {
+        "PROJECT_NAME": project.name,
+        "TARGET_HOSTS": _normalize_multiline(project.hosts),
+        "TARGET_NETWORKS": _normalize_multiline(project.networks),
+        "TARGET_PORTS": (project.ports or "").replace("\n", ", "),
+        "PROTECTED_HOSTS": _normalize_multiline(project.protected_hosts),
+        "CREDENTIALS_JSON": json.dumps(credentials, indent=2, ensure_ascii=False),
+        "CREDENTIALS_TABLE": _credentials_summary(credentials),
+    }
+
+
+def render_script_with_macros(content: str, macros: dict[str, str]) -> str:
+    rendered = content
+    for key, value in macros.items():
+        if isinstance(value, (list, dict)):
+            value_str = json.dumps(value, indent=2, ensure_ascii=False)
+        else:
+            value_str = str(value)
+        pattern = re.compile(r"\{\{\s*" + re.escape(key) + r"\s*\}\}")
+        rendered = pattern.sub(value_str, rendered)
+    return rendered
+
+
+def _get_user_projects(user):
+    return (
+        Project.objects.filter(Q(owner=user) | Q(memberships__user=user))
+        .distinct()
+        .order_by("name")
+    )
+
+
+def _macro_entries(macros: dict) -> list[dict]:
+    entries = []
+    for key, value in macros.items():
+        if isinstance(value, (list, dict)):
+            display = json.dumps(value, indent=2, ensure_ascii=False)
+            entries.append({"key": key, "value": display, "is_pre": True})
+        else:
+            display = str(value)
+            entries.append({"key": key, "value": display, "is_pre": "\n" in display})
+    return entries
+
+
+def _user_scripts_dir(user) -> Path:
+    username = safe_filename(getattr(user, "username", "")) or f"user-{user.pk}"
+    directory = SCRIPTS_BASE / "user" / username
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+
+def _write_user_script_file(user, filename: str, content: str) -> Path:
+    directory = _user_scripts_dir(user)
+    path = directory / filename
+    path.write_text(content, encoding="utf-8")
+    try:
+        path.chmod(0o644)
+    except Exception:
+        pass
+    return path
 
 
 class DashboardView(LoginRequiredMixin, TemplateView):
@@ -163,8 +569,6 @@ def projects_create(request):
             errors["end"] = "Data de término não pode ser anterior ao início."
 
         if not errors:
-            from .models import Project, ProjectMembership
-
             project = Project(
                 owner=request.user,
                 name=form["name"],
@@ -189,10 +593,7 @@ def projects_create(request):
 
 @login_required
 def projects_list(request):
-    from django.db.models import Q
     from django.utils import timezone
-
-    from .models import Project
 
     page = request.GET.get("page", 1)
     try:
@@ -234,8 +635,6 @@ def projects_list(request):
 
 
 def _get_accessible_project(user, pk, *, owner_only=False):
-    from .models import Project
-
     base_qs = Project.objects.select_related("owner").prefetch_related("memberships__user")
     if owner_only:
         return get_object_or_404(base_qs.filter(owner=user), pk=pk)
@@ -263,7 +662,6 @@ def projects_detail(request, pk):
 @require_http_methods(["GET", "POST"])
 def projects_share(request, pk):
     from django.contrib.auth import get_user_model
-    from .models import ProjectMembership
 
     project = _get_accessible_project(request.user, pk, owner_only=True)
     errors = {}
@@ -363,84 +761,6 @@ def projects_share(request, pk):
     }
     return render(request, "projects/share.html", context)
 
-
-def scripts_list(request):
-    """
-    Lista scripts (default + personalizados). Usa modelo Script quando existir,
-    caso contrário fornece dados fictícios. Paginação via querystring page/page_size.
-    """
-    items = []
-    try:
-        from .models import Script  # noqa: WPS433
-        qs = Script.objects.all().order_by('-id')
-        for s in qs:
-            items.append({
-                "id": getattr(s, "id", ""),
-                "name": getattr(s, "name", getattr(s, "title", str(s))),
-                "description": getattr(s, "description", "") or "",
-                "type": "custom" if getattr(s, "is_user", False) else "default",
-            })
-    except Exception:
-        # dados fictícios
-        items = [
-            {"id": 1, "name": "nmap-scan-basic", "description": "Nmap scan rápido", "type": "default"},
-            {"id": 2, "name": "sqlmap-detect", "description": "Scan básico SQLi", "type": "default"},
-            {"id": 3, "name": "hydra-brute-ssh", "description": "Brute-force SSH (demo)", "type": "default"},
-            {"id": 101, "name": "minha-varredura-web", "description": "Script personalizado para sites", "type": "custom"},
-            {"id": 102, "name": "lista-hosts", "description": "Meu script de inventário", "type": "custom"},
-        ]
-
-    # paginação
-    page = request.GET.get("page", 1)
-    try:
-        page_size = int(request.GET.get("page_size", 10))
-    except (TypeError, ValueError):
-        page_size = 10
-
-    paginator = Paginator(items, page_size)
-    page_obj = paginator.get_page(page)
-
-    return render(request, "scripts/list.html", {"scripts_page": page_obj, "scripts": page_obj.object_list})
-
-
-@login_required
-def scripts_create(request):
-    """
-    Wrapper compatível com o nome de URL 'scripts_create' usado em templates.
-    Reusa a lógica do editor (scripts_new).
-    """
-    return scripts_new(request)
-
-
-def scripts_edit(request, pk):
-    # placeholder: form de edição
-    messages.info(request, f"Editar script {pk}: funcionalidade pendente (placeholder).")
-    return redirect("scripts_list")
-
-
-def scripts_delete(request, pk):
-    # placeholder: excluir (apenas feedback)
-    messages.success(request, f"Script {pk} removido (simulado).")
-    return redirect("scripts_list")
-
-
-def scripts_clone(request, pk):
-    # placeholder: clonar default -> cria cópia simulada
-    messages.success(request, f"Script {pk} clonado para personalizado (simulado).")
-    return redirect("scripts_list")
-
-
-def scripts_reset(request, pk):
-    # placeholder: resetar script default a partir do original
-    messages.success(request, f"Script {pk} restaurado para default (simulado).")
-    return redirect("scripts_list")
-
-
-def scripts_run(request, pk):
-    # endpoint simples para executar (simulação)
-    return JsonResponse({"status": "ok", "action": "run", "id": pk})
-
-
 def tools_list(request):
     """
     Lista a página de Tools (aponta para templates/tools/list.html).
@@ -499,11 +819,7 @@ def wordlists_download(request, pk):
 @login_required
 @require_http_methods(["GET", "POST"])
 def projects_edit(request, pk):
-    import json
-
     from django.utils import timezone
-
-    from .models import Project
 
     project = get_object_or_404(Project, pk=pk)
 
@@ -612,48 +928,3 @@ def projects_edit(request, pk):
         "errors": errors,
     }
     return render(request, "projects/edit.html", context)
-
-
-@login_required
-def scripts_new(request):
-    """
-    Editor simples para criar um novo script usuário.
-    Salva em arpia_core/scripts/user/<username>/<filename>.
-    """
-    ensure_script_dirs()
-    username = request.user.username or "anonymous"
-    user_dir = SCRIPTS_BASE / "user" / username
-    user_dir.mkdir(parents=True, exist_ok=True)
-
-    context = {
-        "filename": "",
-        "content": "",
-        "username": username,
-        "user_files": sorted([p.name for p in user_dir.iterdir() if p.is_file()]),
-    }
-
-    if request.method == "POST":
-        filename = request.POST.get("filename", "").strip()
-        content = request.POST.get("content", "")
-        filename = safe_filename(filename)
-        if not filename:
-            messages.error(request, "Nome de arquivo inválido.")
-            context.update({"filename": request.POST.get("filename", ""), "content": content})
-            return render(request, "scripts/new.html", context)
-
-        target = user_dir / filename
-        try:
-            target.write_text(content, encoding="utf-8")
-            # permissões padrão
-            try:
-                target.chmod(0o644)
-            except Exception:
-                pass
-            messages.success(request, f"Script salvo: {filename}")
-            return redirect("scripts_list")
-        except Exception as e:
-            messages.error(request, f"Falha ao salvar o script: {e}")
-            context.update({"filename": filename, "content": content})
-            return render(request, "scripts/new.html", context)
-
-    return render(request, "scripts/new.html", context)

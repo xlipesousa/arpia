@@ -98,6 +98,80 @@ class ProjectMembership(models.Model):
         return f"{self.user} -> {self.project} ({self.role})"
 
 
+class ScriptQuerySet(models.QuerySet):
+    def for_user(self, user):
+        if user.is_superuser:
+            return self.all()
+        return self.filter(models.Q(kind="default") | models.Q(owner=user))
+
+
+class Script(models.Model):
+    class Kind(models.TextChoices):
+        DEFAULT = "default", "Default"
+        USER = "user", "Personalizado"
+
+    id = models.BigAutoField(primary_key=True)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="scripts",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+    )
+    name = models.CharField(max_length=180)
+    slug = models.SlugField(max_length=220, db_index=True)
+    description = models.TextField(blank=True)
+    filename = models.CharField(max_length=220)
+    content = models.TextField()
+    kind = models.CharField(max_length=24, choices=Kind.choices, default=Kind.USER)
+    tags = models.JSONField(default=list, blank=True)
+    source_path = models.CharField(max_length=500, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = ScriptQuerySet.as_manager()
+
+    class Meta:
+        unique_together = (
+            ("owner", "slug"),
+            ("owner", "filename"),
+        )
+        constraints = [
+            models.UniqueConstraint(
+                fields=["slug"],
+                condition=models.Q(owner__isnull=True),
+                name="uniq_default_script_slug",
+            ),
+            models.UniqueConstraint(
+                fields=["filename"],
+                condition=models.Q(owner__isnull=True),
+                name="uniq_default_script_filename",
+            ),
+        ]
+        ordering = ("name",)
+        verbose_name = "Script"
+        verbose_name_plural = "Scripts"
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base_slug = slugify(self.name) or slugify(self.filename) or slugify(str(self.pk))
+            candidate = base_slug or "script"
+            suffix = 1
+            owner_filter = models.Q(owner=self.owner)
+            while Script.objects.exclude(pk=self.pk).filter(owner_filter, slug=candidate).exists():
+                suffix += 1
+                candidate = f"{base_slug}-{suffix}"
+            self.slug = candidate
+        super().save(*args, **kwargs)
+
+    @property
+    def is_default(self) -> bool:
+        return self.kind == Script.Kind.DEFAULT
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class Asset(models.Model):
     """Representa um ativo consolidado (host, container, serviço lógico)."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

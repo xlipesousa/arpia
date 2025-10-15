@@ -1,36 +1,152 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Novo Script — ARPIA{% endblock %}
+{% block title %}{% if mode == "edit" %}Editar Script{% else %}Novo Script{% endif %} — ARPIA{% endblock %}
 
 {% block content %}
-<div class="main" style="padding:1.25rem;max-width:900px;margin:0 auto;">
-  <h2 style="margin:0 0 1rem 0;color:var(--text)">Editor de Scripts</h2>
-
-  <form method="post" class="card" style="padding:1rem;display:flex;flex-direction:column;gap:.75rem;">
-    {% csrf_token %}
-    <div style="display:flex;gap:.5rem;align-items:center;">
-      <label style="font-weight:700;color:var(--muted);min-width:90px">Arquivo</label>
-      <input name="filename" placeholder="nome_do_script.sh" value="{{ filename }}" style="flex:1;padding:.45rem .6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);">
-      <a href="{% url 'scripts_list' %}" class="btn btn-ghost" style="margin-left:.5rem">Cancelar</a>
+<div class="main script-form">
+  <div class="scripts-header">
+    <div>
+      <h2>{% if mode == "edit" %}Editar script{% else %}Novo script{% endif %}</h2>
+      <p class="page-subtitle">Estruture comandos reutilizáveis e use macros com dados do projeto escolhido.</p>
     </div>
-
-    <label style="font-weight:700;color:var(--muted)">Conteúdo</label>
-    <textarea name="content" id="script-content" rows="18" style="width:100%;padding:.6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:#021023;color:#dbeafe;font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace; resize:vertical;">{{ content }}</textarea>
-
-    <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:.25rem;">
-      <button type="submit" class="btn btn-primary">Salvar</button>
+    <div class="actions">
+      <a href="{% url 'scripts_list' %}" class="btn btn-ghost">Voltar</a>
     </div>
-  </form>
+  </div>
 
-  <div style="margin-top:1rem;">
-    <h4 style="margin:.25rem 0;color:var(--muted)">Meus scripts ({{ username }})</h4>
-    <ul>
-      {% for f in user_files %}
-        <li><a href="{% url 'scripts_edit' f %}">{{ f }}</a></li>
-      {% empty %}
-        <li style="color:var(--muted)">Nenhum script encontrado.</li>
-      {% endfor %}
-    </ul>
+  <div class="form-layout">
+    <form method="post" class="card form-card">
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+        <div class="alert alert-error">
+          {{ form.non_field_errors }}
+        </div>
+      {% endif %}
+
+      <div class="form-grid">
+        <div class="form-control">
+          <label for="id_name">Nome</label>
+          {{ form.name }}
+          {% if form.name.errors %}<span class="field-error">{{ form.name.errors.0 }}</span>{% endif %}
+        </div>
+        <div class="form-control">
+          <label for="id_filename">Arquivo</label>
+          {{ form.filename }}
+          <span class="field-help">Salvo em <code>scripts/user/&lt;usuário&gt;/</code></span>
+          {% if form.filename.errors %}<span class="field-error">{{ form.filename.errors.0 }}</span>{% endif %}
+        </div>
+        <div class="form-control full">
+          <label for="id_description">Descrição</label>
+          {{ form.description }}
+          {% if form.description.errors %}<span class="field-error">{{ form.description.errors.0 }}</span>{% endif %}
+        </div>
+        <div class="form-control full">
+          <label for="id_content">Conteúdo</label>
+          {{ form.content }}
+          {% if form.content.errors %}<span class="field-error">{{ form.content.errors.0 }}</span>{% endif %}
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Salvar script</button>
+      </div>
+    </form>
+
+    <div class="side-panel">
+      <div class="card select-card">
+        <label for="script-project-select" class="select-label">Projeto de referência</label>
+        <select id="script-project-select" name="project">
+          {% if project_options %}
+            {% for project in project_options %}
+              <option value="{{ project.id }}" {% if project.id == selected_project_id %}selected{% endif %}>{{ project.name }}</option>
+            {% endfor %}
+          {% else %}
+            <option value="">Nenhum projeto disponível</option>
+          {% endif %}
+        </select>
+        <p class="muted" style="margin-top:.5rem;">As macros abaixo serão preenchidas com dados do projeto selecionado.</p>
+      </div>
+
+      <div class="card macros-card">
+        <h3>Macros</h3>
+        <ul class="macro-list">
+          {% for macro in macro_entries %}
+            <li>
+              <div class="macro-key">{{ macro.key }}</div>
+              {% if macro.is_pre %}
+                <pre class="macro-value">{{ macro.value }}</pre>
+              {% else %}
+                <span class="macro-value">{{ macro.value|default:"—" }}</span>
+              {% endif %}
+            </li>
+          {% empty %}
+            <li><span class="muted">Nenhum dado disponível para o projeto atual.</span></li>
+          {% endfor %}
+        </ul>
+      </div>
+
+      {% if user_scripts %}
+        <div class="card user-scripts">
+          <h3>Meus scripts</h3>
+          <ul>
+            {% for script in user_scripts %}
+              <li><a href="{% url 'scripts_edit' script.id %}">{{ script.name }}</a> <span class="muted">({{ script.filename }})</span></li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+    </div>
   </div>
 </div>
+
+{{ project_macros|json_script:"project-macros-data" }}
+
+<style>
+.script-form .scripts-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.4rem;gap:1rem;}
+.form-layout{display:grid;grid-template-columns:2fr 1fr;gap:1.2rem;align-items:start;}
+.form-card{padding:1.2rem;}
+.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;}
+.form-control{display:flex;flex-direction:column;gap:.35rem;}
+.form-control.full{grid-column:1/-1;}
+.form-control label{font-size:.85rem;color:var(--muted);font-weight:600;}
+.form-control input,.form-control textarea{padding:.55rem .7rem;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(2,16,35,0.85);color:var(--text);}
+.form-control textarea{min-height:380px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,monospace;}
+.field-help{font-size:.75rem;color:var(--muted);}
+.field-error{color:#ff8b8b;font-size:.78rem;}
+.form-actions{display:flex;justify-content:flex-end;margin-top:1rem;}
+.side-panel{display:grid;gap:1rem;}
+.select-card{padding:1rem;}
+.select-label{display:block;font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:.3rem;}
+.select-card select{width:100%;padding:.5rem .7rem;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:transparent;color:var(--text);}
+.macros-card{padding:1rem;}
+.macro-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.8rem;}
+.macro-key{font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;color:var(--accent-2);}
+.macro-value{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,monospace;font-size:.82rem;color:var(--text);background:rgba(2,16,35,0.85);border-radius:10px;border:1px solid rgba(148,163,184,0.15);padding:.55rem .7rem;white-space:pre-wrap;word-break:break-word;}
+.user-scripts{padding:1rem;}
+.user-scripts ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.4rem;}
+.user-scripts a{text-decoration:none;color:var(--accent-2);}
+.muted{color:var(--muted);}
+.alert-error{background:rgba(255,139,139,0.1);border:1px solid rgba(255,139,139,0.2);padding:.6rem .8rem;border-radius:10px;color:#ff8b8b;margin-bottom:1rem;}
+
+@media (max-width:1080px){
+  .form-layout{grid-template-columns:1fr;}
+}
+</style>
+
+<script>
+(function(){
+  const projectSelect = document.getElementById('script-project-select');
+  if(projectSelect){
+    projectSelect.addEventListener('change', ()=>{
+      const params = new URLSearchParams(window.location.search);
+      if(projectSelect.value){
+        params.set('project', projectSelect.value);
+      } else {
+        params.delete('project');
+      }
+      window.location.search = params.toString();
+    });
+  }
+})();
+</script>
 {% endblock %}

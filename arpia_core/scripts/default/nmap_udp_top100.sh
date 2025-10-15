@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Nmap quick top 1000 TCP scan (resettable default).
+# Nmap top 100 UDP ports scan.
 # Placeholders:
 #   {{PROJECT_NAME}} -> project name
 #   {{TARGET_HOSTS}} -> newline-separated hostnames/IPs
@@ -14,20 +14,20 @@ EOF
 )
 
 if [[ -z "${HOSTS//[[:space:]]/}" ]]; then
-	echo "[WARN] Nenhum host definido para ${PROJECT_NAME}." >&2
-	exit 0
+  echo "[WARN] Nenhum host definido para ${PROJECT_NAME}." >&2
+  exit 0
 fi
 
 OUTPUT_DIR="${OUTPUT_DIR:-./recon/${PROJECT_NAME// /_}}"
 mkdir -p "$OUTPUT_DIR"
 
-echo "[INFO] Executando Nmap top-1000 TCP"
+echo "[INFO] Executando Nmap UDP top-100"
 while IFS= read -r HOST; do
-	[[ -z "${HOST//[[:space:]]/}" ]] && continue
-	SAFE_HOST=${HOST//[^A-Za-z0-9_.-]/_}
-	echo "[INFO] Varredura top-1000 TCP para ${HOST}"
-	nmap -sS -sV --top-ports 1000 "$HOST" -oA "${OUTPUT_DIR}/nmap_quick_${SAFE_HOST}" || true
-	echo
+  [[ -z "${HOST//[[:space:]]/}" ]] && continue
+  SAFE_HOST=${HOST//[^A-Za-z0-9_.-]/_}
+  echo "[INFO] Varredura UDP para ${HOST}"
+  nmap -sU --top-ports 100 --open "$HOST" -oA "${OUTPUT_DIR}/nmap_udp_top100_${SAFE_HOST}" || true
+  echo
 done <<< "$HOSTS"
 
 echo "[INFO] Resultados em ${OUTPUT_DIR}"

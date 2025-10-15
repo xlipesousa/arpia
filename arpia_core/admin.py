@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Asset, ObservedEndpoint, Project, ProjectMembership
+from .models import Asset, ObservedEndpoint, Project, ProjectMembership, Script
 
 
 @admin.register(Project)
@@ -33,3 +33,12 @@ class ObservedEndpointAdmin(admin.ModelAdmin):
 	search_fields = ("ip", "service", "source")
 	list_filter = ("source", "proto")
 	autocomplete_fields = ("asset",)
+
+
+@admin.register(Script)
+class ScriptAdmin(admin.ModelAdmin):
+	list_display = ("name", "kind", "owner", "filename", "updated_at")
+	list_filter = ("kind", "updated_at")
+	search_fields = ("name", "filename", "owner__username")
+	autocomplete_fields = ("owner",)
+	ordering = ("name",)
