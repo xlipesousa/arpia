@@ -27,15 +27,15 @@ urlpatterns = [
     path("scripts/<int:pk>/run/", views.scripts_run, name="scripts_run"),
 
     # Tools & Wordlists
-    path("tools/", views.tools_list, name="tools_list"),
-    path("tools/add/", views.tools_add, name="tools_add"),
-    path("tools/<int:pk>/configure/", views.tools_configure, name="tools_configure"),
-    path("tools/<int:pk>/delete/", views.tools_delete, name="tools_delete"),
+    path("tools/", views.ToolWordlistView.as_view(), name="tools_list"),
+    path("tools/new/", views.ToolCreateView.as_view(), name="tools_add"),
+    path("tools/<slug:slug>/edit/", views.ToolUpdateView.as_view(), name="tools_configure"),
+    path("tools/<slug:slug>/delete/", views.ToolDeleteView.as_view(), name="tools_delete"),
 
-    path("wordlists/add/", views.wordlists_add, name="wordlists_add"),
-    path("wordlists/<int:pk>/edit/", views.wordlists_edit, name="wordlists_edit"),
-    path("wordlists/<int:pk>/delete/", views.wordlists_delete, name="wordlists_delete"),
-    path("wordlists/<int:pk>/download/", views.wordlists_download, name="wordlists_download"),
+    path("wordlists/new/", views.WordlistCreateView.as_view(), name="wordlists_add"),
+    path("wordlists/<slug:slug>/edit/", views.WordlistUpdateView.as_view(), name="wordlists_edit"),
+    path("wordlists/<slug:slug>/delete/", views.WordlistDeleteView.as_view(), name="wordlists_delete"),
+    path("wordlists/<slug:slug>/download/", views.wordlists_download, name="wordlists_download"),
 
     # Reports & Logs
     path("reports/", views.ReportsListView.as_view(), name="reports_list"),

@@ -1,6 +1,6 @@
 # Dependências Python do projeto ARPIA
 Django>=4.2,<5
-djangorestframework>=3.14
+djangorestframework==3.16.1
 python-dotenv>=1.0
 psycopg2-binary>=2.9
 prometheus-client>=0.16

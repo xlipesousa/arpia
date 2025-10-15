@@ -29,12 +29,21 @@ fi
 OUTPUT_DIR="${OUTPUT_DIR:-./recon/${PROJECT_NAME// /_}}"
 mkdir -p "$OUTPUT_DIR"
 
+NMAP_BIN="{{TOOL_NMAP}}"
+if [[ -z "${NMAP_BIN//[[:space:]]/}" || "${NMAP_BIN}" == "None" ]]; then
+  if command -v nmap >/dev/null 2>&1; then
+    NMAP_BIN="$(command -v nmap)"
+  else
+    NMAP_BIN="nmap"
+  fi
+fi
+
 echo "[INFO] Executando varredura NSE de vulnerabilidades"
 while IFS= read -r TARGET; do
   [[ -z "${TARGET//[[:space:]]/}" ]] && continue
   SAFE_TARGET=${TARGET//[^A-Za-z0-9_.-]/_}
   echo "[INFO] Nmap --script vuln para ${TARGET}"
-  nmap -sV --script vuln "$TARGET" -oA "${OUTPUT_DIR}/nmap_vuln_${SAFE_TARGET}" || true
+  "${NMAP_BIN}" -sV --script vuln "$TARGET" -oA "${OUTPUT_DIR}/nmap_vuln_${SAFE_TARGET}" || true
   echo
 done <<< "$TARGET_LIST"
 

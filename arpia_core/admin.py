@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Asset, ObservedEndpoint, Project, ProjectMembership, Script
+from .models import Asset, ObservedEndpoint, Project, ProjectMembership, Script, Tool, Wordlist
 
 
 @admin.register(Project)
@@ -40,5 +40,24 @@ class ScriptAdmin(admin.ModelAdmin):
 	list_display = ("name", "kind", "owner", "filename", "updated_at")
 	list_filter = ("kind", "updated_at")
 	search_fields = ("name", "filename", "owner__username")
+	autocomplete_fields = ("owner",)
+	ordering = ("name",)
+
+
+# Admin para Tool
+@admin.register(Tool)
+class ToolAdmin(admin.ModelAdmin):
+	list_display = ("name", "owner", "category", "path", "updated_at")
+	search_fields = ("name", "category", "path", "owner__username")
+	list_filter = ("category", "created_at")
+	autocomplete_fields = ("owner",)
+	ordering = ("name",)
+
+
+@admin.register(Wordlist)
+class WordlistAdmin(admin.ModelAdmin):
+	list_display = ("name", "owner", "category", "path", "updated_at")
+	search_fields = ("name", "category", "path", "owner__username")
+	list_filter = ("category", "created_at")
 	autocomplete_fields = ("owner",)
 	ordering = ("name",)

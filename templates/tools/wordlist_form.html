@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}{% if object %}Editar Wordlist{% else %}Nova Wordlist{% endif %} — ARPIA{% endblock %}
+
+{% block content %}
+<div class="main wordlist-form">
+  <div class="form-header">
+    <div>
+      <h2>{% if object %}Editar wordlist{% else %}Nova wordlist{% endif %}</h2>
+      <p class="page-subtitle">Registre caminhos para listas de palavras personalizadas e reutilize em scripts.</p>
+    </div>
+    <div class="actions">
+      <a href="{% url 'tools_list' %}" class="btn btn-ghost">Voltar</a>
+    </div>
+  </div>
+
+  <div class="form-card card">
+    <form method="post" novalidate>
+      {% csrf_token %}
+
+      {% if form.non_field_errors %}
+        <div class="alert alert-error">{{ form.non_field_errors }}</div>
+      {% endif %}
+
+      <div class="form-grid">
+        <div class="form-control">
+          <label for="id_name">Nome</label>
+          {{ form.name }}
+          {% if form.name.errors %}<span class="field-error">{{ form.name.errors.0 }}</span>{% endif %}
+        </div>
+        <div class="form-control">
+          <label for="id_category">Categoria</label>
+          {{ form.category }}
+          {% if form.category.errors %}<span class="field-error">{{ form.category.errors.0 }}</span>{% endif %}
+        </div>
+        <div class="form-control full">
+          <label for="id_description">Descrição</label>
+          {{ form.description }}
+          {% if form.description.errors %}<span class="field-error">{{ form.description.errors.0 }}</span>{% endif %}
+        </div>
+        <div class="form-control full">
+          <label for="id_path">Caminho do arquivo</label>
+          {{ form.path }}
+          <span class="field-help">Informe o caminho completo da lista. Ex: <code>/usr/share/wordlists/rockyou.txt</code>.</span>
+          {% if form.path.errors %}<span class="field-error">{{ form.path.errors.0 }}</span>{% endif %}
+        </div>
+        <div class="form-control full">
+          <label for="id_tags">Tags</label>
+          {{ form.tags }}
+          <span class="field-help">Separe por vírgulas para facilitar filtros (ex: <code>web, brute</code>).</span>
+          {% if form.tags.errors %}<span class="field-error">{{ form.tags.errors.0 }}</span>{% endif %}
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Salvar</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card help-card">
+    <h3>Macros disponíveis</h3>
+    <p>Cada wordlist gera uma macro no formato <code>{{ WORDLIST_NOME_DA_LISTA }}</code>. Utilize essa macro nos scripts para referenciar o arquivo com segurança.</p>
+  </div>
+</div>
+
+<style>
+.wordlist-form .form-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.4rem;gap:1rem;}
+.wordlist-form .form-card{padding:1.2rem;margin-bottom:1.2rem;}
+.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;}
+.form-control{display:flex;flex-direction:column;gap:.35rem;}
+.form-control.full{grid-column:1/-1;}
+.form-control label{font-size:.85rem;color:var(--muted);font-weight:600;}
+.form-control input, .form-control textarea{padding:.55rem .7rem;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(2,16,35,0.85);color:var(--text);}
+.form-control textarea{min-height:120px;}
+.form-actions{display:flex;justify-content:flex-end;margin-top:1rem;}
+.field-help{font-size:.75rem;color:var(--muted);}
+.field-error{color:#ff8b8b;font-size:.78rem;}
+.alert-error{background:rgba(255,139,139,0.1);border:1px solid rgba(255,139,139,0.2);padding:.6rem .8rem;border-radius:10px;color:#ff8b8b;margin-bottom:1rem;}
+.help-card{padding:1.2rem;margin-bottom:2rem;}
+.help-card code{background:rgba(2,16,35,0.85);padding:.15rem .4rem;border-radius:6px;border:1px solid rgba(148,163,184,0.18);}
+
+@media (max-width:960px){
+  .form-grid{grid-template-columns:1fr;}
+}
+</style>
+{% endblock %}

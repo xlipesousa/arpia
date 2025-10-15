@@ -16,9 +16,10 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 from django.views.generic import TemplateView, View
+from django.views.generic.edit import CreateView, DeleteView, FormMixin, UpdateView
 
-from .forms import ScriptForm
-from .models import Project, ProjectMembership, Script
+from .forms import ScriptForm, ToolForm, WordlistForm
+from .models import Project, ProjectMembership, Script, Tool, Wordlist
 from .project_logging import (
     log_project_created,
     log_project_member_added,
@@ -86,7 +87,7 @@ def scripts_list(request):
         selected_project = projects[0]
         selected_project_id = str(selected_project.pk)
 
-    project_macros = build_project_macros(selected_project)
+    project_macros = build_project_macros(request.user, selected_project)
     macros_json = json.dumps(project_macros, ensure_ascii=False)
     macro_entries = _macro_entries(project_macros)
 
@@ -142,7 +143,7 @@ def scripts_new(request):
     ]
     if not selected_project and projects:
         selected_project = projects[0]
-    project_macros = build_project_macros(selected_project)
+    project_macros = build_project_macros(request.user, selected_project)
     macros_json = json.dumps(project_macros, ensure_ascii=False)
     macro_entries = _macro_entries(project_macros)
 
@@ -203,7 +204,7 @@ def scripts_edit(request, pk):
     ]
     if not selected_project and projects:
         selected_project = projects[0]
-    project_macros = build_project_macros(selected_project)
+    project_macros = build_project_macros(request.user, selected_project)
     macros_json = json.dumps(project_macros, ensure_ascii=False)
     macro_entries = _macro_entries(project_macros)
 
@@ -329,7 +330,7 @@ def scripts_run(request, pk):
         except Http404:
             selected_project = None
 
-    macros = build_project_macros(selected_project)
+    macros = build_project_macros(request.user, selected_project)
     rendered_content = render_script_with_macros(script.content, macros)
 
     return JsonResponse(
@@ -400,28 +401,65 @@ def _credentials_summary(credentials):
     return summary
 
 
-def build_project_macros(project: Project | None) -> dict:
-    if not project:
-        return {
-            "PROJECT_NAME": "",
-            "TARGET_HOSTS": "",
-            "TARGET_NETWORKS": "",
-            "TARGET_PORTS": "",
-            "PROTECTED_HOSTS": "",
-            "CREDENTIALS_JSON": "[]",
-            "CREDENTIALS_TABLE": [],
-        }
-
-    credentials = project.credentials_json or []
-    return {
-        "PROJECT_NAME": project.name,
-        "TARGET_HOSTS": _normalize_multiline(project.hosts),
-        "TARGET_NETWORKS": _normalize_multiline(project.networks),
-        "TARGET_PORTS": (project.ports or "").replace("\n", ", "),
-        "PROTECTED_HOSTS": _normalize_multiline(project.protected_hosts),
-        "CREDENTIALS_JSON": json.dumps(credentials, indent=2, ensure_ascii=False),
-        "CREDENTIALS_TABLE": _credentials_summary(credentials),
+def build_project_macros(user, project: Project | None) -> dict:
+    base_macros = {
+        "PROJECT_NAME": "",
+        "TARGET_HOSTS": "",
+        "TARGET_NETWORKS": "",
+        "TARGET_PORTS": "",
+        "PROTECTED_HOSTS": "",
+        "CREDENTIALS_JSON": "[]",
+        "CREDENTIALS_TABLE": [],
     }
+
+    if project:
+        credentials = project.credentials_json or []
+        base_macros.update(
+            {
+                "PROJECT_NAME": project.name,
+                "TARGET_HOSTS": _normalize_multiline(project.hosts),
+                "TARGET_NETWORKS": _normalize_multiline(project.networks),
+                "TARGET_PORTS": (project.ports or "").replace("\n", ", "),
+                "PROTECTED_HOSTS": _normalize_multiline(project.protected_hosts),
+                "CREDENTIALS_JSON": json.dumps(credentials, indent=2, ensure_ascii=False),
+                "CREDENTIALS_TABLE": _credentials_summary(credentials),
+            }
+        )
+
+    if user and getattr(user, "is_authenticated", False):
+        tool_macros = {}
+        tools_data = []
+        for tool in Tool.objects.for_user(user).order_by("name"):
+            tool_macros[tool.macro_key] = tool.path
+            tools_data.append(
+                {
+                    "name": tool.name,
+                    "slug": tool.slug,
+                    "path": tool.path,
+                    "category": tool.category,
+                }
+            )
+
+        wordlist_macros = {}
+        wordlists_data = []
+        for wordlist in Wordlist.objects.for_user(user).order_by("name"):
+            wordlist_macros[wordlist.macro_key] = wordlist.path
+            wordlists_data.append(
+                {
+                    "name": wordlist.name,
+                    "slug": wordlist.slug,
+                    "path": wordlist.path,
+                    "category": wordlist.category,
+                    "tags": wordlist.tags,
+                }
+            )
+
+        base_macros.update(tool_macros)
+        base_macros.update(wordlist_macros)
+        base_macros["TOOLS_JSON"] = json.dumps(tools_data, indent=2, ensure_ascii=False)
+        base_macros["WORDLISTS_JSON"] = json.dumps(wordlists_data, indent=2, ensure_ascii=False)
+
+    return base_macros
 
 
 def render_script_with_macros(content: str, macros: dict[str, str]) -> str:
@@ -761,59 +799,130 @@ def projects_share(request, pk):
     }
     return render(request, "projects/share.html", context)
 
-def tools_list(request):
-    """
-    Lista a página de Tools (aponta para templates/tools/list.html).
-    Usa dados fictícios no template — view placeholder.
-    """
-    return render(request, "tools/list.html", {})
+class ToolWordlistView(LoginRequiredMixin, TemplateView):
+    template_name = "tools/list.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+
+        tools = list(Tool.objects.for_user(user).order_by("name"))
+        wordlists = list(Wordlist.objects.for_user(user).order_by("name"))
+
+        context.update(
+            {
+                "tools": tools,
+                "wordlists": wordlists,
+                "tool_form": ToolForm(owner=user),
+                "wordlist_form": WordlistForm(owner=user),
+            }
+        )
+        return context
 
 
-def tools_add(request):
-    """
-    Placeholder para adicionar ferramenta.
-    """
-    messages.info(request, "Adicionar ferramenta: funcionalidade pendente (placeholder).")
-    return redirect(reverse("tools_list"))
+class OwnerMixin(LoginRequiredMixin):
+    model = None
+    slug_field = "slug"
+    slug_url_kwarg = "slug"
+
+    def get_queryset(self):
+        return self.model.objects.for_user(self.request.user)
+
+    def form_valid(self, form):
+        form.instance.owner = self.request.user
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse("tools_list")
 
 
-def tools_configure(request, pk):
-    """
-    Placeholder para configurar uma ferramenta (pk).
-    """
-    messages.info(request, f"Configurar ferramenta {pk}: funcionalidade pendente (placeholder).")
-    return redirect(reverse("tools_list"))
+class ToolFormMixin(FormMixin):
+    form_class = ToolForm
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["owner"] = self.request.user
+        return kwargs
 
 
-def tools_delete(request, pk):
-    """
-    Placeholder para excluir ferramenta (simulado).
-    """
-    messages.success(request, f"Ferramenta {pk} removida (simulado).")
-    return redirect(reverse("tools_list"))
+class WordlistFormMixin(FormMixin):
+    form_class = WordlistForm
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["owner"] = self.request.user
+        return kwargs
 
 
-def wordlists_add(request):
-    messages.info(request, "Adicionar wordlist: funcionalidade pendente (placeholder).")
-    return redirect(reverse("tools_list"))
+class ToolCreateView(ToolFormMixin, OwnerMixin, CreateView):
+    template_name = "tools/tool_form.html"
+    model = Tool
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, "Ferramenta cadastrada com sucesso.")
+        return response
 
 
-def wordlists_edit(request, pk):
-    messages.info(request, f"Editar wordlist {pk}: funcionalidade pendente (placeholder).")
-    return redirect(reverse("tools_list"))
+class ToolUpdateView(ToolFormMixin, OwnerMixin, UpdateView):
+    template_name = "tools/tool_form.html"
+    model = Tool
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, "Ferramenta atualizada com sucesso.")
+        return response
 
 
-def wordlists_delete(request, pk):
-    messages.success(request, f"Wordlist {pk} removida (simulado).")
-    return redirect(reverse("tools_list"))
+class ToolDeleteView(OwnerMixin, DeleteView):
+    template_name = "tools/tool_confirm_delete.html"
+    model = Tool
+
+    def delete(self, request, *args, **kwargs):
+        messages.success(request, "Ferramenta removida com sucesso.")
+        return super().delete(request, *args, **kwargs)
 
 
-def wordlists_download(request, pk):
-    """
-    Placeholder para download de wordlist.
-    Retorna JSON simulando link/estado.
-    """
-    return JsonResponse({"status": "ok", "action": "download", "id": pk})
+class WordlistCreateView(WordlistFormMixin, OwnerMixin, CreateView):
+    template_name = "tools/wordlist_form.html"
+    model = Wordlist
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, "Wordlist cadastrada com sucesso.")
+        return response
+
+
+class WordlistUpdateView(WordlistFormMixin, OwnerMixin, UpdateView):
+    template_name = "tools/wordlist_form.html"
+    model = Wordlist
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, "Wordlist atualizada com sucesso.")
+        return response
+
+
+class WordlistDeleteView(OwnerMixin, DeleteView):
+    template_name = "tools/wordlist_confirm_delete.html"
+    model = Wordlist
+
+    def delete(self, request, *args, **kwargs):
+        messages.success(request, "Wordlist removida com sucesso.")
+        return super().delete(request, *args, **kwargs)
+
+
+@login_required
+def wordlists_download(request, slug):
+    wordlist = get_object_or_404(Wordlist.objects.for_user(request.user), slug=slug)
+    return JsonResponse(
+        {
+            "status": "ok",
+            "action": "download",
+            "id": wordlist.pk,
+            "path": wordlist.path,
+        }
+    )
 
 
 @login_required

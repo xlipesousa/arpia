@@ -23,12 +23,21 @@ PORT_SPEC="${PORT_SPEC:-{{TARGET_PORTS}}}"
 OUTPUT_DIR="${OUTPUT_DIR:-./recon/${PROJECT_NAME// /_}}"
 mkdir -p "$OUTPUT_DIR"
 
+NMAP_BIN="{{TOOL_NMAP}}"
+if [[ -z "${NMAP_BIN//[[:space:]]/}" || "${NMAP_BIN}" == "None" ]]; then
+  if command -v nmap >/dev/null 2>&1; then
+    NMAP_BIN="$(command -v nmap)"
+  else
+    NMAP_BIN="nmap"
+  fi
+fi
+
 echo "[INFO] Escaneando hosts definidos (ports: ${PORT_SPEC})"
 while IFS= read -r HOST; do
   [[ -z "${HOST//[[:space:]]/}" ]] && continue
   SAFE_HOST=${HOST//[^A-Za-z0-9_.-]/_}
   echo "[INFO] Nmap full TCP em ${HOST}"
-  nmap -sS -sV -O -p "$PORT_SPEC" "$HOST" -oA "${OUTPUT_DIR}/nmap_full_tcp_${SAFE_HOST}" || true
+  "${NMAP_BIN}" -sS -sV -O -p "$PORT_SPEC" "$HOST" -oA "${OUTPUT_DIR}/nmap_full_tcp_${SAFE_HOST}" || true
   echo
 done <<< "$HOSTS"
 

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Remover Wordlist — ARPIA{% endblock %}
+
+{% block content %}
+<div class="main confirm-delete">
+  <div class="card">
+    <h2>Remover wordlist</h2>
+    <p>Tem certeza de que deseja remover <strong>{{ object.name }}</strong>? Scripts que referenciam esta macro podem deixar de funcionar.</p>
+
+    <form method="post" style="margin-top:1.2rem;display:flex;gap:1rem;">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-danger">Remover</button>
+      <a href="{% url 'tools_list' %}" class="btn btn-ghost">Cancelar</a>
+    </form>
+  </div>
+</div>
+
+<style>
+.confirm-delete .card{padding:1.5rem;max-width:520px;}
+.confirm-delete h2{margin-bottom:.6rem;}
+.confirm-delete p{color:var(--muted);}
+</style>
+{% endblock %}

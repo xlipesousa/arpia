@@ -29,59 +29,37 @@
             <tr style="text-align:left;font-weight:700;color:var(--muted);font-size:.9rem;">
               <th class="id-col">ID</th>
               <th class="name-col">Nome</th>
+              <th class="category-col">Categoria</th>
               <th class="desc-col">Descrição</th>
-              <th class="path-col">Path</th>
+              <th class="path-col">Caminho</th>
               <th class="actions-col" style="text-align:right">Ações</th>
             </tr>
           </thead>
           <tbody id="tools-body">
-            <!-- dados fictícios -->
+            {% for tool in tools %}
             <tr>
-              <td class="id-col">1</td>
-              <td class="name-col">nmap</td>
-              <td class="desc-col">Scanner de portas e serviços</td>
-              <td class="path-col">/usr/bin/nmap</td>
+              <td class="id-col">{{ forloop.counter }}</td>
+              <td class="name-col">
+                <div>{{ tool.name }}</div>
+                <small class="macro-hint">Macro: <code>{{ tool.macro_key }}</code></small>
+              </td>
+              <td class="category-col">{{ tool.category|default:"—" }}</td>
+              <td class="desc-col">{{ tool.description|default:"—" }}</td>
+              <td class="path-col"><code>{{ tool.path }}</code></td>
               <td class="actions-col">
-                <a href="{% url 'tools_configure' 1 %}" class="btn-icon btn-info" title="Configurar" aria-label="Configurar nmap">
-                  <!-- ícone engrenagem -->
+                <a href="{% url 'tools_configure' tool.slug %}" class="btn-icon btn-info" title="Configurar" aria-label="Configurar {{ tool.name }}">
                   <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </a>
-                <a href="{% url 'tools_delete' 1 %}" class="btn-icon btn-danger" title="Excluir" aria-label="Excluir nmap">
-                  <!-- ícone lixeira -->
+                <a href="{% url 'tools_delete' tool.slug %}" class="btn-icon btn-danger" title="Excluir" aria-label="Excluir {{ tool.name }}">
                   <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 6v14a1 1 0 001 1h6a1 1 0 001-1V6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </a>
               </td>
             </tr>
-
+            {% empty %}
             <tr>
-              <td class="id-col">2</td>
-              <td class="name-col">rustscan</td>
-              <td class="desc-col">Scanner rápido escrito em Rust</td>
-              <td class="path-col">/usr/local/bin/rustscan</td>
-              <td class="actions-col">
-                <a href="{% url 'tools_configure' 2 %}" class="btn-icon btn-info" title="Configurar" aria-label="Configurar rustscan">
-                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </a>
-                <a href="{% url 'tools_delete' 2 %}" class="btn-icon btn-danger" title="Excluir" aria-label="Excluir rustscan">
-                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 6v14a1 1 0 001 1h6a1 1 0 001-1V6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </a>
-              </td>
+              <td colspan="6" style="text-align:center;padding:1rem;">Nenhuma ferramenta cadastrada ainda.</td>
             </tr>
-
-            <tr>
-              <td class="id-col">3</td>
-              <td class="name-col">netcat</td>
-              <td class="desc-col">Ferramenta para socket TCP/UDP</td>
-              <td class="path-col">/bin/nc</td>
-              <td class="actions-col">
-                <a href="{% url 'tools_configure' 3 %}" class="btn-icon btn-info" title="Configurar" aria-label="Configurar netcat">
-                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </a>
-                <a href="{% url 'tools_delete' 3 %}" class="btn-icon btn-danger" title="Excluir" aria-label="Excluir netcat">
-                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 6v14a1 1 0 001 1h6a1 1 0 001-1V6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </a>
-              </td>
-            </tr>
+            {% endfor %}
           </tbody>
         </table>
       </div>
@@ -119,51 +97,40 @@
             <tr style="text-align:left;font-weight:700;color:var(--muted);font-size:.9rem;">
               <th class="id-col">ID</th>
               <th class="name-col">Nome</th>
+              <th class="category-col">Categoria</th>
               <th class="desc-col">Descrição</th>
-              <th class="path-col">Path</th>
+              <th class="path-col">Caminho</th>
               <th class="actions-col" style="text-align:right">Ações</th>
             </tr>
           </thead>
           <tbody id="wordlists-body">
-            <!-- dados fictícios -->
+            {% for wordlist in wordlists %}
             <tr>
-              <td class="id-col">101</td>
-              <td class="name-col">common-passwords</td>
-              <td class="desc-col">Lista comum de senhas</td>
-              <td class="path-col">/usr/share/wordlists/common.txt</td>
+              <td class="id-col">{{ forloop.counter }}</td>
+              <td class="name-col">
+                <div>{{ wordlist.name }}</div>
+                <small class="macro-hint">Macro: <code>{{ wordlist.macro_key }}</code></small>
+              </td>
+              <td class="category-col">{{ wordlist.category|default:"—" }}</td>
+              <td class="desc-col">{{ wordlist.description|default:"—" }}</td>
+              <td class="path-col"><code>{{ wordlist.path }}</code></td>
               <td class="actions-col">
-                <a href="{% url 'wordlists_edit' 101 %}" class="btn-icon btn-success" title="Editar" aria-label="Editar wordlist common-passwords">
-                  <!-- ícone lápis -->
+                <a href="{% url 'wordlists_edit' wordlist.slug %}" class="btn-icon btn-success" title="Editar" aria-label="Editar wordlist {{ wordlist.name }}">
                   <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 21l3-1 11-11 1-3L14 3 3 14v7z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </a>
-                <a href="{% url 'wordlists_delete' 101 %}" class="btn-icon btn-danger" title="Remover" aria-label="Remover wordlist common-passwords">
-                  <!-- ícone lixeira -->
+                <a href="{% url 'wordlists_delete' wordlist.slug %}" class="btn-icon btn-danger" title="Remover" aria-label="Remover wordlist {{ wordlist.name }}">
                   <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 6v14a1 1 0 001 1h6a1 1 0 001-1V6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </a>
-                <a href="{% url 'wordlists_download' 101 %}" class="btn-icon btn-info" title="Download" aria-label="Download wordlist common-passwords">
-                  <!-- ícone download -->
+                <a href="{% url 'wordlists_download' wordlist.slug %}" class="btn-icon btn-info" title="Download" aria-label="Download wordlist {{ wordlist.name }}">
                   <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 11l4 4 4-4" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 21H3" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </a>
               </td>
             </tr>
-
+            {% empty %}
             <tr>
-              <td class="id-col">102</td>
-              <td class="name-col">web-fuzz</td>
-              <td class="desc-col">Wordlist para fuzzing web</td>
-              <td class="path-col">/home/user/wordlists/web-fuzz.txt</td>
-              <td class="actions-col">
-                <a href="{% url 'wordlists_edit' 102 %}" class="btn-icon btn-success" title="Editar" aria-label="Editar wordlist web-fuzz">
-                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 21l3-1 11-11 1-3L14 3 3 14v7z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </a>
-                <a href="{% url 'wordlists_delete' 102 %}" class="btn-icon btn-danger" title="Remover" aria-label="Remover wordlist web-fuzz">
-                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 6v14a1 1 0 001 1h6a1 1 0 001-1V6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </a>
-                <a href="{% url 'wordlists_download' 102 %}" class="btn-icon btn-info" title="Download" aria-label="Download wordlist web-fuzz">
-                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 11l4 4 4-4" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 21H3" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </a>
-              </td>
+              <td colspan="6" style="text-align:center;padding:1rem;">Nenhuma wordlist cadastrada ainda.</td>
             </tr>
+            {% endfor %}
           </tbody>
         </table>
       </div>
@@ -191,6 +158,9 @@
 .projects-table th, .projects-table td{ padding:.45rem .6rem; vertical-align:middle; overflow:hidden; }
 .projects-table .id-col{ min-width:56px; width:auto; text-align:center; }
 .projects-table .name-col{ min-width:140px; max-width:45%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text); }
+.projects-table .name-col .macro-hint{ display:block; font-size:.7rem; color:var(--muted); margin-top:.2rem; }
+.projects-table .name-col .macro-hint code{ background:rgba(2,16,35,0.85); padding:.1rem .3rem; border-radius:6px; border:1px solid rgba(148,163,184,0.18); }
+.projects-table .category-col{ min-width:120px; max-width:160px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--muted); }
 .projects-table .desc-col{ max-width:60ch; overflow:hidden; text-overflow:ellipsis; color:var(--muted); }
 .projects-table .path-col{ max-width:40ch; overflow:hidden; text-overflow:ellipsis; color:var(--muted); }
 .projects-table .actions-col{ min-width:160px; text-align:right; white-space:nowrap; }
