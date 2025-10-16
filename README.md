@@ -28,6 +28,10 @@ Scripts úteis
 - install.sh
   - Executa bootstrap completo: cria .venv, instala requirements, aplica migrations, cria superuser demo e collectstatic.
 
+- update.sh
+  - Sincroniza com o remoto (git pull --rebase), instala dependências e aplica migrações automaticamente.
+  - Recomendado após qualquer git pull ou antes de rodar o servidor para garantir que o banco esteja em dia.
+
 - arpia.sh
   - Controla o servidor de desenvolvimento em background.
   - Torne executável: chmod +x arpia.sh
@@ -47,6 +51,8 @@ Atenção
 - O script arpia.sh usa o python do .venv se presente; garanta que o .venv foi criado pelo install.sh ou manualmente.
 - Para desenvolvimento, DEBUG=True (configurado via .env). Não use em produção.
 - Se o repositório for privado, garanta que os colaboradores têm acesso SSH/HTTPS conforme preferir.
+- O comando `python manage.py runserver` agora aplica migrações pendentes automaticamente antes de subir o servidor.
+  - Caso precise pular esse comportamento (ex.: scripts de CI), use `python manage.py runserver --skip-auto-migrate`.
 
 Suporte rápido
 - Problemas ao rodar o servidor ou migrar? Cole a saída de:
