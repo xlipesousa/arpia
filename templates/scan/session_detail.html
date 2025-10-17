@@ -1,0 +1,669 @@
+{% extends "base.html" %}
+{% block title %}Scan {{ session.title }} — ARPIA{% endblock %}
+
+{% block content %}
+<section class="page-heading">
+  <div>
+    <a href="{% url 'arpia_scan:dashboard' %}?project={{ project.id }}" class="back-link">← Voltar para dashboard de scans</a>
+    <h1>{{ session.title }}</h1>
+    <p class="page-subtitle">Projeto {{ project.name }} • Referência #{{ session.reference }}</p>
+  </div>
+  <div class="session-status">
+    <span class="label">Status</span>
+    <span class="status-pill status-{{ session.status }}" id="session-status-pill">{{ session.get_status_display }}</span>
+    <span class="live-indicator {% if session.is_terminal %}hidden{% endif %}" id="live-indicator">Atualizando em tempo real…</span>
+    {% if report_url %}
+      <a href="{{ report_url }}" class="report-link" target="_blank" rel="noopener noreferrer">Ver relatório provisório</a>
+    {% endif %}
+  </div>
+</section>
+
+<section class="session-layout" id="session-root" data-session-id="{{ session.id }}" data-status="{{ session.status }}" data-api-status-url="{% url 'arpia_scan:api_session_status' session.id %}" data-api-logs-url="{{ logs_url }}">
+  <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+  <div class="card session-overview">
+    <h2>Resumo da sessão</h2>
+    <dl>
+      <div>
+        <dt>Projeto</dt>
+        <dd>{{ project.name }}</dd>
+      </div>
+      <div>
+        <dt>Responsável</dt>
+        <dd>{{ session.owner.get_username }}</dd>
+      </div>
+      <div>
+        <dt>Iniciada</dt>
+        <dd>{{ session.started_at|default:session.created_at|date:"Y-m-d H:i" }}</dd>
+      </div>
+      <div>
+        <dt>Finalizada</dt>
+        <dd>{% if session.finished_at %}{{ session.finished_at|date:"Y-m-d H:i" }}{% else %}<span class="muted">—</span>{% endif %}</dd>
+      </div>
+      <div>
+        <dt>Notas</dt>
+        <dd>{{ session.notes|default:"Nenhuma anotação." }}</dd>
+      </div>
+    </dl>
+  </div>
+
+  {% if report_stats %}
+  <div class="card report-preview-card">
+    <div class="report-preview-header">
+      <h2>Relatório consolidado</h2>
+      <a href="{{ report_url }}" class="btn-secondary" target="_blank" rel="noopener noreferrer">Abrir relatório</a>
+    </div>
+    <p class="muted">Resumo rápido gerado a partir do <code>report_snapshot</code> desta sessão.</p>
+    <div class="report-preview-metrics">
+      <div>
+        <span class="metric-value">{{ report_stats.total_tasks|default:0 }}</span>
+        <span class="metric-label">etapas</span>
+      </div>
+      <div>
+        <span class="metric-value">{{ report_stats.completed_tasks|default:0 }}</span>
+        <span class="metric-label">concluídas</span>
+      </div>
+      <div>
+        <span class="metric-value">{{ report_stats.failed_tasks|default:0 }}</span>
+        <span class="metric-label">falhas</span>
+      </div>
+      <div>
+        <span class="metric-value">{{ report_stats.total_findings|default:0 }}</span>
+        <span class="metric-label">achados</span>
+      </div>
+    </div>
+    {% if report_insights %}
+    <ul class="report-preview-insights">
+      {% for insight in report_insights|slice:":2" %}
+      <li class="insight insight-{{ insight.level|default:'info' }}">{{ insight.message }}</li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="empty">Nenhum insight gerado ainda.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <div class="card macros-card">
+    <h2>Macros utilizadas</h2>
+    {% if macro_entries %}
+      <ul class="macro-list">
+        {% for macro in macro_entries %}
+          <li>
+            <span class="macro-key">{{ macro.key }}</span>
+            {% if macro.is_pre %}
+              <pre>{{ macro.value }}</pre>
+            {% else %}
+              <span class="macro-value">{{ macro.value|default:"—" }}</span>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <div class="empty">Nenhuma macro capturada para esta sessão.</div>
+    {% endif %}
+  </div>
+
+  <div class="card targets-card" data-empty-text="Nenhum alvo ou porta registrado até o momento.">
+    <div class="targets-header">
+      <div>
+        <h2>Alvos observados</h2>
+        <p class="muted">Superfície detectada a partir dos resultados consolidados.</p>
+      </div>
+      <div class="targets-actions">
+        <a href="{% url 'arpia_scan:session_targets_export_csv' session.id %}" class="btn-secondary" target="_blank" rel="noopener noreferrer">Exportar CSV</a>
+        <a href="{% url 'arpia_scan:session_targets_export_json' session.id %}" class="btn-secondary" target="_blank" rel="noopener noreferrer">Exportar JSON</a>
+      </div>
+    </div>
+    {% if report_targets.hosts %}
+      <div class="targets-metrics">
+        <div>
+          <span class="metric">{{ report_targets.hosts_count|default:0 }}</span>
+          <span class="label">hosts com portas abertas</span>
+        </div>
+        <div>
+          <span class="metric">{{ report_targets.open_ports|default:0 }}</span>
+          <span class="label">portas abertas detectadas</span>
+        </div>
+        <div>
+          <span class="metric">{{ report_services.count|default:0 }}</span>
+          <span class="label">serviços distintos</span>
+        </div>
+      </div>
+      <ul class="targets-list">
+        {% for host in report_targets.hosts %}
+          <li class="target-item severity-{{ host.severity|default:'low' }}">
+            <div class="target-heading">
+              <div>
+                <h3>{{ host.host }}</h3>
+                {% if host.hostname %}<span class="muted">{{ host.hostname }}</span>{% endif %}
+              </div>
+              <span class="badge">Severidade {{ host.severity|default:"low"|title }}</span>
+            </div>
+            {% if host.ports %}
+              <table class="ports-table">
+                <thead>
+                  <tr>
+                    <th>Porta</th>
+                    <th>Protocolo</th>
+                    <th>Serviço</th>
+                    <th>Produto</th>
+                    <th>Severidade</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for port in host.ports %}
+                    <tr>
+                      <td>{{ port.port }}</td>
+                      <td>{{ port.protocol|default:"tcp" }}</td>
+                      <td>{{ port.service|default:"—" }}</td>
+                      <td>{% if port.product %}{{ port.product }}{% if port.version %} {{ port.version }}{% endif %}{% else %}<span class="muted">—</span>{% endif %}</td>
+                      <td><span class="badge">{{ port.severity|default:"low"|title }}</span></td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            {% else %}
+              <p class="empty">Nenhuma porta aberta registrada para este host.</p>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <div class="empty">Nenhum alvo detectado até o momento.</div>
+    {% endif %}
+
+    {% if report_services.items %}
+      <div class="services-summary">
+        <h3>Serviços em destaque</h3>
+        <ul>
+          {% for service in report_services.items %}
+            <li>
+              <strong>{{ service.service|default:"Desconhecido" }}</strong>
+              <span class="muted">— {{ service.occurrences|length }} ocorrência(s)</span>
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="card logs-card" data-empty-text="Nenhum log registrado para esta sessão.">
+    <div class="logs-header">
+      <h2>Eventos e logs</h2>
+      <span class="muted">Atualizado em tempo real via arpia_log</span>
+    </div>
+    <ul class="logs-list" id="session-logs"></ul>
+    <div class="empty" id="logs-empty">Nenhum log registrado para esta sessão.</div>
+  </div>
+
+  <div class="card tasks-card" data-empty-text="Nenhuma etapa registrada para esta sessão.">
+    <h2>Etapas executadas</h2>
+    <table class="tasks-table" id="tasks-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Etapa</th>
+          <th>Ferramenta</th>
+          <th>Script</th>
+          <th>Status</th>
+          <th>Progresso</th>
+          <th>Início</th>
+          <th>Término</th>
+          <th>Saída</th>
+        </tr>
+      </thead>
+      <tbody id="tasks-body">
+        {% for task in tasks %}
+          <tr data-task-id="{{ task.id }}">
+            <td>{{ forloop.counter }}</td>
+            <td>
+              <strong>{{ task.name }}</strong>
+              <span class="muted">{{ task.get_kind_display }}</span>
+            </td>
+            <td>{{ task.tool|default:"—" }}</td>
+            <td>{{ task.script|default:"—" }}</td>
+            <td><span class="status-pill status-{{ task.status }}">{{ task.get_status_display }}</span></td>
+            <td>
+              <div class="progress-bar" data-progress="{{ task.progress_percent }}"><span></span></div>
+              <small class="muted">{{ task.progress_percent }}%</small>
+            </td>
+            <td>{% if task.started_at %}{{ task.started_at|date:"Y-m-d H:i" }}{% else %}<span class="muted">—</span>{% endif %}</td>
+            <td>{% if task.finished_at %}{{ task.finished_at|date:"Y-m-d H:i" }}{% else %}<span class="muted">—</span>{% endif %}</td>
+            <td class="task-output">
+              {% if task.stdout %}
+                <details>
+                  <summary>Ver saída</summary>
+                  <pre>{{ task.stdout }}</pre>
+                </details>
+              {% else %}
+                <span class="muted">Sem saída</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if not tasks %}
+      <div class="empty" id="tasks-empty">Nenhuma etapa registrada para esta sessão.</div>
+    {% endif %}
+  </div>
+
+  <div class="card findings-card" data-empty-text="Nenhum achado documentado.">
+    <h2>Achados</h2>
+    <ul class="findings-list" id="findings-list">
+      {% for item in findings %}
+        {% with finding=item.instance %}
+        <li>
+          <div class="finding-header">
+            <span class="badge kind-{{ finding.kind }}">{{ finding.get_kind_display }}</span>
+            {% if finding.severity %}
+              <span class="badge severity">{{ finding.severity }}</span>
+            {% endif %}
+          </div>
+          <h3>{{ finding.title }}</h3>
+          <p>{{ finding.summary|default:"Sem descrição adicional." }}</p>
+          {% if item.display_data %}
+            <pre>{{ item.display_data }}</pre>
+          {% endif %}
+        </li>
+        {% endwith %}
+      {% endfor %}
+    </ul>
+    {% if not findings %}
+      <div class="empty" id="findings-empty">Nenhum achado documentado.</div>
+    {% endif %}
+  </div>
+</section>
+
+<style>
+.page-heading{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.6rem;gap:1rem;}
+.page-heading h1{margin:.3rem 0;font-size:1.85rem;color:var(--text);}
+.back-link{text-decoration:none;color:var(--muted);font-size:.9rem;}
+.back-link:hover{color:var(--text);} 
+.session-status{display:flex;flex-direction:column;gap:.3rem;align-items:flex-end;}
+.session-status .label{font-size:.75rem;text-transform:uppercase;color:var(--muted);letter-spacing:.08em;}
+.status-pill{display:inline-flex;align-items:center;padding:.25rem .75rem;border-radius:999px;font-weight:600;font-size:.8rem;color:var(--text);background:rgba(255,255,255,0.08);} 
+.status-running{background:rgba(123,195,255,0.18);} 
+.status-completed{background:rgba(118,221,174,0.22);} 
+.status-failed{background:rgba(255,132,132,0.2);} 
+.status-planned,.status-ready{background:rgba(255,255,255,0.08);} 
+.live-indicator{font-size:.82rem;color:#8fc0ff;display:inline-flex;align-items:center;gap:.4rem;}
+.live-indicator::before{content:"";display:inline-block;width:.5rem;height:.5rem;border-radius:999px;background:#8fc0ff;animation:pulse 1.5s ease-in-out infinite;}
+.live-indicator.hidden{display:none;}
+.live-indicator.tone-success{color:#d8f6e9;}
+.live-indicator.tone-error{color:#ffd9d9;}
+.report-link{margin-top:.6rem;display:inline-flex;align-items:center;justify-content:center;padding:.45rem .95rem;border-radius:999px;font-weight:600;font-size:.85rem;background:rgba(76,148,255,0.18);border:1px solid rgba(76,148,255,0.25);color:#8bc5ff;text-decoration:none;transition:.2s ease;}
+.report-link:hover{background:rgba(117,187,255,0.28);}
+.session-layout{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:1.4rem;align-items:start;}
+.card{background:rgba(8,23,43,0.78);border-radius:14px;padding:1.4rem;border:1px solid rgba(255,255,255,0.05);box-shadow:0 18px 38px rgba(5,16,32,0.35);max-width:100%;overflow:hidden;} 
+.session-overview dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1rem;margin:0;}
+.session-overview dt{font-size:.8rem;text-transform:uppercase;color:var(--muted);letter-spacing:.08em;}
+.session-overview dd{margin:0;font-size:1rem;color:var(--text);} 
+.report-preview-card{display:flex;flex-direction:column;gap:1rem;}
+.report-preview-header{display:flex;align-items:center;justify-content:space-between;gap:1rem;}
+.report-preview-card .btn-secondary{padding:.45rem .9rem;}
+.report-preview-card code{background:rgba(255,255,255,0.08);padding:.1rem .4rem;border-radius:6px;}
+.report-preview-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.9rem;}
+.report-preview-metrics .metric-value{display:block;font-size:1.5rem;font-weight:700;color:#8bc5ff;}
+.report-preview-metrics .metric-label{font-size:.82rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;}
+.report-preview-insights{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.6rem;}
+.report-preview-insights .insight{padding:.6rem .8rem;border-radius:10px;border:1px solid rgba(255,255,255,0.05);background:rgba(255,255,255,0.03);}
+.macros-card .macro-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.7rem;max-height:320px;overflow:auto;}
+.macro-list li{display:flex;flex-direction:column;gap:.35rem;background:rgba(255,255,255,0.02);padding:.75rem 1rem;border-radius:10px;border:1px solid rgba(255,255,255,0.03);} 
+.macro-key{font-family:"Fira Code",monospace;color:#89d1ff;font-size:.85rem;}
+.macro-value{color:var(--text);} 
+.macro-list pre{margin:0;background:rgba(0,0,0,0.4);padding:.6rem .8rem;border-radius:8px;white-space:pre-wrap;font-family:"Fira Code",monospace;font-size:.78rem;}
+.targets-card{display:flex;flex-direction:column;gap:1.2rem;}
+.targets-header{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;}
+.targets-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1rem;}
+.targets-metrics .metric{display:block;font-size:1.6rem;font-weight:700;color:#8bc5ff;}
+.targets-metrics .label{font-size:.85rem;color:var(--muted);}
+.targets-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1rem;}
+.target-item{padding:1rem 1.2rem;border-radius:12px;border:1px solid rgba(255,255,255,0.05);background:rgba(255,255,255,0.02);} 
+.target-item.severity-high{border-color:rgba(255,132,132,0.35);}
+.target-item.severity-medium{border-color:rgba(255,214,165,0.3);}
+.target-heading{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:.6rem;}
+.ports-table{width:100%;border-collapse:collapse;font-size:.9rem;background:rgba(0,0,0,0.35);border-radius:10px;overflow:hidden;}
+.ports-table th,.ports-table td{padding:.55rem .75rem;border-bottom:1px solid rgba(255,255,255,0.08);text-align:left;}
+.ports-table th{font-size:.75rem;text-transform:uppercase;color:var(--muted);letter-spacing:.06em;background:rgba(0,0,0,0.2);}
+.ports-table tr:last-child td{border-bottom:none;}
+.targets-actions{display:flex;gap:.6rem;flex-wrap:wrap;}
+.services-summary ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.5rem;}
+.services-summary li{display:flex;gap:.4rem;align-items:center;}
+.btn-secondary{display:inline-flex;align-items:center;justify-content:center;padding:.45rem .9rem;border-radius:999px;font-weight:600;font-size:.85rem;background:rgba(76,148,255,0.15);border:1px solid rgba(76,148,255,0.25);color:#8bc5ff;text-decoration:none;transition:.2s ease;}
+.btn-secondary:hover{background:rgba(117,187,255,0.25);} 
+.logs-card{display:flex;flex-direction:column;gap:1rem;max-height:420px;overflow:hidden;}
+.logs-list{list-style:none;margin:0;padding:0;overflow:auto;max-height:340px;display:flex;flex-direction:column;gap:.75rem;}
+.log-entry{padding:.75rem 1rem;border-radius:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);display:flex;flex-direction:column;gap:.4rem;}
+.log-entry header{display:flex;align-items:center;justify-content:space-between;gap:.6rem;font-size:.85rem;}
+.log-entry .severity{display:inline-flex;align-items:center;padding:.2rem .6rem;border-radius:999px;font-weight:600;font-size:.72rem;}
+.log-entry .severity-ERROR{background:rgba(255,132,132,0.25);color:#ffd8d8;}
+.log-entry .severity-WARN{background:rgba(255,214,165,0.25);color:#ffe5c7;}
+.log-entry .severity-INFO{background:rgba(127,181,255,0.22);color:#d3e8ff;}
+.log-entry .severity-NOTICE{background:rgba(124,214,191,0.25);color:#dbf9f1;}
+.log-entry .severity-CRITICAL{background:rgba(206,91,91,0.32);color:#ffe0e0;}
+.log-entry footer{display:flex;align-items:center;justify-content:space-between;font-size:.75rem;color:var(--muted);}
+.log-entry code{font-family:"Fira Code",monospace;font-size:.78rem;background:rgba(0,0,0,0.35);padding:.3rem .45rem;border-radius:6px;}
+.toast-container{position:fixed;top:1.2rem;right:1.2rem;z-index:9999;display:flex;flex-direction:column;gap:.6rem;pointer-events:none;}
+.toast{min-width:260px;max-width:320px;padding:.75rem 1rem;border-radius:10px;background:rgba(8,23,43,0.9);border:1px solid rgba(255,255,255,0.12);color:#fff;box-shadow:0 12px 28px rgba(0,0,0,0.35);opacity:0;transform:translateY(-10px);transition:opacity .25s ease,transform .25s ease;pointer-events:auto;}
+.toast.show{opacity:1;transform:translateY(0);}
+.toast.success{border-color:rgba(118,221,174,0.45);}
+.toast.error{border-color:rgba(255,132,132,0.45);}
+.toast .toast-title{font-weight:600;font-size:.9rem;margin-bottom:.2rem;}
+.toast .toast-body{font-size:.85rem;color:rgba(255,255,255,0.85);}
+.toast button{background:none;border:none;color:inherit;font-size:1rem;cursor:pointer;margin-left:auto;display:inline-flex;align-items:center;}
+.tasks-table{width:100%;border-collapse:collapse;font-size:.92rem;}
+.tasks-table th,.tasks-table td{padding:.6rem .75rem;border-bottom:1px solid rgba(255,255,255,0.05);text-align:left;vertical-align:top;}
+.tasks-table th{font-size:.75rem;text-transform:uppercase;color:var(--muted);letter-spacing:.06em;}
+.progress-bar{background:rgba(255,255,255,0.08);border-radius:999px;height:6px;overflow:hidden;margin-bottom:.35rem;}
+.progress-bar span{display:block;height:100%;background:linear-gradient(90deg,#7fb5ff,#4d9dff);transition:width .4s ease;}
+.task-output details{cursor:pointer;}
+.task-output pre{margin-top:.5rem;}
+.findings-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1rem;}
+.findings-list li{background:rgba(255,255,255,0.02);padding:1rem 1.2rem;border-radius:12px;border:1px solid rgba(255,255,255,0.04);word-break:break-word;}
+.finding-header{display:flex;gap:.5rem;margin-bottom:.4rem;}
+.badge{display:inline-flex;align-items:center;padding:.2rem .6rem;border-radius:999px;font-size:.75rem;font-weight:600;color:var(--text);background:rgba(255,255,255,0.08);} 
+.badge.severity{background:rgba(255,214,165,0.18);}
+.empty{padding:1rem;background:rgba(255,255,255,0.02);border-radius:10px;color:var(--muted);}
+.live-update-error{color:#ffb8b8;font-size:.85rem;margin-top:.75rem;}
+.tasks-table pre,.findings-list pre{margin:0;background:rgba(0,0,0,0.45);padding:.6rem .8rem;border-radius:8px;white-space:pre-wrap;word-break:break-word;max-width:100%;overflow:auto;}
+.hidden{display:none !important;}
+@keyframes pulse{0%{opacity:0.3;}50%{opacity:1;}100%{opacity:0.3;}}
+@media (max-width:900px){
+  .page-heading{flex-direction:column;align-items:flex-start;}
+  .session-status{align-items:flex-start;}
+  .session-layout{grid-template-columns:1fr;}
+  .tasks-table,.sessions-table{display:block;overflow-x:auto;}
+  .findings-list li, .macro-list li{word-break:break-word;}
+  .targets-header{flex-direction:column;align-items:flex-start;}
+  .targets-actions{width:100%;}
+  .logs-card{max-height:none;}
+  .logs-list{max-height:none;}
+}
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const root = document.getElementById("session-root");
+  if (!root) return;
+
+  const statusPill = document.getElementById("session-status-pill");
+  const liveIndicator = document.getElementById("live-indicator");
+  const tasksBody = document.getElementById("tasks-body");
+  const tasksEmpty = document.getElementById("tasks-empty");
+  const findingsList = document.getElementById("findings-list");
+  const findingsEmpty = document.getElementById("findings-empty");
+  const logsList = document.getElementById("session-logs");
+  const logsEmpty = document.getElementById("logs-empty");
+  const toastContainer = document.getElementById("toast-container");
+
+  const statusUrl = root.dataset.apiStatusUrl;
+  const logsUrl = root.dataset.apiLogsUrl;
+  const sessionId = root.dataset.sessionId;
+  const initialStatus = root.dataset.status;
+  const terminalStatuses = new Set(["completed", "failed", "canceled"]);
+  let previousStatus = initialStatus;
+  let latestLogCursor = null;
+  let isFetchingLogs = false;
+
+  const shouldPoll = Boolean(statusUrl) && !terminalStatuses.has(initialStatus);
+  if (!shouldPoll && liveIndicator) {
+    liveIndicator.classList.add("hidden");
+  }
+
+  const statusToneClass = status => {
+    switch (status) {
+      case "running": return "status-running";
+      case "completed": return "status-completed";
+      case "failed": return "status-failed";
+      default: return "status-" + status;
+    }
+  };
+
+  const formatDate = iso => {
+    if (!iso) return "—";
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return "—";
+    return new Intl.DateTimeFormat("pt-BR", {
+      dateStyle: "short",
+      timeStyle: "medium",
+    }).format(date);
+  };
+
+  const escapeHtml = value => value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+  function syncProgressBars(scope = document) {
+    scope.querySelectorAll(".progress-bar").forEach(bar => {
+      const progress = Number.parseInt(bar.dataset.progress ?? "0", 10);
+      const clamped = Number.isNaN(progress) ? 0 : Math.max(0, Math.min(progress, 100));
+      const span = bar.querySelector("span");
+      if (span) {
+        span.style.width = `${clamped}%`;
+      }
+    });
+  }
+
+  function renderTasks(tasks) {
+    if (!tasksBody) return;
+    tasksBody.innerHTML = "";
+    tasks.forEach((task, index) => {
+      const tr = document.createElement("tr");
+      tr.dataset.taskId = task.id;
+      const progressPercent = typeof task.progress_percent === "number"
+        ? task.progress_percent
+        : Math.round((task.progress || 0) * 100);
+      const stdout = task.stdout ? escapeHtml(task.stdout) : "";
+      const stdoutBlock = task.stdout
+        ? `<details><summary>Ver saída</summary><pre>${stdout}</pre></details>`
+        : '<span class="muted">Sem saída</span>';
+      tr.innerHTML = `
+        <td>${index + 1}</td>
+        <td>
+          <strong>${task.name}</strong>
+          <span class="muted">${task.kind_display}</span>
+        </td>
+        <td>${task.tool_name || "—"}</td>
+        <td>${task.script_name || "—"}</td>
+        <td><span class="status-pill ${statusToneClass(task.status)}">${task.status_display}</span></td>
+        <td>
+          <div class="progress-bar" data-progress="${progressPercent}"><span></span></div>
+          <small class="muted">${progressPercent}%</small>
+        </td>
+        <td>${formatDate(task.started_at)}</td>
+        <td>${formatDate(task.finished_at)}</td>
+        <td class="task-output">${stdoutBlock}</td>
+      `;
+      tasksBody.appendChild(tr);
+    });
+
+    syncProgressBars(tasksBody);
+
+    if (tasksEmpty) {
+      tasksEmpty.classList.toggle("hidden", tasks.length > 0);
+      if (!tasks.length) {
+        tasksEmpty.textContent = document.querySelector(".tasks-card").dataset.emptyText;
+      }
+    }
+  }
+
+  function renderFindings(findings) {
+    if (!findingsList) return;
+    findingsList.innerHTML = "";
+    findings.forEach(finding => {
+  const li = document.createElement("li");
+  const prettyData = finding.data ? escapeHtml(JSON.stringify(finding.data, null, 2)) : "";
+  const dataSection = finding.data ? `<pre>${prettyData}</pre>` : "";
+      li.innerHTML = `
+        <div class="finding-header">
+          <span class="badge kind-${finding.kind}">${finding.kind_display}</span>
+          ${finding.severity ? `<span class="badge severity">${finding.severity}</span>` : ""}
+        </div>
+        <h3>${finding.title}</h3>
+        <p>${finding.summary || "Sem descrição adicional."}</p>
+        ${dataSection}
+      `;
+      findingsList.appendChild(li);
+    });
+
+    if (findingsEmpty) {
+      findingsEmpty.classList.toggle("hidden", findings.length > 0);
+      if (!findings.length) findingsEmpty.textContent = document.querySelector(".findings-card").dataset.emptyText;
+    }
+  }
+
+  async function pollStatus() {
+    try {
+      const response = await fetch(statusUrl, { headers: { "X-Requested-With": "XMLHttpRequest" } });
+      if (!response.ok) throw new Error("Falha ao consultar status");
+      const payload = await response.json();
+
+      if (statusPill) {
+        statusPill.textContent = payload.status_display;
+        statusPill.className = "status-pill " + statusToneClass(payload.status);
+      }
+
+      handleStatusTransition(payload.status, payload.status_display);
+
+      if (tasksBody) renderTasks(payload.tasks || []);
+      if (findingsList) renderFindings(payload.findings || []);
+      if (logsUrl) fetchLogs();
+
+      if (!terminalStatuses.has(payload.status)) {
+        setTimeout(pollStatus, 2500);
+      } else if (liveIndicator) {
+        liveIndicator.classList.remove("hidden");
+      }
+    } catch (error) {
+      console.error("Erro ao atualizar sessão", error);
+      if (liveIndicator) {
+        liveIndicator.textContent = "Falha ao atualizar automaticamente.";
+        liveIndicator.classList.remove("hidden", "tone-success", "tone-error");
+        liveIndicator.classList.add("tone-error");
+      }
+      setTimeout(pollStatus, 5000);
+    }
+  }
+
+  syncProgressBars();
+  if (logsUrl) fetchLogs(true);
+  if (shouldPoll) {
+    pollStatus();
+  } else if (logsUrl) {
+    fetchLogs();
+  }
+
+  function handleStatusTransition(currentStatus, statusDisplay) {
+    if (liveIndicator && terminalStatuses.has(currentStatus)) {
+      liveIndicator.textContent = currentStatus === "completed" ? "Sessão concluída." : "Sessão finalizada.";
+      liveIndicator.classList.remove("hidden", "tone-success", "tone-error");
+      liveIndicator.classList.add(currentStatus === "completed" ? "tone-success" : "tone-error");
+    }
+
+    if (previousStatus !== currentStatus && terminalStatuses.has(currentStatus)) {
+      const tone = currentStatus === "completed" ? "success" : "error";
+      showToast({
+        title: currentStatus === "completed" ? "Scan finalizado" : "Scan encerrado",
+        message: statusDisplay || "A sessão foi encerrada.",
+        tone,
+      });
+    }
+
+    previousStatus = currentStatus;
+  }
+
+  async function fetchLogs(initial = false) {
+    if (isFetchingLogs || !logsUrl) return;
+    isFetchingLogs = true;
+
+    try {
+      const url = new URL(logsUrl, window.location.origin);
+      if (!initial && latestLogCursor) {
+        url.searchParams.set("cursor", latestLogCursor);
+      }
+      url.searchParams.set("limit", initial ? "100" : "50");
+
+      const response = await fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" } });
+      if (!response.ok) throw new Error("Falha ao buscar logs");
+      const payload = await response.json();
+      const logs = payload.results || [];
+      if (logs.length) {
+        appendLogs(logs, initial);
+        latestLogCursor = logs[logs.length - 1].timestamp;
+      }
+      updateLogsEmpty();
+    } catch (error) {
+      console.error("Erro ao buscar logs", error);
+    } finally {
+      isFetchingLogs = false;
+    }
+  }
+
+  function appendLogs(logs, initialLoad = false) {
+    if (!logsList) return;
+    const fragment = document.createDocumentFragment();
+    logs.forEach(log => {
+      const li = document.createElement("li");
+      li.className = "log-entry";
+      li.innerHTML = `
+        <header>
+          <span class="severity severity-${log.severity}">${log.severity}</span>
+          <span>${log.timestamp_display || ""}</span>
+        </header>
+        <div class="log-message">${escapeHtml(log.message || "")}</div>
+        <footer>
+          <span>${escapeHtml(log.event_type || "")}</span>
+          <span>${escapeHtml(log.component || "")}</span>
+        </footer>
+      `;
+      fragment.appendChild(li);
+    });
+
+    if (initialLoad || !logsList.children.length) {
+      logsList.innerHTML = "";
+      logsList.appendChild(fragment);
+    } else {
+      logsList.appendChild(fragment);
+      if (logsList.children.length > 200) {
+        while (logsList.children.length > 200) {
+          logsList.removeChild(logsList.firstChild);
+        }
+      }
+      logsList.scrollTop = logsList.scrollHeight;
+    }
+  }
+
+  function updateLogsEmpty() {
+    if (!logsEmpty || !logsList) return;
+    const hasLogs = logsList.children.length > 0;
+    logsEmpty.classList.toggle("hidden", hasLogs);
+    logsList.classList.toggle("hidden", !hasLogs);
+  }
+
+  function showToast({ title, message, tone = "success", timeout = 5000 }) {
+    if (!toastContainer) return;
+    const toast = document.createElement("div");
+    toast.className = `toast ${tone}`;
+    toast.innerHTML = `
+      <div class="toast-title">${escapeHtml(title)}</div>
+      <div class="toast-body">${escapeHtml(message)}</div>
+      <button type="button" aria-label="Fechar">×</button>
+    `;
+
+    const close = () => {
+      toast.classList.remove("show");
+      setTimeout(() => toast.remove(), 250);
+    };
+
+    toast.querySelector("button").addEventListener("click", close);
+    toastContainer.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add("show"));
+    setTimeout(close, timeout);
+  }
+});
+</script>
+{% endblock %}

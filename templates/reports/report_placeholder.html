@@ -1,0 +1,369 @@
+{% extends "base.html" %}
+{% block title %}Relatórios{% if session %} — {{ session.title }}{% endif %}{% endblock %}
+
+{% block content %}
+<section class="report-hero">
+  <div class="hero-heading">
+    <a href="{% url 'arpia_scan:dashboard' %}{% if project %}?project={{ project.id }}{% endif %}" class="back-link">← Voltar para scans</a>
+    <h1>{% if session %}Relatório do scan {{ session.title }}{% else %}Central de relatórios{% endif %}</h1>
+    <p class="page-subtitle">
+      {% if session %}
+        Visualização consolidada construída a partir do snapshot da sessão para acelerar análise e decisões.
+      {% else %}
+        Selecione uma sessão finalizada no módulo de scans para destravar insights, gráficos e linha do tempo de execução.
+      {% endif %}
+    </p>
+  </div>
+  {% if session %}
+  <div class="hero-meta">
+    <div class="status-block">
+      <span class="label">Status</span>
+      <span class="status-pill status-{{ session.status }}">{{ session.get_status_display }}</span>
+      <span class="muted">Referência #{{ session.reference }}</span>
+    </div>
+    <div class="hero-actions">
+      <a href="{% url 'arpia_scan:session_detail' session.id %}" class="btn-secondary">Abrir sessão</a>
+      <a href="{% url 'arpia_report:api_session_report' session.id %}" class="btn-secondary" target="_blank" rel="noopener noreferrer">Ver JSON</a>
+    </div>
+  </div>
+  {% endif %}
+</section>
+
+{% if session and has_report %}
+<section class="report-grid">
+  <article class="card metrics-card">
+    <header>
+      <h2>Métricas principais</h2>
+      <span class="badge">Snapshot v{{ report.version|default:1 }}</span>
+    </header>
+    <div class="metrics-grid">
+      <div class="metric-chip">
+        <span class="metric-value">{{ report_stats.total_tasks|default:0 }}</span>
+        <span class="metric-label">etapas catalogadas</span>
+      </div>
+      <div class="metric-chip">
+        <span class="metric-value">{{ report_stats.completed_tasks|default:0 }}</span>
+        <span class="metric-label">etapas concluídas</span>
+      </div>
+      <div class="metric-chip">
+        <span class="metric-value">{{ report_stats.failed_tasks|default:0 }}</span>
+        <span class="metric-label">falhas registradas</span>
+      </div>
+      <div class="metric-chip">
+        <span class="metric-value">{{ report_stats.total_findings|default:0 }}</span>
+        <span class="metric-label">achados documentados</span>
+      </div>
+      <div class="metric-chip">
+        <span class="metric-value">{{ report_targets.open_ports|default:0 }}</span>
+        <span class="metric-label">portas abertas</span>
+      </div>
+      <div class="metric-chip">
+        <span class="metric-value">{% if report.timing.duration_seconds %}{{ report.timing.duration_seconds|floatformat:0 }}s{% else %}—{% endif %}</span>
+        <span class="metric-label">duração total</span>
+      </div>
+    </div>
+    {% if report_highlights %}
+    <ul class="highlights">
+      {% for insight in report_highlights %}
+      <li class="highlight-item highlight-{{ insight.level|default:'info' }}">{{ insight.message }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </article>
+
+  <article class="card status-card">
+    <header>
+      <h2>Status das etapas</h2>
+      <span class="muted">Distribuição de {{ report_stats.total_tasks|default:0 }} tarefas</span>
+    </header>
+    {% if status_chart %}
+    <ul class="status-chart">
+      {% for item in status_chart %}
+      <li>
+        <div class="status-row">
+          <span class="status-label">{{ item.label }}</span>
+          <span class="status-count">{{ item.count }}</span>
+        </div>
+        <div class="status-bar">
+          <span class="status-fill status-{{ item.key }}" style="width: {{ item.percentage }}%"></span>
+          <span class="status-percentage">{{ item.percentage }}%</span>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="empty">Nenhuma tarefa executada nesta sessão.</p>
+    {% endif %}
+  </article>
+
+  <article class="card timeline-card">
+    <header>
+      <h2>Linha do tempo</h2>
+      <span class="muted">Sequência das etapas com horários consolidados</span>
+    </header>
+    {% if report_timeline %}
+    <ol class="timeline">
+      {% for entry in report_timeline %}
+      <li>
+        <div class="timeline-marker status-{{ entry.status|default:'pending' }}"></div>
+        <div class="timeline-body">
+          <div class="timeline-header">
+            <strong>{{ entry.label }}</strong>
+            <span class="badge">{{ entry.status|default:"pending"|title }}</span>
+          </div>
+          <div class="timeline-meta">
+            <span data-datetime="{{ entry.started_at }}">Início: {{ entry.started_at|default:"—" }}</span>
+            <span data-datetime="{{ entry.finished_at }}">Término: {{ entry.finished_at|default:"—" }}</span>
+            <span>Duração: {% if entry.duration_seconds %}{{ entry.duration_seconds|floatformat:1 }}s{% else %}—{% endif %}</span>
+          </div>
+        </div>
+      </li>
+      {% endfor %}
+    </ol>
+    {% else %}
+    <p class="empty">Ainda não há informações de timeline disponíveis.</p>
+    {% endif %}
+  </article>
+
+  <article class="card insights-card">
+    <header>
+      <h2>Insights automáticos</h2>
+      <span class="muted">Gerados a partir de observações e macros</span>
+    </header>
+    {% if report_insights %}
+    <ul class="insight-list">
+      {% for insight in report_insights %}
+      <li class="insight insight-{{ insight.level|default:'info' }}">{{ insight.message }}</li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="empty">Nenhum insight registrado nesta sessão.</p>
+    {% endif %}
+  </article>
+
+  <article class="card targets-card">
+    <header>
+      <h2>Superfície observada</h2>
+      <span class="muted">{{ report_targets.hosts_count|default:0 }} hosts • {{ report_targets.open_ports|default:0 }} portas abertas</span>
+    </header>
+    {% if report_targets.hosts %}
+    <ul class="target-list">
+      {% for host in report_targets.hosts|slice:":4" %}
+      <li>
+        <div class="target-heading">
+          <strong>{{ host.host }}</strong>
+          <span class="badge severity-{{ host.severity|default:'low' }}">Severidade {{ host.severity|default:'low'|title }}</span>
+        </div>
+        <p class="muted">{% if host.hostname %}{{ host.hostname }} • {% endif %}{{ host.ports|length|default:0 }} porta(s)</p>
+        {% if host.ports %}
+        <div class="port-tags">
+          {% for port in host.ports|slice:":6" %}
+          <span class="port-tag">{{ port.port }}/{{ port.protocol|default:"tcp" }} {{ port.service|default:"" }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="empty">Nenhum alvo identificado até o momento.</p>
+    {% endif %}
+  </article>
+
+  <article class="card services-card">
+    <header>
+      <h2>Serviços predominantes</h2>
+      <span class="muted">{{ report_services.count|default:0 }} serviços consolidados</span>
+    </header>
+    {% if report_services.items %}
+    <ul class="service-list">
+      {% for item in report_services.items|slice:":6" %}
+      <li>
+        <strong>{{ item.service|default:"Desconhecido"|title }}</strong>
+        <span class="muted">{{ item.occurrences|length|default:0 }} ocorrência(s)</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="empty">Nenhum serviço agregado disponível.</p>
+    {% endif %}
+  </article>
+
+  <article class="card findings-card">
+    <header>
+      <h2>Achados em destaque</h2>
+      <span class="muted">{{ report_findings|length }} resultado(s)</span>
+    </header>
+    {% if report_findings %}
+    <ul class="finding-list">
+      {% for finding in report_findings|slice:":5" %}
+      <li>
+        <div class="finding-header">
+          <span class="badge kind-{{ finding.kind|default:'summary' }}">{{ finding.kind_display|default:finding.kind|default:'Resumo' }}</span>
+          {% if finding.severity %}<span class="badge severity">{{ finding.severity }}</span>{% endif %}
+        </div>
+        <strong>{{ finding.title }}</strong>
+        <p>{{ finding.summary|default:"Sem descrição." }}</p>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="empty">Nenhum achado registrado nesta sessão.</p>
+    {% endif %}
+  </article>
+
+  <article class="card macros-card">
+    <header>
+      <h2>Configuração utilizada</h2>
+      <span class="muted">Hosts e portas previstas</span>
+    </header>
+    <dl class="macro-grid">
+      <div>
+        <dt>Hosts configurados</dt>
+        <dd>
+          {% if report_targets.configured_hosts %}
+            {{ report_targets.configured_hosts|join:", " }}
+          {% else %}
+            <span class="muted">Nenhum host definido</span>
+          {% endif %}
+        </dd>
+      </div>
+      <div>
+        <dt>Portas configuradas</dt>
+        <dd>
+          {% if report_targets.configured_ports %}
+            {{ report_targets.configured_ports|join:", " }}
+          {% else %}
+            <span class="muted">Padrão do perfil</span>
+          {% endif %}
+        </dd>
+      </div>
+    </dl>
+  </article>
+
+  <article class="card raw-card">
+    <header>
+      <h2>Snapshot bruto</h2>
+      <span class="muted">Fonte única de verdade com todos os campos consolidados</span>
+    </header>
+    <details>
+      <summary>Visualizar JSON completo</summary>
+      <pre>{{ report_json }}</pre>
+    </details>
+  </article>
+</section>
+{% elif session %}
+<section class="report-empty">
+  <div class="card note-card">
+    <h2>Snapshot ainda não disponível</h2>
+    <p>Esta sessão não gerou um <code>report_snapshot</code> consolidado. Verifique se o orquestrador já concluiu o processamento dos artefatos.</p>
+    <a href="{% url 'arpia_scan:session_detail' session.id %}" class="btn-primary">Abrir detalhes da sessão</a>
+  </div>
+</section>
+{% else %}
+<section class="report-empty">
+  <div class="card note-card">
+    <h2>Como acessar um relatório</h2>
+    <p>Finalize um scan e utilize o botão “Ver relatório provisório” na página da sessão. O snapshot consolidado ficará disponível aqui para revisões e exportações.</p>
+    <a href="{% url 'arpia_scan:dashboard' %}" class="btn-primary">Ir para sessões de scan</a>
+  </div>
+</section>
+{% endif %}
+
+<style>
+.report-hero{display:flex;flex-direction:column;gap:1.2rem;margin-bottom:1.8rem;}
+.hero-heading h1{margin:.2rem 0;font-size:2rem;color:var(--text);}
+.back-link{text-decoration:none;color:var(--muted);font-size:.95rem;}
+.back-link:hover{color:var(--text);} 
+.page-subtitle{margin:0;color:var(--muted);max-width:700px;}
+.hero-meta{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:1rem;}
+.status-block{display:flex;flex-direction:column;gap:.3rem;}
+.status-block .label{font-size:.75rem;text-transform:uppercase;color:var(--muted);letter-spacing:.08em;}
+.status-pill{display:inline-flex;align-items:center;padding:.3rem .9rem;border-radius:999px;font-weight:600;font-size:.85rem;background:rgba(255,255,255,0.08);color:var(--text);}
+.status-completed{background:rgba(118,221,174,0.25);} 
+.status-failed{background:rgba(255,132,132,0.25);} 
+.status-running{background:rgba(123,195,255,0.22);} 
+.status-ready,.status-planned{background:rgba(255,255,255,0.1);} 
+.hero-actions{display:flex;gap:.6rem;}
+.btn-secondary,.btn-primary{display:inline-flex;align-items:center;justify-content:center;padding:.55rem 1.1rem;border-radius:999px;font-weight:600;font-size:.85rem;text-decoration:none;transition:.2s ease;}
+.btn-secondary{background:rgba(76,148,255,0.16);border:1px solid rgba(76,148,255,0.25);color:#8bc5ff;}
+.btn-secondary:hover{background:rgba(117,187,255,0.26);} 
+.btn-primary{background:rgba(118,221,174,0.18);border:1px solid rgba(118,221,174,0.28);color:#d8f6e9;}
+.btn-primary:hover{background:rgba(118,221,174,0.28);} 
+.badge{display:inline-flex;align-items:center;padding:.25rem .7rem;border-radius:999px;font-weight:600;font-size:.75rem;background:rgba(255,255,255,0.08);color:var(--text);} 
+.muted{color:var(--muted);font-size:.85rem;}
+.report-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1.4rem;align-items:start;}
+.card{background:rgba(8,23,43,0.82);border-radius:16px;padding:1.4rem;border:1px solid rgba(255,255,255,0.05);box-shadow:0 18px 38px rgba(5,16,32,0.35);} 
+.card header{display:flex;align-items:center;justify-content:space-between;gap:.6rem;margin-bottom:1rem;}
+.metrics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1rem;margin-bottom:1rem;}
+.metric-chip{display:flex;flex-direction:column;gap:.25rem;background:rgba(255,255,255,0.02);padding:.9rem 1rem;border-radius:12px;border:1px solid rgba(255,255,255,0.04);} 
+.metric-value{font-size:1.6rem;font-weight:700;color:#8bc5ff;}
+.metric-label{font-size:.82rem;color:var(--muted);} 
+.highlights{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.6rem;}
+.highlight-item{padding:.65rem .9rem;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);font-size:.9rem;}
+.highlight-warning{border-color:rgba(255,214,165,0.3);}
+.highlight-error{border-color:rgba(255,132,132,0.3);} 
+.highlight-success{border-color:rgba(118,221,174,0.3);} 
+.status-chart{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.9rem;}
+.status-row{display:flex;align-items:center;justify-content:space-between;font-weight:600;}
+.status-bar{position:relative;height:10px;background:rgba(255,255,255,0.08);border-radius:999px;margin-top:.35rem;overflow:hidden;}
+.status-fill{display:block;height:100%;background:linear-gradient(90deg,#7fb5ff,#4d9dff);} 
+.status-bar .status-percentage{position:absolute;right:.4rem;top:50%;transform:translateY(-50%);font-size:.72rem;color:rgba(255,255,255,0.86);} 
+.status-bar span.status-percentage{pointer-events:none;}
+.timeline{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1.2rem;}
+.timeline li{display:flex;gap:.8rem;}
+.timeline-marker{width:12px;height:12px;border-radius:999px;margin-top:.4rem;background:rgba(127,181,255,0.45);} 
+.timeline-marker.status-completed{background:rgba(118,221,174,0.65);} 
+.timeline-marker.status-failed{background:rgba(255,132,132,0.65);} 
+.timeline-body{flex:1;display:flex;flex-direction:column;gap:.4rem;}
+.timeline-header{display:flex;align-items:center;gap:.6rem;font-size:1rem;font-weight:600;}
+.timeline-meta{display:flex;flex-wrap:wrap;gap:.6rem;font-size:.8rem;color:var(--muted);} 
+.insight-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.7rem;}
+.insight{padding:.75rem 1rem;border-radius:12px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.04);} 
+.insight-info{border-color:rgba(127,181,255,0.3);} 
+.insight-warning{border-color:rgba(255,214,165,0.32);} 
+.insight-error{border-color:rgba(255,132,132,0.35);} 
+.insight-success{border-color:rgba(118,221,174,0.32);} 
+.target-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.9rem;}
+.target-heading{display:flex;align-items:center;justify-content:space-between;gap:.6rem;}
+.severity-high{background:rgba(255,132,132,0.35);} 
+.severity-medium{background:rgba(255,214,165,0.28);} 
+.port-tags{display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.45rem;}
+.port-tag{padding:.3rem .6rem;border-radius:999px;background:rgba(255,255,255,0.06);font-size:.78rem;color:rgba(255,255,255,0.85);} 
+.service-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.65rem;}
+.service-list li{display:flex;align-items:center;justify-content:space-between;gap:.6rem;padding:.55rem .75rem;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid rgba(255,255,255,0.04);} 
+.finding-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.9rem;}
+.finding-header{display:flex;gap:.6rem;align-items:center;margin-bottom:.35rem;}
+.macro-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;margin:0;}
+.macro-grid dt{font-size:.78rem;text-transform:uppercase;color:var(--muted);letter-spacing:.08em;margin-bottom:.3rem;}
+.macro-grid dd{margin:0;color:var(--text);} 
+.raw-card details{margin-top:.6rem;}
+.raw-card pre{max-height:320px;overflow:auto;margin-top:.6rem;background:rgba(0,0,0,0.35);padding:.9rem 1rem;border-radius:12px;font-size:.8rem;}
+.empty{color:var(--muted);font-size:.9rem;}
+.report-empty{display:flex;}
+.note-card{width:100%;max-width:540px;margin:0 auto;text-align:left;}
+.note-card h2{margin-top:0;margin-bottom:.8rem;}
+.note-card p{color:var(--muted);}
+.note-card code{background:rgba(255,255,255,0.08);padding:.15rem .35rem;border-radius:6px;}
+@media (max-width:900px){
+  .hero-meta{align-items:flex-start;}
+  .report-grid{grid-template-columns:1fr;}
+  .timeline-meta{flex-direction:column;align-items:flex-start;}
+}
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  document.querySelectorAll('[data-datetime]').forEach(element => {
+    const iso = element.getAttribute('data-datetime');
+    if (!iso) return;
+    const parsed = new Date(iso);
+    if (Number.isNaN(parsed.getTime())) return;
+    element.textContent = element.textContent.replace(iso, new Intl.DateTimeFormat('pt-BR', {
+      dateStyle: 'short',
+      timeStyle: 'medium'
+    }).format(parsed));
+  });
+});
+</script>
+{% endblock %}

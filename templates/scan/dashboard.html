@@ -1,0 +1,354 @@
+{% extends "base.html" %}
+{% block title %}Scan — ARPIA{% endblock %}
+
+{% block content %}
+<section class="page-heading">
+  <div>
+    <h1>Orquestração de scans</h1>
+    <p class="page-subtitle">Selecione um projeto para configurar conectividade, discovery rápido e perfis avançados.</p>
+  </div>
+  {% if has_project %}
+    <div class="active-project">
+      <span class="label">Projeto ativo</span>
+      <strong>{{ selected_project.name }}</strong>
+      {% if selected_project.client_name %}
+        <span class="muted">{{ selected_project.client_name }}</span>
+      {% endif %}
+    </div>
+  {% endif %}
+</section>
+
+<section class="scan-grid">
+  <div class="card project-card">
+    <div class="card-header">
+      <h2>Projetos</h2>
+      <p class="muted">Você tem acesso a {{ projects|length }} projeto(s).</p>
+    </div>
+    {% if projects %}
+      <ul class="project-list">
+        {% for project in projects %}
+          <li>
+            <a href="?project={{ project.id }}" class="project-link {% if project.id|stringformat:'s' == selected_project_id %}active{% endif %}">
+              <span class="name">{{ project.name }}</span>
+              {% if project.client_name %}<span class="client">{{ project.client_name }}</span>{% endif %}
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <div class="empty">
+        <p>Nenhum projeto disponível. Crie um projeto para habilitar os fluxos de scan.</p>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="card actions-card" data-project-id="{{ selected_project_id }}">
+    <div class="card-header">
+      <h2>Fluxos de scan</h2>
+      <p class="muted">Configure cada etapa com scripts e ferramentas personalizadas.</p>
+    </div>
+    <div id="scan-feedback" class="scan-feedback hidden">
+      <span class="icon" aria-hidden="true">⏳</span>
+      <div>
+        <strong id="scan-feedback-title">Preparando execução…</strong>
+        <p id="scan-feedback-body">Aguarde enquanto iniciamos o fluxo escolhido.</p>
+      </div>
+    </div>
+    <div class="actions-grid">
+      {% for action in action_cards %}
+        <div class="action-tile {% if not action.enabled %}disabled{% endif %}" data-kind="{{ action.kind }}">
+          <div class="tile-head">
+            <h3>{{ action.title }}</h3>
+            {% if action.badge %}<span class="badge">{{ action.badge }}</span>{% endif %}
+          </div>
+          <p>{{ action.description }}</p>
+          {% if action.enabled %}
+            <button type="button" class="btn-primary scan-trigger" data-kind="{{ action.kind }}">Executar agora</button>
+          {% else %}
+            <button type="button" class="btn-primary" disabled>Selecione um projeto</button>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card macros-card">
+    <div class="card-header">
+      <h2>Macros do projeto</h2>
+      <p class="muted">Serão injetadas nos scripts e ferramentas durante o scan.</p>
+    </div>
+    {% if macro_entries %}
+      <ul class="macro-list">
+        {% for macro in macro_entries %}
+          <li>
+            <span class="macro-key">{{ macro.key }}</span>
+            {% if macro.is_pre %}
+              <pre>{{ macro.value }}</pre>
+            {% else %}
+              <span class="macro-value">{{ macro.value|default:"—" }}</span>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <div class="empty">
+        <p>Selecione um projeto para visualizar hosts, redes, ferramentas e wordlists disponíveis.</p>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="card sessions-card">
+    <div class="card-header">
+      <h2>Sessões recentes</h2>
+      {% if has_project %}
+        <span class="summary">{{ recent_sessions|length }} sessão(ões) • {{ total_findings }} achado(s)</span>
+      {% endif %}
+    </div>
+    {% if recent_sessions %}
+      <table class="sessions-table">
+        <thead>
+          <tr>
+            <th>Título</th>
+            <th>Status</th>
+            <th>Iniciada</th>
+            <th>Responsável</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for session in recent_sessions %}
+            <tr>
+              <td>
+                <a href="{% url 'arpia_scan:session_detail' session.id %}">{{ session.title }}</a>
+                <span class="ref">#{{ session.reference }}</span>
+              </td>
+              <td>
+                <span class="status status-{{ session.status }}">{{ session.get_status_display }}</span>
+              </td>
+              <td>{{ session.started_at|default:session.created_at|date:"Y-m-d H:i" }}</td>
+              <td>{{ session.owner.get_username }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% elif has_project %}
+      <div class="empty">
+        <p>Nenhuma sessão registrada ainda para este projeto. Use os fluxos acima para iniciar assim que estiver disponível.</p>
+      </div>
+    {% else %}
+      <div class="empty">
+        <p>Selecione um projeto para visualizar o histórico.</p>
+      </div>
+    {% endif %}
+  </div>
+</section>
+
+<style>
+.page-heading{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.6rem;gap:1rem;}
+.page-heading h1{margin:0;font-size:1.9rem;color:var(--text);} 
+.active-project{display:flex;flex-direction:column;gap:.25rem;background:rgba(255,255,255,0.02);padding:.8rem 1rem;border-radius:10px;border:1px solid rgba(255,255,255,0.06);min-width:220px;}
+.active-project .label{font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);} 
+.scan-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1.4rem;align-items:start;}
+.card{background:rgba(8,23,43,0.78);border-radius:14px;padding:1.4rem;border:1px solid rgba(255,255,255,0.05);box-shadow:0 18px 38px rgba(5,16,32,0.35);position:relative;max-width:100%;overflow:hidden;}
+.card-header{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1rem;}
+.card-header h2{margin:0;color:var(--text);font-size:1.2rem;}
+.muted{color:var(--muted);} 
+.project-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.6rem;}
+.project-link{display:flex;flex-direction:column;gap:.2rem;padding:.75rem 1rem;border-radius:10px;text-decoration:none;color:var(--text);background:rgba(255,255,255,0.03);border:1px solid transparent;transition:.2s ease;}
+.project-link:hover{background:rgba(255,255,255,0.06);} 
+.project-link.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);} 
+.project-link .client{font-size:.85rem;color:var(--muted);} 
+.actions-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;}
+.action-tile{display:flex;flex-direction:column;gap:.6rem;padding:1rem;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.03);min-height:180px;transition:.2s ease;}
+.action-tile:not(.disabled):hover{border-color:rgba(127,181,255,0.45);box-shadow:0 0 0 1px rgba(127,181,255,0.25);}
+.action-tile.disabled{opacity:.6;pointer-events:none;}
+.action-tile h3{margin:0;font-size:1.1rem;color:var(--text);} 
+.action-tile p{margin:0;color:var(--muted);flex:1;}
+.action-tile .badge{background:rgba(127,181,255,0.12);padding:.2rem .6rem;border-radius:999px;font-size:.75rem;color:#8fc0ff;} 
+.action-tile .btn-primary{align-self:flex-start;padding:.45rem 1rem;border-radius:999px;font-weight:600;background:rgba(76,148,255,0.2);border:1px solid rgba(76,148,255,0.25);color:#7fb5ff;cursor:pointer;transition:.2s ease;}
+.action-tile .btn-primary:disabled{cursor:not-allowed;opacity:.6;}
+.action-tile .btn-primary:hover:not(:disabled){background:rgba(117,187,255,0.28);} 
+.scan-feedback{display:flex;align-items:center;gap:.75rem;padding:.9rem 1rem;margin-bottom:1rem;border-radius:12px;background:rgba(76,148,255,0.12);border:1px solid rgba(76,148,255,0.25);color:#cfe4ff;}
+.scan-feedback.hidden{display:none;}
+.scan-feedback .icon{font-size:1.4rem;}
+.scan-feedback.tone-success{background:rgba(118,221,174,0.18);border-color:rgba(118,221,174,0.35);color:#d8f6e9;}
+.scan-feedback.tone-error{background:rgba(255,132,132,0.16);border-color:rgba(255,132,132,0.35);color:#ffd9d9;}
+.macro-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.7rem;max-height:320px;overflow:auto;}
+.macro-list li{display:flex;flex-direction:column;gap:.35rem;background:rgba(255,255,255,0.02);padding:.75rem 1rem;border-radius:10px;border:1px solid rgba(255,255,255,0.03);} 
+.macro-key{font-family:"Fira Code",monospace;color:#89d1ff;font-size:.85rem;}
+.macro-value{color:var(--text);} 
+.macro-list pre{margin:0;background:rgba(0,0,0,0.4);padding:.6rem .8rem;border-radius:8px;white-space:pre-wrap;word-break:break-word;font-family:"Fira Code",monospace;font-size:.78rem;max-width:100%;overflow:auto;}
+.sessions-table{width:100%;border-collapse:collapse;font-size:.92rem;}
+.sessions-table th,.sessions-table td{padding:.55rem .75rem;border-bottom:1px solid rgba(255,255,255,0.05);text-align:left;}
+.sessions-table th{font-weight:600;color:var(--muted);text-transform:uppercase;font-size:.75rem;letter-spacing:.06em;}
+.sessions-table td .ref{display:block;font-size:.75rem;color:var(--muted);}
+.status{display:inline-flex;align-items:center;gap:.4rem;padding:.2rem .6rem;border-radius:999px;font-size:.75rem;font-weight:600;color:var(--text);background:rgba(255,255,255,0.08);} 
+.status-running{background:rgba(123,195,255,0.15);}
+.status-completed{background:rgba(118,221,174,0.2);}
+.status-failed{background:rgba(255,132,132,0.18);}
+.status-planned,.status-ready{background:rgba(255,255,255,0.08);}
+.summary{color:var(--muted);font-size:.85rem;}
+.empty{padding:1rem;background:rgba(255,255,255,0.02);border-radius:10px;color:var(--muted);text-align:left;}
+@media (max-width:960px){.page-heading{flex-direction:column;align-items:flex-start;}.active-project{width:100%;}.scan-grid{grid-template-columns:1fr;}}
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const actionsCard = document.querySelector(".actions-card");
+  if (!actionsCard) return;
+
+  const projectId = actionsCard.dataset.projectId;
+  const feedback = document.getElementById("scan-feedback");
+  const feedbackTitle = document.getElementById("scan-feedback-title");
+  const feedbackBody = document.getElementById("scan-feedback-body");
+  const triggerButtons = document.querySelectorAll(".scan-trigger");
+  const createUrl = "{% url 'arpia_scan:api_session_create' %}";
+  const startUrlTemplate = "{% url 'arpia_scan:api_session_start' pk='00000000-0000-0000-0000-000000000000' %}";
+
+  const ACTION_PRESETS = {
+    connectivity: {
+      title: "Teste de conectividade",
+      tasks: [
+        { kind: "connectivity", name: "Teste de conectividade" }
+      ],
+    },
+    rustscan: {
+      title: "Discovery rápido",
+      tasks: [
+        { kind: "connectivity", name: "Validação de rede" },
+        { kind: "discovery_rustscan", name: "Rustscan discovery" },
+      ],
+    },
+    nmap: {
+      title: "Níveis de ruído (Nmap)",
+      tasks: [
+        { kind: "connectivity", name: "Teste de conectividade" },
+        { kind: "discovery_rustscan", name: "Rustscan discovery" },
+        { kind: "discovery_nmap", name: "Varredura Nmap" },
+      ],
+    },
+  };
+
+  const TERMINAL_STATUSES = new Set(["completed", "failed", "canceled"]);
+
+  function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(";").shift();
+  }
+
+  function setFeedback({ title, body, icon = "⏳", tone = "info" }) {
+    if (!feedback) return;
+    feedback.classList.remove("hidden", "tone-success", "tone-error");
+    if (tone === "success") feedback.classList.add("tone-success");
+    if (tone === "error") feedback.classList.add("tone-error");
+    feedback.querySelector(".icon").textContent = icon;
+    feedbackTitle.textContent = title;
+    feedbackBody.textContent = body;
+  }
+
+  function clearFeedback() {
+    if (!feedback) return;
+    feedback.classList.add("hidden");
+  }
+
+  async function triggerFlow(kind, button) {
+    if (!projectId) return;
+
+    const preset = ACTION_PRESETS[kind];
+    if (!preset) return;
+
+    triggerButtons.forEach(btn => btn.disabled = true);
+    setFeedback({
+      title: `Iniciando ${preset.title}`,
+      body: "Preparando sessão e executando tarefas simuladas…",
+      icon: "⚙️",
+    });
+
+    try {
+  const createResponse = await fetch(createUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": getCookie("csrftoken"),
+        },
+        body: JSON.stringify({
+          project_id: projectId,
+          title: `${preset.title} — ${new Date().toLocaleString("pt-BR")}`,
+          tasks: preset.tasks,
+          trigger_kind: kind,
+        }),
+      });
+
+      if (!createResponse.ok) {
+        const errorPayload = await createResponse.json().catch(() => ({}));
+        throw new Error(errorPayload.error || "Falha ao criar sessão");
+      }
+
+      const sessionData = await createResponse.json();
+
+      setFeedback({
+        title: "Sessão criada",
+        body: "Disparando execução das etapas…",
+        icon: "🚀",
+      });
+
+  const startUrl = startUrlTemplate.replace("00000000-0000-0000-0000-000000000000", sessionData.id);
+  const startResponse = await fetch(startUrl, {
+        method: "POST",
+        headers: {
+          "X-CSRFToken": getCookie("csrftoken"),
+        },
+      });
+
+      if (!startResponse.ok) {
+        const errorPayload = await startResponse.json().catch(() => ({}));
+        throw new Error(errorPayload.error || "Falha ao iniciar sessão");
+      }
+
+      const startedData = await startResponse.json();
+      const status = startedData.status;
+
+      if (TERMINAL_STATUSES.has(status)) {
+        setFeedback({
+          title: "Execução concluída",
+          body: "Redirecionando para o detalhamento da sessão…",
+          icon: status === "completed" ? "✅" : "⚠️",
+          tone: status === "completed" ? "success" : "error",
+        });
+        setTimeout(() => {
+          window.location.href = sessionData.detail_url;
+        }, 1200);
+      } else {
+        setFeedback({
+          title: "Execução em andamento",
+          body: "Acompanhe o progresso em tempo real no detalhamento da sessão.",
+          icon: "📡",
+        });
+        setTimeout(() => {
+          window.location.href = sessionData.detail_url;
+        }, 1200);
+      }
+    } catch (error) {
+      console.error(error);
+      setFeedback({
+        title: "Não foi possível iniciar o fluxo",
+        body: error.message || "Tente novamente em instantes.",
+        icon: "❌",
+        tone: "error",
+      });
+    } finally {
+      triggerButtons.forEach(btn => btn.disabled = false);
+    }
+  }
+
+  if (!projectId) {
+    triggerButtons.forEach(btn => btn.disabled = true);
+    return;
+  }
+
+  triggerButtons.forEach(button => {
+    button.addEventListener("click", () => triggerFlow(button.dataset.kind, button));
+  });
+});
+</script>
+{% endblock %}

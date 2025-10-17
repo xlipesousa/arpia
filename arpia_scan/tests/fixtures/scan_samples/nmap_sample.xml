@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<nmaprun scanner="nmap" args="nmap -A" start="1697462400">
+  <host>
+    <status state="up" reason="syn-ack" reason_ttl="0"/>
+    <address addr="10.0.0.5" addrtype="ipv4"/>
+    <hostnames>
+      <hostname name="app.internal" type="user"/>
+    </hostnames>
+    <ports>
+      <port protocol="tcp" portid="22">
+        <state state="open" reason="syn-ack" reason_ttl="0"/>
+        <service name="ssh" product="OpenSSH" version="8.2" method="probed"/>
+      </port>
+      <port protocol="tcp" portid="443">
+        <state state="open" reason="syn-ack" reason_ttl="0"/>
+        <service name="https" product="nginx" version="1.20" method="probed"/>
+      </port>
+    </ports>
+  </host>
+  <host>
+    <status state="up" reason="syn-ack" reason_ttl="0"/>
+    <address addr="10.0.0.8" addrtype="ipv4"/>
+    <ports>
+      <port protocol="tcp" portid="80">
+        <state state="open" reason="syn-ack" reason_ttl="0"/>
+        <service name="http" product="Apache" version="2.4" method="probed"/>
+      </port>
+      <port protocol="tcp" portid="445">
+        <state state="closed" reason="reset" reason_ttl="0"/>
+      </port>
+    </ports>
+  </host>
+</nmaprun>

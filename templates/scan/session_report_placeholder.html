@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Relatório de scan — {{ session.title }}{% endblock %}
+
+{% block content %}
+<section class="page-heading">
+  <div>
+    <a href="{% url 'arpia_scan:session_detail' session.id %}" class="back-link">← Voltar para a sessão</a>
+    <h1>Relatório em construção</h1>
+    <p class="page-subtitle">Estamos preparando uma visualização dedicada para resumir o scan <strong>{{ session.title }}</strong>.</p>
+  </div>
+  <div class="session-status">
+    <span class="label">Status</span>
+    <span class="status-pill status-{{ session.status }}">{{ session.get_status_display }}</span>
+  </div>
+</section>
+
+<section class="report-placeholder">
+  <div class="card highlight">
+    <h2>Resumo rápido</h2>
+    <ul class="quick-metrics">
+      <li><span class="metric">{{ report.stats.total_tasks|default:0 }}</span><span class="label">etapas executadas</span></li>
+      <li><span class="metric">{{ report.stats.total_findings|default:0 }}</span><span class="label">achados registrados</span></li>
+      <li><span class="metric">{{ report.targets.hosts_count|default:0 }}</span><span class="label">hosts alvo</span></li>
+      <li><span class="metric">{{ report.timing.duration_seconds|default:"—" }}</span><span class="label">duração (s)</span></li>
+    </ul>
+  </div>
+
+  <div class="card insights">
+    <h2>Insights capturados</h2>
+    {% if report.insights %}
+      <ul class="insight-list">
+        {% for insight in report.insights %}
+          <li class="insight insight-{{ insight.level|default:"info" }}">{{ insight.message }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="empty">Nenhum insight extra registrado ainda. Em breve este espaço trará destaques automáticos.</p>
+    {% endif %}
+  </div>
+
+  <div class="card next-steps">
+    <h2>O que vem a seguir?</h2>
+    <p>O módulo de relatórios dedicará uma visualização rica com gráficos, timeline de tarefas e recomendações. Enquanto isso, você pode revisar os detalhes completos na sessão.</p>
+    <a href="{% url 'arpia_scan:session_detail' session.id %}" class="btn-primary">Abrir detalhes da sessão</a>
+  </div>
+</section>
+
+<style>
+.page-heading{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.6rem;gap:1rem;}
+.page-heading h1{margin:.3rem 0;font-size:1.9rem;color:var(--text);}
+.back-link{text-decoration:none;color:var(--muted);font-size:.9rem;}
+.back-link:hover{color:var(--text);}
+.session-status{display:flex;flex-direction:column;gap:.3rem;align-items:flex-end;}
+.session-status .label{font-size:.75rem;text-transform:uppercase;color:var(--muted);letter-spacing:.08em;}
+.status-pill{display:inline-flex;align-items:center;padding:.25rem .75rem;border-radius:999px;font-weight:600;font-size:.8rem;color:var(--text);background:rgba(255,255,255,0.08);} 
+.status-completed{background:rgba(118,221,174,0.22);} 
+.status-failed{background:rgba(255,132,132,0.2);} 
+.status-running{background:rgba(123,195,255,0.18);} 
+.report-placeholder{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.4rem;align-items:start;}
+.card{background:rgba(8,23,43,0.8);border-radius:14px;padding:1.4rem;border:1px solid rgba(255,255,255,0.05);box-shadow:0 18px 38px rgba(5,16,32,0.35);}
+.highlight .quick-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:1rem;list-style:none;margin:0;padding:0;}
+.quick-metrics .metric{display:block;font-size:2rem;font-weight:700;color:#8bc5ff;}
+.quick-metrics .label{font-size:.85rem;color:var(--muted);}
+.insight-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.75rem;}
+.insight{padding:.75rem 1rem;border-radius:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);}
+.insight-info{border-color:rgba(127,181,255,0.25);}
+.insight-success{border-color:rgba(118,221,174,0.25);}
+.insight-warning{border-color:rgba(255,214,165,0.3);}
+.insight-error{border-color:rgba(255,132,132,0.35);}
+.empty{color:var(--muted);}
+.btn-primary{display:inline-flex;align-items:center;justify-content:center;padding:.6rem 1.2rem;border-radius:999px;font-weight:600;background:rgba(76,148,255,0.2);border:1px solid rgba(76,148,255,0.25);color:#8bc5ff;text-decoration:none;transition:.2s ease;}
+.btn-primary:hover{background:rgba(117,187,255,0.28);}
+@media (max-width:900px){.page-heading{flex-direction:column;align-items:flex-start;}.session-status{align-items:flex-start;}.report-placeholder{grid-template-columns:1fr;}}
+</style>
+{% endblock %}
