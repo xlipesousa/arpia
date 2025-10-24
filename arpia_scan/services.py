@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import json
+import os
 import socket
+import subprocess
+import tempfile
 import time
-from contextlib import closing
+from contextlib import closing, suppress
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Iterable, List, Optional, Sequence
 
 from django.core.exceptions import ValidationError
@@ -12,7 +16,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from arpia_core.models import Project, Script, Tool, Wordlist
-from arpia_core.views import build_project_macros  # TODO mover p/ util compartilhado
+from arpia_core.views import build_project_macros, render_script_with_macros  # TODO mover p/ util compartilhado
 from arpia_log.models import LogEntry
 from arpia_log.services import log_event
 
@@ -126,8 +130,24 @@ def _fetch_wordlist(owner, slug: Optional[str]) -> Optional[Wordlist]:
     return Wordlist.objects.filter(owner=owner, slug=slug).first()
 
 
+def _ensure_connectivity_present(tasks_payload: List[dict]) -> List[dict]:
+    has_connectivity = any((task.get("kind") or "") == ScanTask.Kind.CONNECTIVITY for task in tasks_payload)
+    if not has_connectivity:
+        return [DEFAULT_TASK_DEFINITION[0], *tasks_payload]
+    ordered = []
+    connectivity_tasks = [task for task in tasks_payload if (task.get("kind") or "") == ScanTask.Kind.CONNECTIVITY]
+    other_tasks = [task for task in tasks_payload if (task.get("kind") or "") != ScanTask.Kind.CONNECTIVITY]
+    if connectivity_tasks:
+        ordered.append(connectivity_tasks[0])
+        ordered.extend(other_tasks)
+    else:
+        ordered = tasks_payload
+    return ordered
+
+
 def _normalize_tasks(payload: Optional[Iterable[dict]], owner) -> List[PlannedTask]:
-    tasks_payload = list(payload or DEFAULT_TASK_DEFINITION)
+    raw_tasks = list(payload or DEFAULT_TASK_DEFINITION)
+    tasks_payload = _ensure_connectivity_present(raw_tasks)
     planned: List[PlannedTask] = []
 
     for idx, task_def in enumerate(tasks_payload, start=1):
@@ -138,14 +158,22 @@ def _normalize_tasks(payload: Optional[Iterable[dict]], owner) -> List[PlannedTa
         script_slug = task_def.get("script") or task_def.get("script_slug")
         wordlist_slug = task_def.get("wordlist") or task_def.get("wordlist_slug")
 
+        tool = _fetch_tool(owner, tool_slug)
+        if tool_slug and not tool:
+            raise ValidationError(f"Ferramenta '{tool_slug}' não encontrada para o usuário atual.")
+
+        script = _fetch_script(owner, script_slug)
+        if script_slug and not script:
+            raise ValidationError(f"Script '{script_slug}' não está disponível para este usuário.")
+
         planned.append(
             PlannedTask(
                 order=idx,
                 kind=kind,
                 name=name,
                 parameters=parameters,
-                tool=_fetch_tool(owner, tool_slug),
-                script=_fetch_script(owner, script_slug),
+                tool=tool,
+                script=script,
                 wordlist=_fetch_wordlist(owner, wordlist_slug),
             )
         )
@@ -293,6 +321,9 @@ class ScanOrchestrator:
         self.session = session
         self.user = run_as_user or session.owner
         self.macros = session.macros_snapshot or build_project_macros(self.user, session.project)
+        self._connectivity_results: List[ConnectivityProbeResult] = []
+        self._connectivity_hosts: List[str] = []
+        self._connectivity_success: bool = False
 
     def run(self) -> ScanSession:
         if self.session.status == ScanSession.Status.RUNNING:
@@ -367,36 +398,74 @@ class ScanOrchestrator:
             tags=["scan", "task", task.kind],
         )
 
-        if task.kind == ScanTask.Kind.CONNECTIVITY:
-            stdout_lines.extend(self._execute_connectivity(task, summary_data))
-        elif task.kind == ScanTask.Kind.DISCOVERY_RUSTSCAN:
-            stdout_lines.extend(self._simulate_rustscan(task, summary_data))
-        elif task.kind == ScanTask.Kind.DISCOVERY_NMAP:
-            stdout_lines.extend(self._simulate_nmap(task, summary_data))
-        else:
-            stdout_lines.append("[INFO] Etapa personalizada concluída (simulada).")
+        execution_error: Exception | None = None
 
-        stdout_lines.append("[INFO] Finalizando etapa.")
+        try:
+            if task.kind == ScanTask.Kind.CONNECTIVITY:
+                stdout_lines.extend(self._execute_connectivity(task, summary_data))
+            elif task.kind == ScanTask.Kind.DISCOVERY_RUSTSCAN:
+                stdout_lines.extend(self._simulate_rustscan(task, summary_data))
+            elif task.kind == ScanTask.Kind.DISCOVERY_NMAP:
+                stdout_lines.extend(self._simulate_nmap(task, summary_data))
+            elif task.kind == ScanTask.Kind.SCRIPT:
+                stdout_lines.extend(self._execute_script_task(task, summary_data))
+            else:
+                stdout_lines.append("[INFO] Etapa personalizada concluída (simulada).")
+        except ValidationError as exc:
+            execution_error = exc
+            stdout_lines.append(f"[ERROR] {exc.message}")
+            task.stderr = (task.stderr + "\n" if task.stderr else "") + exc.message
+        except FileNotFoundError as exc:
+            execution_error = exc
+            message = str(exc)
+            stdout_lines.append(f"[ERROR] {message}")
+            task.stderr = (task.stderr + "\n" if task.stderr else "") + message
+        except Exception as exc:  # pragma: no cover - erros inesperados
+            execution_error = exc
+            message = str(exc)
+            stdout_lines.append(f"[ERROR] {message}")
+            task.stderr = (task.stderr + "\n" if task.stderr else "") + message
+        finally:
+            stdout_lines.append("[INFO] Finalizando etapa.")
 
-        task.stdout = "\n".join(stdout_lines)
-        task.progress = 1.0
-        task.finished_at = timezone.now()
-        task.status = ScanTask.Status.COMPLETED
-        task.save(update_fields=["status", "finished_at", "progress", "stdout", "updated_at"])
+            task.stdout = "\n".join(stdout_lines)
+            task.finished_at = timezone.now()
+            task.progress = 0.0 if execution_error else 1.0
+            task.status = ScanTask.Status.FAILED if execution_error else ScanTask.Status.COMPLETED
+            task.save(update_fields=["status", "finished_at", "progress", "stdout", "stderr", "updated_at"])
 
-        log_event(
-            source_app="arpia_scan",
-            event_type="scan.task.completed",
-            message=f"Tarefa {task.kind} concluída",
-            context=self._log_context(task=task),
-            correlation=self._log_correlation(task=task),
-            details={
-                "duration_seconds": (task.finished_at - task.started_at).total_seconds() if task.started_at else None,
-                "tool": task.tool.slug if task.tool else None,
-                "script": task.script.slug if task.script else None,
-            },
-            tags=["scan", "task", task.kind],
-        )
+            if execution_error:
+                log_event(
+                    source_app="arpia_scan",
+                    event_type="scan.task.failed",
+                    message=f"Tarefa {task.kind} falhou",
+                    severity=LogEntry.Severity.ERROR,
+                    context=self._log_context(task=task),
+                    correlation=self._log_correlation(task=task),
+                    details={
+                        "error": str(execution_error),
+                        "tool": task.tool.slug if task.tool else None,
+                        "script": task.script.slug if task.script else None,
+                    },
+                    tags=["scan", "task", task.kind, "failure"],
+                )
+            else:
+                log_event(
+                    source_app="arpia_scan",
+                    event_type="scan.task.completed",
+                    message=f"Tarefa {task.kind} concluída",
+                    context=self._log_context(task=task),
+                    correlation=self._log_correlation(task=task),
+                    details={
+                        "duration_seconds": (task.finished_at - task.started_at).total_seconds() if task.started_at else None,
+                        "tool": task.tool.slug if task.tool else None,
+                        "script": task.script.slug if task.script else None,
+                    },
+                    tags=["scan", "task", task.kind],
+                )
+
+        if execution_error:
+            raise execution_error
 
         summary_data.setdefault("tasks", []).append(
             {
@@ -453,6 +522,11 @@ class ScanOrchestrator:
         timeout = float(task.parameters.get("timeout", 1.5)) if isinstance(task.parameters, dict) else 1.5
         runner = ConnectivityRunner(hosts, ports, timeout=timeout)
         results = runner.run()
+
+        self._connectivity_results = results
+        self._connectivity_hosts = [result.host for result in results if result.reachable]
+        self._connectivity_success = bool(self._connectivity_hosts)
+        self._refresh_connectivity_macros()
 
         reachable = [result for result in results if result.reachable]
         unreachable = [result for result in results if not result.reachable]
@@ -522,6 +596,99 @@ class ScanOrchestrator:
 
         return lines
 
+    def _execute_script_task(self, task: ScanTask, summary_data: dict) -> List[str]:
+        if not task.script:
+            raise ValidationError("Nenhum script associado à tarefa.")
+
+        if not self._connectivity_results:
+            raise ValidationError("O teste de conectividade precisa ser executado antes dos scripts.")
+
+        if not self._connectivity_success:
+            raise ValidationError("Não há hosts alcançáveis a partir do teste de conectividade. Ajuste o escopo e tente novamente.")
+
+        script = task.script
+        required_tool_slug = script.required_tool_slug or task.parameters.get("tool") if isinstance(task.parameters, dict) else None
+
+        tool = task.tool
+        if not tool and required_tool_slug:
+            tool = Tool.objects.for_user(self.user).filter(slug=required_tool_slug).first()
+
+        if required_tool_slug and not tool:
+            raise ValidationError(f"Ferramenta '{required_tool_slug}' não cadastrada para o usuário.")
+
+        tool_path = Path(tool.path).expanduser() if tool else None
+        if tool_path and not tool_path.exists():
+            raise ValidationError(f"O executável da ferramenta não foi encontrado em '{tool_path}'.")
+
+        rendered_content = render_script_with_macros(script.content, self.macros)
+        temp_file = tempfile.NamedTemporaryFile("w", suffix=f"_{script.slug}.sh", delete=False, encoding="utf-8")
+        temp_path: Path | None = None
+        try:
+            temp_file.write(rendered_content)
+            temp_file.flush()
+            temp_path = Path(temp_file.name)
+            os.chmod(temp_path, 0o700)
+
+            env = os.environ.copy()
+            env.setdefault("ARPia_SESSION_ID", str(self.session.pk))
+            env.setdefault("ARPia_PROJECT_ID", str(self.session.project.pk))
+            if required_tool_slug:
+                env.setdefault("ARPia_REQUIRED_TOOL", required_tool_slug)
+            if tool_path:
+                env.setdefault("ARPia_TOOL_PATH", str(tool_path))
+
+            for key, value in (self.macros or {}).items():
+                if isinstance(value, (dict, list)):
+                    env[str(key)] = json.dumps(value, ensure_ascii=False)
+                else:
+                    env[str(key)] = str(value)
+
+            result = subprocess.run(
+                ["/bin/bash", str(temp_path)],
+                capture_output=True,
+                text=True,
+                env=env,
+                check=False,
+            )
+        finally:
+            temp_file.close()
+            if temp_path is not None:
+                with suppress(FileNotFoundError):
+                    temp_path.unlink(missing_ok=True)
+
+        lines = ["[STEP] Execução de script" , f"[INFO] Script: {script.name}"]
+        if tool:
+            lines.append(f"[INFO] Ferramenta utilizada: {tool.name} ({tool.path})")
+        targets = self._target_hosts()
+        if targets:
+            lines.append(f"[INFO] Hosts alvo: {', '.join(targets)}")
+        lines.append(f"[INFO] Código de saída: {result.returncode}")
+
+        if result.stdout:
+            preview = result.stdout.strip()
+            lines.append(f"[STDOUT] {preview[:4000]}")
+        if result.stderr:
+            preview_err = result.stderr.strip()
+            lines.append(f"[STDERR] {preview_err[:4000]}")
+
+        summary_data.setdefault("artifacts", {}).setdefault("scripts", {})[script.slug] = {
+            "returncode": result.returncode,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+        }
+
+        if result.returncode != 0:
+            raise ValidationError(f"Execução do script '{script.name}' retornou código {result.returncode}.")
+
+        summary_data.setdefault("insights", []).append(
+            {
+                "level": "info",
+                "message": f"Script '{script.name}' finalizado com sucesso.",
+            }
+        )
+
+        return lines
+
     def _simulate_rustscan(self, task: ScanTask, summary_data: dict) -> List[str]:
         lines = ["[STEP] Rustscan discovery (simulado)"]
         hosts = self._target_hosts()
@@ -548,6 +715,25 @@ class ScanOrchestrator:
         if hosts:
             return hosts
         return ["10.0.0.5", "10.0.0.8"]
+
+    def _refresh_connectivity_macros(self) -> None:
+        macros = dict(self.macros or {})
+        connectivity_hosts = self._connectivity_hosts
+        if connectivity_hosts:
+            macros["CONNECTIVITY_HOSTS"] = "\n".join(connectivity_hosts)
+            macros["CONNECTIVITY_HOSTS_JSON"] = json.dumps(connectivity_hosts, ensure_ascii=False)
+        else:
+            macros.setdefault("CONNECTIVITY_HOSTS", "")
+            macros.setdefault("CONNECTIVITY_HOSTS_JSON", "[]")
+
+        existing_hosts = [host.strip() for host in (macros.get("TARGET_HOSTS") or "").splitlines() if host.strip()]
+        merged_hosts: list[str] = []
+        for host in [*existing_hosts, *connectivity_hosts]:
+            if host and host not in merged_hosts:
+                merged_hosts.append(host)
+
+        macros["TARGET_HOSTS"] = "\n".join(merged_hosts)
+        self.macros = macros
 
     def _configured_hosts(self) -> List[str]:
         return [host.strip() for host in (self.macros.get("TARGET_HOSTS") or "").splitlines() if host.strip()]

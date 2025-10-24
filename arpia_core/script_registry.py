@@ -19,6 +19,7 @@ class ScriptDefinition:
     requires_hosts: bool = True
     requires_networks: bool = False
     requires_credentials: bool = False
+    required_tool_slug: str | None = None
 
     @property
     def source_path(self) -> Path:
@@ -38,6 +39,7 @@ DEFAULT_SCRIPTS: List[ScriptDefinition] = [
         ),
         tags=["nmap", "tcp", "top1000", "recon"],
         requires_hosts=True,
+        required_tool_slug="nmap",
     ),
     ScriptDefinition(
         slug="nmap-discovery",
@@ -47,6 +49,7 @@ DEFAULT_SCRIPTS: List[ScriptDefinition] = [
         tags=["nmap", "discovery", "ping"],
         requires_hosts=False,
         requires_networks=True,
+        required_tool_slug="nmap",
     ),
     ScriptDefinition(
         slug="nmap-full-tcp",
@@ -55,6 +58,7 @@ DEFAULT_SCRIPTS: List[ScriptDefinition] = [
         description="Varredura completa TCP com detecção de versões e sistema operacional.",
         tags=["nmap", "tcp", "service-detection"],
         requires_hosts=True,
+        required_tool_slug="nmap",
     ),
     ScriptDefinition(
         slug="nmap-udp-top100",
@@ -63,6 +67,7 @@ DEFAULT_SCRIPTS: List[ScriptDefinition] = [
         description="Varredura UDP nas 100 portas mais comuns utilizando --top-ports 100.",
         tags=["nmap", "udp", "recon"],
         requires_hosts=True,
+        required_tool_slug="nmap",
     ),
     ScriptDefinition(
         slug="nmap-vuln-nse",
@@ -72,6 +77,7 @@ DEFAULT_SCRIPTS: List[ScriptDefinition] = [
         tags=["nmap", "nse", "vuln"],
         requires_hosts=False,
         requires_networks=True,
+        required_tool_slug="nmap",
     ),
 ]
 

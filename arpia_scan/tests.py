@@ -4,11 +4,13 @@ from pathlib import Path
 from unittest import mock
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from arpia_core.models import Project
+from arpia_core.models import Project, Script, Tool
+from arpia_core.views import sync_default_scripts
 from arpia_log.models import LogEntry
 
 from .models import ScanSession, ScanTask, ScanFinding
@@ -41,7 +43,7 @@ class ObservationParsersTests(SimpleTestCase):
         service_names = {item.get("service") for item in services.get("items", [])}
         self.assertIn("ssh", service_names)
         self.assertIn("http", service_names)
-
+        from datetime import timedelta
 
 class ScanDashboardViewTests(TestCase):
     def setUp(self):
@@ -77,6 +79,25 @@ class ScanDashboardViewTests(TestCase):
         self.assertContains(response, "PROJECT_NAME")
         self.assertContains(response, "Teste de conectividade")
         self.assertContains(response, "Executar agora")
+
+    def test_dashboard_exposes_script_flows_and_disables_when_tool_missing(self):
+        project = Project.objects.create(owner=self.user, name="Projeto Delta", slug="projeto-delta")
+        sync_default_scripts()
+
+        self.client.login(username="tester", password="pass1234")
+        response = self.client.get(reverse("arpia_scan:dashboard"), data={"project": project.pk})
+
+        self.assertEqual(response.status_code, 200)
+        action_cards = response.context["action_cards"]
+        script_cards = [card for card in action_cards if card.get("script_slug")]
+        self.assertTrue(script_cards)
+        self.assertTrue(any(not card["enabled"] for card in script_cards))
+
+        # Após cadastrar ferramenta, os fluxos devem habilitar
+        Tool.objects.create(owner=self.user, name="Nmap", slug="nmap", path="/bin/true")
+        response_enabled = self.client.get(reverse("arpia_scan:dashboard"), data={"project": project.pk})
+        enabled_cards = [card for card in response_enabled.context["action_cards"] if card.get("script_slug")]
+        self.assertTrue(all(card["enabled"] for card in enabled_cards))
 
 
 class ScanModelTests(TestCase):
@@ -115,6 +136,7 @@ class ScanModelTests(TestCase):
         )
         self.assertEqual(finding.kind, ScanFinding.Kind.SUMMARY)
         self.assertEqual(session.findings.count(), 1)
+
 
 
 class ScanConnectivityTaskTests(TestCase):
@@ -170,9 +192,9 @@ class ScanConnectivityTaskTests(TestCase):
         runner_cls.assert_called_once()
         args, kwargs = runner_cls.call_args
         self.assertEqual(args[0], ["127.0.0.1", "10.0.0.10"])
-    ports_arg = args[1]
-    self.assertEqual([getattr(p, "port", None) for p in ports_arg], [22, 80])
-    self.assertTrue(all(getattr(p, "protocol", "tcp") == "tcp" for p in ports_arg))
+        ports_arg = args[1]
+        self.assertEqual([getattr(p, "port", None) for p in ports_arg], [22, 80])
+        self.assertTrue(all(getattr(p, "protocol", "tcp") == "tcp" for p in ports_arg))
         self.assertAlmostEqual(kwargs.get("timeout"), 1.5)
 
         session.refresh_from_db()
@@ -195,6 +217,84 @@ class ScanConnectivityTaskTests(TestCase):
         self.assertIn("10.0.0.10", connectivity_summary.get("unreachable_hosts", []))
         artifacts = summary.get("artifacts", {})
         self.assertIn("connectivity", artifacts)
+
+
+class ScanScriptTaskTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="scripter",
+            email="scripter@example.com",
+            password="pass1234",
+        )
+        self.project = Project.objects.create(
+            owner=self.user,
+            name="Projeto Scripts",
+            slug="projeto-scripts",
+            hosts="127.0.0.1",
+        )
+
+    def _create_script(self, required_tool_slug="dummy"):
+        return Script.objects.create(
+            owner=self.user,
+            name="Script teste",
+            slug="script-teste",
+            description="",
+            filename="script_teste.sh",
+            content="#!/usr/bin/env bash\necho 'ok'",
+            required_tool_slug=required_tool_slug,
+        )
+
+    @mock.patch("arpia_scan.services.ConnectivityRunner")
+    def test_script_task_requires_connectivity_success(self, runner_cls):
+        script = self._create_script()
+        Tool.objects.create(owner=self.user, name="Dummy", slug="dummy", path="/bin/true")
+        runner_cls.return_value.run.return_value = [
+            ConnectivityProbeResult(host="127.0.0.1", reachable=False, ports=[], error="timeout"),
+        ]
+
+        config = {
+            "tasks": [
+                {"kind": ScanTask.Kind.CONNECTIVITY, "name": "Teste de conectividade"},
+                {
+                    "kind": ScanTask.Kind.SCRIPT,
+                    "name": script.name,
+                    "script": script.slug,
+                    "tool": script.required_tool_slug,
+                },
+            ]
+        }
+
+        session = create_planned_session(owner=self.user, project=self.project, title="Fluxo script", config=config)
+
+        with self.assertRaises(ValidationError):
+            ScanOrchestrator(session).run()
+
+    @mock.patch("arpia_scan.services.ConnectivityRunner")
+    def test_script_task_requires_tool_path_exists(self, runner_cls):
+        script = self._create_script(required_tool_slug="dummy")
+        Tool.objects.create(owner=self.user, name="Dummy", slug="dummy", path="/tmp/tool-missing")
+
+        runner_cls.return_value.run.return_value = [
+            ConnectivityProbeResult(host="127.0.0.1", reachable=True, ports=[], error=None),
+        ]
+
+        config = {
+            "tasks": [
+                {"kind": ScanTask.Kind.CONNECTIVITY, "name": "Teste de conectividade"},
+                {
+                    "kind": ScanTask.Kind.SCRIPT,
+                    "name": script.name,
+                    "script": script.slug,
+                    "tool": script.required_tool_slug,
+                },
+            ]
+        }
+
+        session = create_planned_session(owner=self.user, project=self.project, title="Fluxo script", config=config)
+
+        with self.assertRaises(ValidationError) as ctx:
+            ScanOrchestrator(session).run()
+        self.assertIn("executável da ferramenta", str(ctx.exception))
 
 class ScanSessionDetailViewTests(TestCase):
     def setUp(self):
@@ -333,6 +433,36 @@ class ScanApiTests(TestCase):
         targets = snapshot.get("targets", {})
         self.assertGreaterEqual(targets.get("hosts_count", 0), 1)
         self.assertIn("configured_hosts", snapshot.get("targets", {}))
+
+    def test_cannot_create_script_flow_without_tool(self):
+        self.client.login(username="api_owner", password="pass1234")
+        sync_default_scripts()
+        script = Script.objects.get(slug="nmap-discovery")
+        url = reverse("arpia_scan:api_session_create")
+        payload = {
+            "project_id": str(self.project.pk),
+            "tasks": [
+                {
+                    "kind": ScanTask.Kind.CONNECTIVITY,
+                    "name": "Teste de conectividade",
+                    "parameters": {},
+                },
+                {
+                    "kind": ScanTask.Kind.SCRIPT,
+                    "name": script.name,
+                    "script": script.slug,
+                    "tool": script.required_tool_slug,
+                    "parameters": {"script_slug": script.slug},
+                },
+            ],
+        }
+        response = self.client.post(url, data=json.dumps(payload), content_type="application/json")
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("Ferramenta", response.json().get("error", ""))
+
+        Tool.objects.create(owner=self.owner, name="Nmap", slug="nmap", path="/bin/true")
+        response_ok = self.client.post(url, data=json.dumps(payload), content_type="application/json")
+        self.assertEqual(response_ok.status_code, 201)
 
 
 class ScanExportTests(TestCase):

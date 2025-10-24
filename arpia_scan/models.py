@@ -93,6 +93,7 @@ class ScanTask(models.Model):
 		CONNECTIVITY = "connectivity", "Teste de conectividade"
 		DISCOVERY_RUSTSCAN = "discovery_rustscan", "Descoberta rápida (Rustscan)"
 		DISCOVERY_NMAP = "discovery_nmap", "Níveis de ruído (Nmap)"
+		SCRIPT = "script", "Execução de script"
 		CUSTOM = "custom", "Personalizado"
 
 	class Status(models.TextChoices):

@@ -365,6 +365,7 @@ def sync_default_scripts() -> None:
             "kind": Script.Kind.DEFAULT,
             "tags": entry.tags,
             "source_path": str(entry.source_path),
+            "required_tool_slug": entry.required_tool_slug or "",
         }
 
         Script.objects.update_or_create(

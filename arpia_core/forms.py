@@ -6,14 +6,21 @@ from .utils import safe_filename
 
 class ScriptForm(forms.ModelForm):
     filename = forms.CharField(max_length=220, label="Arquivo")
+    required_tool_slug = forms.ChoiceField(
+        required=False,
+        label="Ferramenta requerida",
+        choices=[],
+        help_text="Selecione a ferramenta cadastrada que este script utiliza.",
+    )
     content = forms.CharField(widget=forms.Textarea(attrs={"rows": 20}), label="Conteúdo")
 
     class Meta:
         model = Script
-        fields = ["name", "description", "filename", "content"]
+        fields = ["name", "description", "filename", "required_tool_slug", "content"]
         labels = {
             "name": "Nome",
             "description": "Descrição",
+            "required_tool_slug": "Ferramenta requerida",
         }
 
     def __init__(self, *args, **kwargs):
@@ -28,6 +35,17 @@ class ScriptForm(forms.ModelForm):
         content_widget = self.fields["content"].widget
         content_css = content_widget.attrs.get("class", "")
         content_widget.attrs["class"] = f"{content_css} {base_class} monospace".strip()
+
+        tool_choices = [("", "— Nenhuma —")]
+        if self.owner:
+            user_tools = Tool.objects.for_user(self.owner).order_by("name")
+            tool_choices.extend([(tool.slug, f"{tool.name} ({tool.slug})") for tool in user_tools])
+
+        current_value = self.initial.get("required_tool_slug") or self.data.get("required_tool_slug")
+        if current_value and not any(choice[0] == current_value for choice in tool_choices):
+            tool_choices.append((current_value, current_value))
+
+        self.fields["required_tool_slug"].choices = tool_choices
 
     def clean_filename(self):
         raw = self.cleaned_data["filename"].strip()

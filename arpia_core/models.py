@@ -127,6 +127,7 @@ class Script(models.Model):
     content = models.TextField()
     kind = models.CharField(max_length=24, choices=Kind.choices, default=Kind.USER)
     tags = models.JSONField(default=list, blank=True)
+    required_tool_slug = models.SlugField(max_length=180, blank=True)
     source_path = models.CharField(max_length=500, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -172,6 +173,10 @@ class Script(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+    @property
+    def requires_tool(self) -> bool:
+        return bool(self.required_tool_slug)
 
 
 class Asset(models.Model):

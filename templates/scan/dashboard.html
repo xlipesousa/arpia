@@ -232,11 +232,15 @@
 .flow-card header{display:flex;align-items:flex-start;justify-content:space-between;gap:.9rem;}
 .flow-card h3{margin:0;font-size:1.15rem;color:var(--text);} 
 .flow-card p{margin:.45rem 0 0;color:var(--muted);font-size:.9rem;}
+.flow-card .flow-meta{margin:.25rem 0 0;font-size:.8rem;color:var(--muted);}
+.flow-card .flow-meta code{background:rgba(0,0,0,0.35);padding:.05rem .35rem;border-radius:6px;color:inherit;}
 .flow-card .badge{align-self:flex-start;padding:.3rem .6rem;border-radius:999px;background:rgba(127,181,255,0.18);color:#bedeff;font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;}
 .flow-card .flow-steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.75rem;}
 .flow-card .flow-steps li{padding:.75rem .85rem;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.03);display:flex;flex-direction:column;gap:.55rem;}
 .flow-step-head{display:flex;align-items:center;justify-content:space-between;gap:.8rem;font-weight:600;color:var(--text);} 
 .step-tag{display:inline-flex;align-items:center;gap:.35rem;padding:.15rem .6rem;border-radius:999px;background:rgba(127,181,255,0.18);color:#cfe4ff;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;}
+.flow-warnings{background:rgba(255,204,128,0.12);border:1px solid rgba(255,204,128,0.25);color:#f6d3a0;border-radius:12px;padding:.6rem .8rem;display:flex;flex-direction:column;gap:.3rem;font-size:.82rem;margin-top:.6rem;}
+.flow-warnings code{background:rgba(0,0,0,0.3);padding:.1rem .35rem;border-radius:6px;color:inherit;}
 .flow-card .flow-trigger,
 .preview-execute{display:inline-flex;align-items:center;gap:.45rem;padding:.65rem 1.3rem;border-radius:999px;background:linear-gradient(135deg,rgba(123,195,255,0.95),rgba(82,210,255,0.95));border:1px solid rgba(123,195,255,0.45);color:#041022;font-weight:700;letter-spacing:.03em;text-transform:uppercase;box-shadow:0 10px 22px rgba(30,120,190,0.32);transition:transform .18s ease,box-shadow .18s ease,filter .18s ease;}
 .flow-card .flow-trigger:hover,
@@ -294,42 +298,16 @@ document.addEventListener("DOMContentLoaded", () => {
   const sessionsTemplate = document.getElementById("panel-sessions");
   const reportsTemplate = document.getElementById("panel-reports");
   const actionCardsData = JSON.parse(document.getElementById("action-cards-data")?.textContent || "[]");
+  const cardsByKind = new Map(actionCardsData.map(card => [card.kind, card]));
 
   const createUrl = "{% url 'arpia_scan:api_session_create' %}";
   const startUrlTemplate = "{% url 'arpia_scan:api_session_start' pk='00000000-0000-0000-0000-000000000000' %}";
-
-  const ACTION_PRESETS = {
-    connectivity: {
-      label: "Teste de conectividade",
-      summary: "Valide reachability, interface e rotas antes de iniciar scans pesados.",
-      tasks: [
-        { name: "Validação ICMP", kind: "connectivity", progress: 35 },
-        { name: "Checagem TCP", kind: "connectivity", progress: 10 },
-      ],
-    },
-    rustscan: {
-      label: "Scan rápido (Rustscan)",
-      summary: "Identifique rapidamente hosts responsivos e portas expostas.",
-      tasks: [
-        { name: "Validação ICMP", kind: "connectivity", progress: 20 },
-        { name: "Rustscan discovery", kind: "discovery_rustscan", progress: 0 },
-      ],
-    },
-    nmap: {
-      label: "Níveis de ruído (Nmap)",
-      summary: "Escolha perfis de Nmap para alvos prioritários e avaliação completa.",
-      tasks: [
-        { name: "Validação ICMP", kind: "connectivity", progress: 15 },
-        { name: "Rustscan discovery", kind: "discovery_rustscan", progress: 10 },
-        { name: "Varredura Nmap", kind: "discovery_nmap", progress: 0 },
-      ],
-    },
-  };
 
   const KIND_LABELS = {
     connectivity: "Conectividade",
     discovery_rustscan: "Discovery",
     discovery_nmap: "Nmap",
+    script: "Script",
   };
 
   const TERMINAL_STATUSES = new Set(["completed", "failed", "canceled"]);
@@ -382,35 +360,49 @@ document.addEventListener("DOMContentLoaded", () => {
     contentSubtitle.textContent = "Escolha um fluxo para executar e acompanhar as etapas.";
 
     const cardsMarkup = actionCardsData.map(card => {
-      const preset = ACTION_PRESETS[card.kind] || { tasks: [] };
-      const tasks = (preset.tasks || []).map(task => {
-        const progress = Number.isFinite(task.progress) ? Math.max(0, Math.min(100, task.progress)) : 0;
-        const kindLabel = KIND_LABELS[task.kind] || "Etapa";
+      const tasks = (card.tasks || []).map(task => {
+        const kindKey = task.kind?.startsWith("script") ? "script" : task.kind;
+        const kindLabel = KIND_LABELS[kindKey] || "Etapa";
         return `
           <li>
             <div class="flow-step-head">
               <span>${task.name}</span>
               <span class="step-tag">${kindLabel}</span>
             </div>
-            <div class="progress-track"><span class="progress-bar" style="width:${progress}%"></span></div>
+            <div class="progress-track"><span class="progress-bar" style="width:0%"></span></div>
           </li>
         `;
       }).join("\n");
 
       const disabledAttr = card.enabled ? "" : "disabled";
       const disabledClass = card.enabled ? "" : " is-disabled";
+      const toolInfo = card.required_tool_slug
+        ? `<p class="flow-meta">Requer ferramenta <code>${card.required_tool_slug}</code>${card.required_tool_name ? ` — ${card.required_tool_name}` : ""}</p>`
+        : "";
+      const warnings = [];
+      if (!hasProject) {
+        warnings.push("Selecione um projeto para habilitar este fluxo.");
+      }
+      if (card.missing_tool && card.required_tool_slug) {
+        warnings.push(`Cadastre a ferramenta <code>${card.required_tool_slug}</code> na área de ferramentas.`);
+      }
+      if (card.kind.startsWith("script:")) {
+        warnings.push("Este fluxo depende de um teste de conectividade bem-sucedido antes da execução do script.");
+      }
       return `
         <section class="flow-card${disabledClass}" data-kind="${card.kind}">
           <header>
             <div>
               <h3>${card.title}</h3>
               <p>${card.description}</p>
+              ${toolInfo}
             </div>
             ${card.badge ? `<span class="badge">${card.badge}</span>` : ""}
           </header>
           <ul class="flow-steps">
             ${tasks}
           </ul>
+          ${warnings.length ? `<div class="flow-warnings">${warnings.map(text => `<p>${text}</p>`).join("")}</div>` : ""}
           <button type="button" class="btn-primary flow-trigger" data-kind="${card.kind}" ${disabledAttr}>
             Executar agora
           </button>
@@ -459,13 +451,13 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    const preset = ACTION_PRESETS[kind];
-    if (!preset) return;
+    const card = cardsByKind.get(kind);
+    if (!card) return;
 
     setFlowButtonsDisabled(true);
     if (button) button.disabled = true;
     setFeedback({
-      title: `Iniciando ${preset.label}`,
+      title: `Iniciando ${card.title}`,
       body: "Preparando sessão e executando tarefas configuradas…",
       icon: "⚙️",
     });
@@ -479,8 +471,8 @@ document.addEventListener("DOMContentLoaded", () => {
         },
         body: JSON.stringify({
           project_id: projectId,
-          title: `${preset.label} — ${new Date().toLocaleString("pt-BR")}`,
-          tasks: preset.tasks,
+          title: `${card.title} — ${new Date().toLocaleString("pt-BR")}`,
+          tasks: card.tasks,
           trigger_kind: kind,
         }),
       });

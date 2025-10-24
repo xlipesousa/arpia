@@ -38,12 +38,12 @@ def _format_duration(seconds: float | int | None) -> str:
         parts.append(f"{sec}s")
     return " ".join(parts) if parts else f"{seconds}s"
 
-from arpia_core.models import Project
+from arpia_core.models import Project, Script, Tool
 from arpia_core.views import build_project_macros  # TODO: mover para util dedicado
 
 from arpia_log.models import LogEntry
 
-from .models import ScanFinding, ScanSession
+from .models import ScanFinding, ScanSession, ScanTask
 from .services import ScanOrchestrator, create_planned_session
 
 
@@ -308,30 +308,67 @@ class ScanDashboardView(LoginRequiredMixin, TemplateView):
         return None, ""
 
     def _action_cards(self, selected_project_id: str) -> list[dict]:
-        base_cards = [
+        has_project = bool(selected_project_id)
+        user = self.request.user
+        cards: list[dict] = [
             {
                 "kind": "connectivity",
                 "title": "Teste de conectividade",
                 "description": "Valide reachability, interface e rotas antes de iniciar scans pesados.",
-                "badge": "Simulação",
-            },
-            {
-                "kind": "rustscan",
-                "title": "Scan rápido (Rustscan)",
-                "description": "Identifique rapidamente hosts responsivos e portas expostas.",
-                "badge": "Simulação",
-            },
-            {
-                "kind": "nmap",
-                "title": "Níveis de ruído (Nmap)",
-                "description": "Escolha perfis de Nmap para alvos prioritários e avaliação completa.",
-                "badge": "Simulação",
-            },
+                "badge": "Obrigatório",
+                "enabled": has_project,
+                "script_slug": None,
+                "required_tool_slug": None,
+                "tasks": [
+                    {
+                        "kind": ScanTask.Kind.CONNECTIVITY,
+                        "name": "Teste de conectividade",
+                        "parameters": {},
+                    }
+                ],
+            }
         ]
 
-        for card in base_cards:
-            card["enabled"] = bool(selected_project_id)
-        return base_cards
+        scripts = Script.objects.for_user(user).order_by("name")
+        tools_map = {tool.slug: tool for tool in Tool.objects.for_user(user)}
+
+        for script in scripts:
+            required_tool_slug = script.required_tool_slug or ""
+            required_tool = tools_map.get(required_tool_slug) if required_tool_slug else None
+            enabled = has_project and (not required_tool_slug or required_tool is not None)
+
+            card = {
+                "kind": f"script:{script.slug}",
+                "title": script.name,
+                "description": script.description or "Execução de script personalizado do repositório.",
+                "badge": "Script",
+                "enabled": enabled,
+                "script_slug": script.slug,
+                "required_tool_slug": required_tool_slug or None,
+                "required_tool_name": required_tool.name if required_tool else None,
+                "requires_tool_registered": bool(required_tool_slug),
+                "missing_tool": bool(required_tool_slug and not required_tool),
+                "tasks": [
+                    {
+                        "kind": ScanTask.Kind.CONNECTIVITY,
+                        "name": "Teste de conectividade",
+                        "parameters": {},
+                    },
+                    {
+                        "kind": ScanTask.Kind.SCRIPT,
+                        "name": script.name,
+                        "script": script.slug,
+                        "tool": required_tool_slug or None,
+                        "parameters": {
+                            "script_slug": script.slug,
+                        },
+                    },
+                ],
+            }
+
+            cards.append(card)
+
+        return cards
 
     def _count_findings(self, sessions) -> int:
         if not sessions:

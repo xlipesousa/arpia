@@ -40,6 +40,12 @@
           {{ form.description }}
           {% if form.description.errors %}<span class="field-error">{{ form.description.errors.0 }}</span>{% endif %}
         </div>
+        <div class="form-control">
+          <label for="id_required_tool_slug">Ferramenta requerida</label>
+          {{ form.required_tool_slug }}
+          <span class="field-help">Cadastre a ferramenta em <a href="{% url 'tools_list' %}">Ferramentas</a> e selecione aqui.</span>
+          {% if form.required_tool_slug.errors %}<span class="field-error">{{ form.required_tool_slug.errors.0 }}</span>{% endif %}
+        </div>
         <div class="form-control full">
           <label for="id_content">Conteúdo</label>
           {{ form.content }}
