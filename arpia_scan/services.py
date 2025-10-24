@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import socket
+import time
+from contextlib import closing
 from dataclasses import dataclass
-from typing import Iterable, List, Optional
+from typing import Iterable, List, Optional, Sequence
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -35,6 +38,55 @@ DEFAULT_TASK_DEFINITION = [
         "parameters": {},
     },
 ]
+
+
+@dataclass(frozen=True)
+class PortSpec:
+    port: int
+    protocol: str = "tcp"
+
+    @classmethod
+    def from_value(cls, value) -> "PortSpec | None":
+        if isinstance(value, PortSpec):
+            return value
+        if isinstance(value, dict):
+            port = value.get("port")
+            protocol = (value.get("protocol") or "tcp").lower()
+        elif isinstance(value, str):
+            token = value.strip()
+            if not token:
+                return None
+            if "/" in token:
+                port_part, proto_part = token.split("/", 1)
+                port = port_part.strip()
+                protocol = proto_part.strip().lower() or "tcp"
+            else:
+                port = token
+                protocol = "tcp"
+        else:
+            port = value
+            protocol = "tcp"
+
+        try:
+            port_number = int(port)
+        except (TypeError, ValueError):
+            return None
+        if not (0 < port_number < 65536):
+            return None
+        protocol = protocol if protocol in {"tcp", "udp"} else "tcp"
+        return cls(port=port_number, protocol=protocol)
+
+
+DEFAULT_CONNECTIVITY_PORTS: Sequence[PortSpec] = (
+    PortSpec(22, "tcp"),
+    PortSpec(80, "tcp"),
+    PortSpec(443, "tcp"),
+    PortSpec(53, "udp"),
+    PortSpec(3389, "tcp"),
+    PortSpec(445, "tcp"),
+    PortSpec(25, "tcp"),
+    PortSpec(161, "udp"),
+)
 
 
 @dataclass
@@ -154,6 +206,88 @@ def create_planned_session(*, owner, project: Project, title: str, config: Optio
     return session
 
 
+@dataclass
+class ConnectivityProbeResult:
+    host: str
+    reachable: bool
+    ports: List[dict]
+    error: Optional[str] = None
+
+
+class ConnectivityRunner:
+    def __init__(self, hosts: List[str], ports: Sequence[PortSpec | int | dict | str], *, timeout: float = 1.5):
+        self.hosts = hosts
+        normalized = []
+        for item in ports or []:
+            spec = PortSpec.from_value(item)
+            if spec:
+                normalized.append(spec)
+        if not normalized:
+            normalized = list(DEFAULT_CONNECTIVITY_PORTS)
+        self.ports = normalized
+        self.timeout = timeout
+
+    def run(self) -> List[ConnectivityProbeResult]:
+        results: List[ConnectivityProbeResult] = []
+        for host in self.hosts:
+            results.append(self._probe_host(host))
+        return results
+
+    def _probe_host(self, host: str) -> ConnectivityProbeResult:
+        reachable = False
+        port_results: List[dict] = []
+        last_error: Optional[str] = None
+
+        for spec in self.ports:
+            if spec.protocol == "udp":
+                status, payload = self._probe_udp(host, spec.port)
+            else:
+                status, payload = self._probe_tcp(host, spec.port)
+
+            payload.update({"port": spec.port, "protocol": spec.protocol})
+            port_results.append(payload)
+
+            if status == "open":
+                reachable = True
+            elif payload.get("error"):
+                last_error = payload["error"]
+
+        return ConnectivityProbeResult(host=host, reachable=reachable, ports=port_results, error=last_error)
+
+    def _probe_tcp(self, host: str, port: int) -> tuple[str, dict]:
+        started = time.perf_counter()
+        try:
+            with closing(socket.create_connection((host, int(port)), timeout=self.timeout)):
+                latency_ms = (time.perf_counter() - started) * 1000
+                return "open", {"status": "open", "latency_ms": round(latency_ms, 2)}
+        except (OSError, socket.timeout) as exc:
+            return "closed", {"status": "closed", "error": str(exc)}
+
+    def _probe_udp(self, host: str, port: int) -> tuple[str, dict]:
+        started = time.perf_counter()
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.settimeout(self.timeout)
+        try:
+            sock.connect((host, int(port)))
+            payload = b"\x00"
+            sock.send(payload)
+            try:
+                sock.recv(1)
+                latency_ms = (time.perf_counter() - started) * 1000
+                return "open", {"status": "open", "latency_ms": round(latency_ms, 2)}
+            except socket.timeout:
+                latency_ms = (time.perf_counter() - started) * 1000
+                return "open", {
+                    "status": "open",
+                    "latency_ms": round(latency_ms, 2),
+                    "note": "Sem resposta UDP (best-effort)",
+                }
+        except (ConnectionRefusedError, OSError) as exc:
+            return "closed", {"status": "closed", "error": str(exc)}
+        finally:
+            sock.close()
+
+
 class ScanOrchestrator:
     def __init__(self, session: ScanSession, *, run_as_user=None):
         self.session = session
@@ -234,7 +368,7 @@ class ScanOrchestrator:
         )
 
         if task.kind == ScanTask.Kind.CONNECTIVITY:
-            stdout_lines.extend(self._simulate_connectivity())
+            stdout_lines.extend(self._execute_connectivity(task, summary_data))
         elif task.kind == ScanTask.Kind.DISCOVERY_RUSTSCAN:
             stdout_lines.extend(self._simulate_rustscan(task, summary_data))
         elif task.kind == ScanTask.Kind.DISCOVERY_NMAP:
@@ -306,16 +440,86 @@ class ScanOrchestrator:
             })
         return correlation
 
-    def _simulate_connectivity(self) -> List[str]:
-        hosts = (self.macros.get("TARGET_HOSTS") or "").splitlines()
+    def _execute_connectivity(self, task: ScanTask, summary_data: dict) -> List[str]:
         lines = ["[STEP] Validando conectividade básica"]
+        hosts = self._configured_hosts()
+
         if not hosts:
-            lines.append("[WARN] Nenhum host definido no projeto. Pulando testes.")
+            lines.append("[WARN] Nenhum host alvo configurado. Pulando etapa de conectividade.")
+            summary_data.setdefault("artifacts", {})["connectivity"] = []
+            return lines
+
+        ports = self._configured_ports(task)
+        timeout = float(task.parameters.get("timeout", 1.5)) if isinstance(task.parameters, dict) else 1.5
+        runner = ConnectivityRunner(hosts, ports, timeout=timeout)
+        results = runner.run()
+
+        reachable = [result for result in results if result.reachable]
+        unreachable = [result for result in results if not result.reachable]
+
+        lines.append(f"[INFO] Hosts avaliados: {', '.join(hosts)}")
+        lines.append(
+            "[INFO] Portas verificadas: "
+            + ", ".join(f"{port.port}/{port.protocol}" for port in ports)
+        )
+
+        for result in results:
+            if result.reachable:
+                best_latency = next((port.get("latency_ms") for port in result.ports if port.get("status") == "open"), None)
+                latency_text = f" (latência {best_latency:.1f}ms)" if best_latency is not None else ""
+                lines.append(f"[OK] {result.host} respondeu às conexões{latency_text}.")
+            else:
+                reason = result.error or "sem detalhes"
+                lines.append(f"[WARN] {result.host} não respondeu ({reason}).")
+
+        summary_data.setdefault("artifacts", {})["connectivity"] = [
+            {
+                "host": result.host,
+                "reachable": result.reachable,
+                "ports": result.ports,
+                "error": result.error,
+            }
+            for result in results
+        ]
+
+        summary_data.setdefault("connectivity", {}).update(
+            {
+                "reachable_hosts": [item.host for item in reachable],
+                "unreachable_hosts": [item.host for item in unreachable],
+                "checked_ports": [
+                    {"port": port.port, "protocol": port.protocol}
+                    for port in ports
+                ],
+            }
+        )
+
+        self._store_connectivity_findings(results, task)
+
+        if not reachable:
+            lines.append("[WARN] Nenhum host respondeu durante o teste de conectividade.")
+            summary_data.setdefault("insights", []).append(
+                {
+                    "level": "warning",
+                    "message": "Nenhum host respondeu durante o teste de conectividade.",
+                }
+            )
+        elif unreachable:
+            lines.append(f"[INFO] {len(unreachable)} host(s) não responderam.")
+            summary_data.setdefault("insights", []).append(
+                {
+                    "level": "info",
+                    "message": f"{len(unreachable)} host(s) não responderam ao teste de conectividade.",
+                }
+            )
         else:
-            for host in hosts[:5]:
-                lines.append(f"[OK] Host {host} responde ao ping (simulado)")
-            if len(hosts) > 5:
-                lines.append("[INFO] Lista truncada para 5 hosts.")
+            lines.append("[INFO] Todos os hosts responderam com sucesso.")
+            summary_data.setdefault("insights", []).append(
+                {
+                    "level": "success",
+                    "message": "Todos os hosts configurados responderam ao teste de conectividade.",
+                }
+            )
+
         return lines
 
     def _simulate_rustscan(self, task: ScanTask, summary_data: dict) -> List[str]:
@@ -344,6 +548,71 @@ class ScanOrchestrator:
         if hosts:
             return hosts
         return ["10.0.0.5", "10.0.0.8"]
+
+    def _configured_hosts(self) -> List[str]:
+        return [host.strip() for host in (self.macros.get("TARGET_HOSTS") or "").splitlines() if host.strip()]
+
+    def _configured_ports(self, task: ScanTask) -> List[PortSpec]:
+        raw_ports = task.parameters.get("ports") if isinstance(task.parameters, dict) else None
+        ports_source = raw_ports or self.macros.get("TARGET_PORTS") or []
+
+        if isinstance(ports_source, str):
+            sanitized = ports_source
+            for sep in [";", "\n", "\r", "\t"]:
+                sanitized = sanitized.replace(sep, ",")
+            tokens = [token.strip() for token in sanitized.split(",") if token.strip()]
+        elif isinstance(ports_source, (list, tuple)):
+            tokens = [str(item).strip() for item in ports_source if str(item).strip()]
+        else:
+            tokens = []
+
+        ports: List[PortSpec] = []
+        for token in tokens:
+            spec = PortSpec.from_value(token)
+            if spec:
+                ports.append(spec)
+
+        if ports:
+            return ports
+
+        return list(DEFAULT_CONNECTIVITY_PORTS)
+
+    def _store_connectivity_findings(self, results: List[ConnectivityProbeResult], task: ScanTask) -> None:
+        if not results:
+            return
+
+        existing_count = self.session.findings.count()
+        findings: List[ScanFinding] = []
+
+        for index, result in enumerate(results, start=1):
+            status = "alcançado" if result.reachable else "inalcançável"
+            open_ports = [
+                port_info
+                for port_info in result.ports
+                if port_info.get("status") == "open"
+            ]
+            summary = "Portas abertas: " + ", ".join(str(port.get("port")) for port in open_ports) if open_ports else "Nenhuma porta respondeu"
+            severity = "low" if result.reachable else "medium"
+
+            findings.append(
+                ScanFinding(
+                    session=self.session,
+                    source_task=task,
+                    kind=ScanFinding.Kind.TARGET,
+                    title=f"Conectividade — {result.host}",
+                    summary=f"Host {status}. {summary}.",
+                    data={
+                        "host": result.host,
+                        "reachable": result.reachable,
+                        "ports": result.ports,
+                        "error": result.error,
+                    },
+                    severity=severity,
+                    order=existing_count + index,
+                )
+            )
+
+        ScanFinding.objects.bulk_create(findings)
 
     def _generate_rustscan_payload(self, hosts: List[str]) -> str:
         payload = []
@@ -387,12 +656,15 @@ class ScanOrchestrator:
         return "<?xml version=\"1.0\"?>\n<nmaprun>\n" + "".join(snippets) + "</nmaprun>"
 
     def _persist_summary(self, summary_data: dict) -> None:
-        hosts = self._target_hosts()
+        connectivity_artifact = summary_data.get("artifacts", {}).get("connectivity", [])
+        hosts = [item.get("host") for item in connectivity_artifact if item.get("host")] or self._target_hosts()
         summary_data["hosts"] = hosts
         data = {
             "hosts": hosts,
             "tasks": summary_data.get("tasks", []),
         }
+        if connectivity_artifact:
+            data["connectivity"] = connectivity_artifact
         finding = ScanFinding.objects.create(
             session=self.session,
             kind=ScanFinding.Kind.SUMMARY,

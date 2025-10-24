@@ -41,8 +41,12 @@
     <label style="font-weight:700;color:var(--muted)">Networks (CIDR, vírgula separados)</label>
     <input name="networks" placeholder="ex: 10.0.0.0/24,192.168.0.0/16" value="{{ project.networks|default:form.networks }}" style="padding:.45rem .6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);">
 
-    <label style="font-weight:700;color:var(--muted)">Portas de interesse (vírgula separados)</label>
-    <input name="ports" placeholder="ex: 22,80,443,8080" value="{{ project.ports|default:form.ports }}" style="padding:.45rem .6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);">
+    <label style="font-weight:700;color:var(--muted)">Portas de interesse (porta/protocolo, separadas por vírgula)</label>
+    <input name="ports" placeholder="ex: 22/tcp, 80/tcp, 53/udp" value="{{ project.ports|default:form.ports }}" style="padding:.45rem .6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);">
+    <p class="small-muted" style="margin:0;">Quando o protocolo for omitido, consideramos <strong>tcp</strong> automaticamente. Aceitamos apenas tcp ou udp.</p>
+    {% if errors.ports %}
+      <p class="form-error">{{ errors.ports }}</p>
+    {% endif %}
 
     <!-- credenciais -->
     <div style="border:1px solid rgba(255,255,255,0.03);padding:.6rem;border-radius:8px;background:rgba(255,255,255,0.005)">
@@ -107,6 +111,7 @@
 .btn-primary{ background:linear-gradient(90deg,#4fd1c5,var(--accent)); color:#021023; border:1px solid rgba(79,209,197,0.08); box-shadow:0 8px 26px rgba(4,18,42,0.06); }
 .btn.compact{ padding:.32rem .5rem; font-size:.95rem; }
 .small-muted{ color:var(--muted); font-size:.86rem; margin-right:.25rem; }
+.form-error{ color:#f87171; font-size:.86rem; margin:0; }
 </style>
 
 <script>

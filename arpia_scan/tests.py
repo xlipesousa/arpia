@@ -1,6 +1,7 @@
 import json
 from datetime import timedelta
 from pathlib import Path
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.test import SimpleTestCase, TestCase
@@ -12,6 +13,7 @@ from arpia_log.models import LogEntry
 
 from .models import ScanSession, ScanTask, ScanFinding
 from .parsers import merge_observations, parse_nmap_xml, parse_rustscan_payload
+from .services import ConnectivityProbeResult, ScanOrchestrator, create_planned_session
 
 
 FIXTURES_DIR = Path(__file__).resolve().parent / "tests" / "fixtures" / "scan_samples"
@@ -114,6 +116,85 @@ class ScanModelTests(TestCase):
         self.assertEqual(finding.kind, ScanFinding.Kind.SUMMARY)
         self.assertEqual(session.findings.count(), 1)
 
+
+class ScanConnectivityTaskTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="connector",
+            email="connector@example.com",
+            password="pass1234",
+        )
+        self.project = Project.objects.create(
+            owner=self.user,
+            name="Projeto Conectividade",
+            slug="projeto-conectividade",
+            hosts="127.0.0.1\n10.0.0.10",
+            ports="22, 80",
+        )
+
+    @mock.patch("arpia_scan.services.ConnectivityRunner")
+    def test_connectivity_task_records_results(self, runner_cls):
+        session = create_planned_session(
+            owner=self.user,
+            project=self.project,
+            title="Fluxo de Conectividade",
+            config={
+                "tasks": [
+                    {
+                        "kind": ScanTask.Kind.CONNECTIVITY,
+                        "name": "Teste de conectividade real",
+                    }
+                ]
+            },
+        )
+
+        runner_instance = runner_cls.return_value
+        runner_instance.run.return_value = [
+            ConnectivityProbeResult(
+                host="127.0.0.1",
+                reachable=True,
+                ports=[{"port": 22, "status": "open", "latency_ms": 9.5}],
+                error=None,
+            ),
+            ConnectivityProbeResult(
+                host="10.0.0.10",
+                reachable=False,
+                ports=[{"port": 22, "status": "closed", "error": "tempo esgotado"}],
+                error="tempo esgotado",
+            ),
+        ]
+
+        orchestrator = ScanOrchestrator(session)
+        orchestrator.run()
+
+        runner_cls.assert_called_once()
+        args, kwargs = runner_cls.call_args
+        self.assertEqual(args[0], ["127.0.0.1", "10.0.0.10"])
+    ports_arg = args[1]
+    self.assertEqual([getattr(p, "port", None) for p in ports_arg], [22, 80])
+    self.assertTrue(all(getattr(p, "protocol", "tcp") == "tcp" for p in ports_arg))
+        self.assertAlmostEqual(kwargs.get("timeout"), 1.5)
+
+        session.refresh_from_db()
+        task = session.tasks.get(kind=ScanTask.Kind.CONNECTIVITY)
+
+        self.assertIn("127.0.0.1 respondeu", task.stdout)
+        self.assertIn("10.0.0.10 não respondeu", task.stdout)
+
+        connectivity_findings = session.findings.filter(source_task=task, kind=ScanFinding.Kind.TARGET)
+        self.assertEqual(connectivity_findings.count(), 2)
+        reachable_finding = connectivity_findings.filter(data__reachable=True).first()
+        unreachable_finding = connectivity_findings.filter(data__reachable=False).first()
+        self.assertIsNotNone(reachable_finding)
+        self.assertIsNotNone(unreachable_finding)
+
+        snapshot = session.report_snapshot or {}
+        summary = snapshot.get("summary", {})
+        connectivity_summary = summary.get("connectivity", {})
+        self.assertIn("127.0.0.1", connectivity_summary.get("reachable_hosts", []))
+        self.assertIn("10.0.0.10", connectivity_summary.get("unreachable_hosts", []))
+        artifacts = summary.get("artifacts", {})
+        self.assertIn("connectivity", artifacts)
 
 class ScanSessionDetailViewTests(TestCase):
     def setUp(self):

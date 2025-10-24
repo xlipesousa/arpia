@@ -32,19 +32,29 @@
       </div>
     </div>
 
+    <div style="display:flex;flex-direction:column;gap:.35rem;">
+      <label for="ports" style="font-weight:700;color:var(--muted)">Portas padrão para novas execuções</label>
+      <input id="ports" name="ports" placeholder="ex: 22/tcp, 80/tcp, 53/udp" value="{{ form.ports }}" style="padding:.45rem .6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);">
+      <p class="small-muted" style="margin:0;">Use o formato porta/protocolo (tcp ou udp). Quando o protocolo não for indicado, assumimos tcp automaticamente.</p>
+      {% if errors.ports %}
+        <p class="form-error">{{ errors.ports }}</p>
+      {% endif %}
+    </div>
+
     <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:.25rem;">
       <a href="{% url 'projects_list' %}" class="btn btn-ghost">Cancelar</a>
       <button type="submit" class="btn btn-primary">Criar Projeto</button>
     </div>
   </form>
 </div>
-
 <style>
 /* pequenas garantias de contraste e consistência */
 .card{ background:rgba(255,255,255,0.01); border-radius:10px; }
 .btn{ border-radius:8px; padding:.35rem .6rem; font-weight:700; cursor:pointer; color:var(--muted); background:transparent; border:1px solid rgba(255,255,255,0.03); text-decoration:none; display:inline-flex; align-items:center; gap:.4rem; }
 .btn-ghost{ background:transparent; color:var(--muted); border:1px solid rgba(255,255,255,0.03); }
 .btn-primary{ background:linear-gradient(90deg,#4fd1c5,var(--accent)); color:#021023; border:1px solid rgba(79,209,197,0.08); box-shadow:0 8px 26px rgba(4,18,42,0.06); }
+.small-muted{ color:var(--muted); font-size:.86rem; }
+.form-error{ color:#f87171; font-size:.9rem; margin:0; }
 </style>
 
 <script>

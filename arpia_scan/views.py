@@ -1,4 +1,5 @@
 import csv
+from statistics import mean
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
@@ -15,6 +16,27 @@ from django.utils.dateparse import parse_datetime
 from django.utils.http import urlencode
 
 import json
+
+
+def _format_duration(seconds: float | int | None) -> str:
+    if seconds is None:
+        return "—"
+    try:
+        seconds = int(round(float(seconds)))
+    except (TypeError, ValueError):
+        return "—"
+    if seconds < 60:
+        return f"{seconds}s"
+    minutes, sec = divmod(seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    parts = []
+    if hours:
+        parts.append(f"{hours}h")
+    if minutes:
+        parts.append(f"{minutes}m")
+    if sec and hours < 1:
+        parts.append(f"{sec}s")
+    return " ".join(parts) if parts else f"{seconds}s"
 
 from arpia_core.models import Project
 from arpia_core.views import build_project_macros  # TODO: mover para util dedicado
@@ -34,6 +56,203 @@ def _macro_entries(macros: dict | None) -> list[dict]:
         else:
             display = str(value or "")
             entries.append({"key": key, "value": display, "is_pre": "\n" in display})
+    return entries
+
+
+def _collect_connectivity_artifacts(summary: dict) -> list[dict]:
+    artifacts = []
+    summary = summary or {}
+    artifacts_block = summary.get("artifacts", {}) if isinstance(summary.get("artifacts"), dict) else {}
+    potential_lists = [
+        artifacts_block.get("connectivity"),
+        summary.get("connectivity"),
+    ]
+    for payload in potential_lists:
+        if isinstance(payload, list):
+            artifacts.extend(payload)
+        elif isinstance(payload, dict):
+            artifacts.extend(payload.get("entries", []))
+    return artifacts
+
+
+def _build_connectivity_overview(summary: dict) -> dict:
+    artifacts = _collect_connectivity_artifacts(summary)
+    host_map: dict[str, dict] = {}
+
+    for entry in artifacts:
+        host = entry.get("host") or "—"
+        bucket = host_map.setdefault(
+            host,
+            {
+                "host": host,
+                "reachable": False,
+                "ports": {},
+                "errors": set(),
+            },
+        )
+        if entry.get("reachable"):
+            bucket["reachable"] = True
+        error_message = entry.get("error")
+        if error_message:
+            bucket["errors"].add(error_message)
+
+        for port_info in entry.get("ports", []) or []:
+            port_number = port_info.get("port")
+            if port_number is None:
+                continue
+            try:
+                port_number = int(port_number)
+            except (TypeError, ValueError):
+                continue
+
+            existing = bucket["ports"].get(port_number, {})
+            status = port_info.get("status") or existing.get("status") or "unknown"
+            priority = 2 if status == "open" else 1 if status == "closed" else 0
+            existing_priority = 2 if existing.get("status") == "open" else 1 if existing.get("status") == "closed" else 0
+
+            if priority >= existing_priority:
+                bucket["ports"][port_number] = {
+                    "port": port_number,
+                    "status": status,
+                    "latency_ms": port_info.get("latency_ms"),
+                    "error": port_info.get("error"),
+                }
+
+    hosts_view = []
+    for host, bucket in sorted(host_map.items(), key=lambda item: item[0]):
+        ports = list(bucket["ports"].values())
+        open_ports = sorted((p for p in ports if p.get("status") == "open"), key=lambda p: p["port"])
+        closed_ports = sorted((p for p in ports if p.get("status") != "open"), key=lambda p: p["port"])
+        latencies = [p.get("latency_ms") for p in open_ports if isinstance(p.get("latency_ms"), (int, float))]
+        hosts_view.append(
+            {
+                "host": host,
+                "reachable": bucket["reachable"],
+                "open_ports": open_ports,
+                "closed_ports": closed_ports,
+                "latency_avg": round(mean(latencies), 2) if latencies else None,
+                "latency_min": round(min(latencies), 2) if latencies else None,
+                "latency_max": round(max(latencies), 2) if latencies else None,
+                "errors": sorted(bucket["errors"]),
+            }
+        )
+
+    connectivity_summary = summary.get("connectivity") if isinstance(summary.get("connectivity"), dict) else {}
+    reachable_hosts = connectivity_summary.get("reachable_hosts", []) if isinstance(connectivity_summary, dict) else []
+    unreachable_hosts = connectivity_summary.get("unreachable_hosts", []) if isinstance(connectivity_summary, dict) else []
+    checked_ports = connectivity_summary.get("checked_ports", []) if isinstance(connectivity_summary, dict) else []
+
+    return {
+        "hosts": hosts_view,
+        "totals": {
+            "reachable": len(reachable_hosts) or sum(1 for host in hosts_view if host["reachable"]),
+            "unreachable": len(unreachable_hosts) or sum(1 for host in hosts_view if not host["reachable"]),
+            "checked_ports": len(checked_ports) or len({p["port"] for host in hosts_view for p in host["open_ports"] + host["closed_ports"]}),
+        },
+    }
+
+
+def _build_overview_metrics(session: ScanSession, snapshot: dict, connectivity_overview: dict) -> list[dict]:
+    snapshot = snapshot or {}
+    stats = snapshot.get("stats", {}) if isinstance(snapshot.get("stats"), dict) else {}
+    targets = snapshot.get("targets", {}) if isinstance(snapshot.get("targets"), dict) else {}
+    timings = snapshot.get("timing", {}) if isinstance(snapshot.get("timing"), dict) else {}
+
+    metrics = [
+        {
+            "label": "Etapas processadas",
+            "value": stats.get("total_tasks", 0),
+            "note": f"{stats.get('completed_tasks', 0)} concluídas / {stats.get('failed_tasks', 0)} falhas",
+        },
+        {
+            "label": "Hosts configurados",
+            "value": len(targets.get("configured_hosts", []) or []),
+            "note": "Definidos nas macros da sessão",
+        },
+        {
+            "label": "Hosts alcançados",
+            "value": connectivity_overview.get("totals", {}).get("reachable", 0),
+            "note": "Resposta positiva durante o teste",
+        },
+        {
+            "label": "Hosts sem resposta",
+            "value": connectivity_overview.get("totals", {}).get("unreachable", 0),
+            "note": "Necessitam investigação",
+        },
+        {
+            "label": "Portas observadas",
+            "value": targets.get("open_ports", 0) or connectivity_overview.get("totals", {}).get("checked_ports", 0),
+            "note": "Com base no snapshot consolidado",
+        },
+    ]
+
+    started_at = session.started_at or session.created_at
+    finished_at = session.finished_at
+    duration_seconds = timings.get("duration_seconds")
+    if duration_seconds is None and started_at and finished_at:
+        duration_seconds = (finished_at - started_at).total_seconds()
+    metrics.append(
+        {
+            "label": "Duração da sessão",
+            "value": _format_duration(duration_seconds),
+            "note": f"Início {started_at:%d/%m %H:%M} — Fim {finished_at:%d/%m %H:%M}" if finished_at else "Em andamento",
+        }
+    )
+
+    return metrics
+
+
+def _build_finding_payload(finding: ScanFinding) -> dict:
+    data = finding.data or {}
+    payload = {"raw": data}
+
+    if finding.kind == ScanFinding.Kind.SUMMARY:
+        payload["hosts"] = data.get("hosts", []) if isinstance(data.get("hosts"), list) else []
+        payload["tasks"] = data.get("tasks", []) if isinstance(data.get("tasks"), list) else []
+        payload["connectivity"] = data.get("connectivity", []) if isinstance(data.get("connectivity"), list) else []
+    elif finding.kind == ScanFinding.Kind.TARGET:
+        ports = data.get("ports", []) if isinstance(data.get("ports"), list) else []
+        open_ports = [p for p in ports if p.get("status") == "open"]
+        closed_ports = [p for p in ports if p.get("status") != "open"]
+        payload.update(
+            {
+                "host": data.get("host"),
+                "reachable": data.get("reachable"),
+                "open_ports": open_ports,
+                "closed_ports": closed_ports,
+                "error": data.get("error"),
+            }
+        )
+    return payload
+
+
+def _format_timestamp(value) -> str:
+    if not value:
+        return "—"
+    dt = parse_datetime(value) if isinstance(value, str) else value
+    if not dt:
+        return "—"
+    if timezone.is_naive(dt):
+        dt = timezone.make_aware(dt, timezone.get_current_timezone())
+    return timezone.localtime(dt).strftime("%d/%m %H:%M")
+
+
+def _build_timeline_entries(snapshot: dict) -> list[dict]:
+    entries = []
+    for item in snapshot.get("timeline", []) or []:
+        if not isinstance(item, dict):
+            continue
+        entries.append(
+            {
+                "label": item.get("label"),
+                "kind": item.get("kind"),
+                "status": item.get("status"),
+                "status_display": item.get("status_display"),
+                "started_at": _format_timestamp(item.get("started_at")),
+                "finished_at": _format_timestamp(item.get("finished_at")),
+                "duration": _format_duration(item.get("duration_seconds")),
+            }
+        )
     return entries
 
 
@@ -136,10 +355,16 @@ class ScanSessionDetailView(LoginRequiredMixin, TemplateView):
         finding_rows = [
             {
                 "instance": finding,
-                "display_data": json.dumps(finding.data, indent=2, ensure_ascii=False) if finding.data else "",
+                "payload": _build_finding_payload(finding),
+                "raw_json": json.dumps(finding.data, indent=2, ensure_ascii=False) if finding.data else "",
             }
             for finding in findings_qs
         ]
+
+        snapshot = session.report_snapshot or {}
+        summary = snapshot.get("summary", {}) if isinstance(snapshot.get("summary"), dict) else {}
+        connectivity_overview = _build_connectivity_overview(summary)
+        overview_metrics = _build_overview_metrics(session, snapshot, connectivity_overview)
 
         context.update(
             {
@@ -149,11 +374,15 @@ class ScanSessionDetailView(LoginRequiredMixin, TemplateView):
                 "findings": finding_rows,
                 "macros": macros,
                 "macro_entries": macro_entries,
-                "report": session.report_snapshot or {},
-                "report_insights": (session.report_snapshot or {}).get("insights", []),
-                "report_stats": (session.report_snapshot or {}).get("stats", {}),
-                "report_targets": (session.report_snapshot or {}).get("targets", {}),
-                "report_services": (session.report_snapshot or {}).get("services", {}),
+                "report": snapshot,
+                "report_summary": summary,
+                "overview_metrics": overview_metrics,
+                "connectivity_overview": connectivity_overview,
+                "report_insights": snapshot.get("insights", []),
+                "report_stats": snapshot.get("stats", {}),
+                "report_targets": snapshot.get("targets", {}),
+                "report_services": snapshot.get("services", {}),
+                "timeline_entries": _build_timeline_entries(snapshot),
                 "report_url": self._build_report_url(session),
                 "logs_url": reverse("arpia_scan:api_session_logs", args=[session.pk]),
             }

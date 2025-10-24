@@ -384,6 +384,49 @@ def _normalize_multiline(value: str) -> str:
     return "\n".join(items)
 
 
+PORT_SPEC_PATTERN = re.compile(r"^(\d{1,5})(?:\s*/\s*([a-zA-Z]{1,8}))?$")
+VALID_PROTOCOLS = {"tcp", "udp"}
+
+
+def _normalize_port_specs(value: str) -> tuple[str, list[str]]:
+    if not value:
+        return "", []
+
+    if not isinstance(value, str):
+        value = str(value)
+
+    normalized: list[str] = []
+    invalid: list[str] = []
+
+    cleaned = value.replace(",", "\n").replace(";", "\n").replace("\r", "\n")
+    for raw in cleaned.splitlines():
+        token = raw.strip()
+        if not token:
+            continue
+
+        match = PORT_SPEC_PATTERN.match(token)
+        if not match:
+            invalid.append(token)
+            continue
+
+        port = int(match.group(1))
+        protocol = (match.group(2) or "tcp").lower()
+
+        if not (1 <= port <= 65535) or protocol not in VALID_PROTOCOLS:
+            invalid.append(token)
+            continue
+
+        normalized.append(f"{port}/{protocol}")
+
+    return "\n".join(normalized), invalid
+
+
+def _format_ports_for_form(value: str | None) -> str:
+    if not value:
+        return ""
+    return value.replace("\n", ", ")
+
+
 def _credentials_summary(credentials):
     summary = []
     for cred in credentials or []:
@@ -584,6 +627,7 @@ def projects_create(request):
         "client": "",
         "start": "",
         "end": "",
+        "ports": "",
     }
 
     if request.method == "POST":
@@ -592,6 +636,7 @@ def projects_create(request):
         form["client"] = request.POST.get("client", "").strip()
         form["start"] = request.POST.get("start", "").strip()
         form["end"] = request.POST.get("end", "").strip()
+        form["ports"] = request.POST.get("ports", "").strip()
 
         if not form["name"]:
             errors["name"] = "O nome é obrigatório."
@@ -606,6 +651,10 @@ def projects_create(request):
         if dt_start and dt_end and dt_end < dt_start:
             errors["end"] = "Data de término não pode ser anterior ao início."
 
+        normalized_ports, invalid_ports = _normalize_port_specs(form["ports"])
+        if invalid_ports:
+            errors["ports"] = "Entradas de porta inválidas: " + ", ".join(invalid_ports)
+
         if not errors:
             project = Project(
                 owner=request.user,
@@ -616,6 +665,7 @@ def projects_create(request):
                 end_at=dt_end,
                 timezone=str(timezone.get_current_timezone()),
             )
+            project.ports = normalized_ports
             project.save()
             ProjectMembership.objects.get_or_create(
                 project=project,
@@ -973,7 +1023,7 @@ def projects_edit(request, pk):
             "hosts": p.hosts,
             "protected_hosts": p.protected_hosts,
             "networks": p.networks,
-            "ports": p.ports,
+            "ports": _format_ports_for_form(p.ports),
             "credentials_json": json.dumps(credentials),
             "credentials": summarize_credentials(credentials),
         }
@@ -1012,6 +1062,10 @@ def projects_edit(request, pk):
             credentials_payload = []
             errors["credentials_json"] = "Formato inválido de credenciais."
 
+        ports_normalized, invalid_ports = _normalize_port_specs(form["ports"])
+        if invalid_ports:
+            errors["ports"] = "Entradas de porta inválidas: " + ", ".join(invalid_ports)
+
         if not errors:
             project.name = form["name"]
             project.description = form["description"]
@@ -1021,7 +1075,7 @@ def projects_edit(request, pk):
             project.hosts = form["hosts"]
             project.protected_hosts = form["protected_hosts"]
             project.networks = form["networks"]
-            project.ports = form["ports"]
+            project.ports = ports_normalized
             project.credentials_json = credentials_payload
             project.metadata = {
                 **(project.metadata or {}),

@@ -44,16 +44,65 @@ class ProjectViewTests(TestCase):
 				"client": "ACME",
 				"start": "2025-01-01T10:00",
 				"end": "2025-01-10T10:00",
+				"ports": "80, 443/tcp, 53/udp",
 			},
 		)
 		project = Project.objects.get(name="Projeto Insider")
 
 		self.assertRedirects(response, reverse("projects_edit", kwargs={"pk": project.pk}))
 		self.assertEqual(project.owner, self.user)
+		self.assertEqual(project.ports, "80/tcp\n443/tcp\n53/udp")
 		self.assertTrue(ProjectMembership.objects.filter(project=project, user=self.user, role="owner").exists())
 		self.assertTrue(
 			LogEntry.objects.filter(event_type="PROJECT_CREATED", details__project_id=str(project.pk)).exists()
 		)
+
+	def test_edit_view_validates_port_entries(self):
+		project = Project.objects.create(owner=self.user, name="Projeto", description="", client_name="", ports="22/tcp")
+
+		response = self.client.post(
+			reverse("projects_edit", kwargs={"pk": project.pk}),
+			{
+				"name": "Projeto",
+				"description": "",
+				"client": "",
+				"start": "",
+				"end": "",
+				"hosts": "",
+				"protected_hosts": "",
+				"networks": "",
+				"ports": "70000/tcp, 21/ftp",
+				"credentials_json": "[]",
+			},
+		)
+
+		project.refresh_from_db()
+		self.assertEqual(response.status_code, 200)
+		self.assertIn("Entradas de porta inválidas", response.content.decode())
+		self.assertEqual(project.ports, "22/tcp")
+
+	def test_edit_view_normalizes_port_entries(self):
+		project = Project.objects.create(owner=self.user, name="Projeto", description="", client_name="")
+
+		response = self.client.post(
+			reverse("projects_edit", kwargs={"pk": project.pk}),
+			{
+				"name": "Projeto",
+				"description": "",
+				"client": "",
+				"start": "",
+				"end": "",
+				"hosts": "",
+				"protected_hosts": "",
+				"networks": "",
+				"ports": "443; 53/UDP, 22",
+				"credentials_json": "[]",
+			},
+		)
+
+		project.refresh_from_db()
+		self.assertRedirects(response, reverse("projects_edit", kwargs={"pk": project.pk}))
+		self.assertEqual(project.ports, "443/tcp\n53/udp\n22/tcp")
 
 	def test_edit_view_requires_owner(self):
 		project = Project.objects.create(owner=self.user, name="Proj", description="", client_name="")
