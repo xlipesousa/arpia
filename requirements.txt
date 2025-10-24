@@ -16,5 +16,6 @@ crispy-bootstrap5>=0.7
 pytest>=7.0
 pytest-django>=4.5
 
-# Observação: 'jq' é utilitário do sistema (não via pip). Instale com apt/snap/homebrew.
-# Exemplo (Debian/Ubuntu/Kali): sudo apt install -y jq
+# Dependências de sistema (instale manualmente quando necessário):
+#   jq .............. sudo apt install -y jq
+#   rustscan ........ sudo apt update && sudo apt install -y cargo && cargo install rustscan

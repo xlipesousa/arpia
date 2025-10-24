@@ -8,6 +8,43 @@ set -euo pipefail
 REPO_EXPECTED="https://github.com/xlipesousa/arpia.git"
 CWD="$(pwd)"
 
+install_rustscan() {
+  if command -v rustscan >/dev/null 2>&1; then
+    info "Rustscan já instalado — pulando."
+    return
+  fi
+
+  info "Instalando Rustscan (kit básico)..."
+
+  if ! command -v cargo >/dev/null 2>&1; then
+    if command -v apt-get >/dev/null 2>&1; then
+      info "Instalando cargo via apt-get..."
+      if ! sudo apt-get update; then
+        warn "Falha ao executar apt-get update. Instale cargo manualmente para prosseguir com o Rustscan."
+        return
+      fi
+      if ! sudo apt-get install -y cargo; then
+        warn "Falha ao instalar cargo. Execute manualmente 'sudo apt-get install -y cargo'."
+        return
+      fi
+    else
+      warn "apt-get não disponível. Instale cargo manualmente para habilitar o Rustscan."
+      return
+    fi
+  fi
+
+  if ! command -v cargo >/dev/null 2>&1; then
+    warn "cargo continua indisponível. Rustscan não foi instalado automaticamente."
+    return
+  fi
+
+  if ! cargo install rustscan; then
+    warn "Falha ao instalar Rustscan via cargo. Execute manualmente: cargo install rustscan"
+  else
+    info "Rustscan instalado com sucesso."
+  fi
+}
+
 info(){ echo "[INFO] $*"; }
 warn(){ echo "[WARN] $*"; }
 err(){ echo "[ERROR] $*" >&2; exit 1; }
@@ -125,6 +162,8 @@ if [ -f "requirements.txt" ]; then
 else
   info "Nenhum requirements.txt encontrado — pulando instalação de dependências."
 fi
+
+install_rustscan
 # --- aplicar migrações automaticamente ---
 if [ -z "${PYTHON:-}" ]; then
   if [ -n "${VIRTUAL_ENV:-}" ]; then

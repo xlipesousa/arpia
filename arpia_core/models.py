@@ -232,6 +232,9 @@ class ToolQuerySet(models.QuerySet):
     def for_user(self, user):
         if not user or not getattr(user, "is_authenticated", False):
             return self.none()
+        from .tool_registry import sync_default_tools_for_user
+
+        sync_default_tools_for_user(user)
         return self.filter(owner=user)
 
 

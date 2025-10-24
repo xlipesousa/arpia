@@ -80,7 +80,7 @@ class ScanDashboardViewTests(TestCase):
         self.assertContains(response, "Teste de conectividade")
         self.assertContains(response, "Executar agora")
 
-    def test_dashboard_exposes_script_flows_and_disables_when_tool_missing(self):
+    def test_dashboard_exposes_script_flows_with_default_tools_available(self):
         project = Project.objects.create(owner=self.user, name="Projeto Delta", slug="projeto-delta")
         sync_default_scripts()
 
@@ -91,13 +91,7 @@ class ScanDashboardViewTests(TestCase):
         action_cards = response.context["action_cards"]
         script_cards = [card for card in action_cards if card.get("script_slug")]
         self.assertTrue(script_cards)
-        self.assertTrue(any(not card["enabled"] for card in script_cards))
-
-        # Após cadastrar ferramenta, os fluxos devem habilitar
-        Tool.objects.create(owner=self.user, name="Nmap", slug="nmap", path="/bin/true")
-        response_enabled = self.client.get(reverse("arpia_scan:dashboard"), data={"project": project.pk})
-        enabled_cards = [card for card in response_enabled.context["action_cards"] if card.get("script_slug")]
-        self.assertTrue(all(card["enabled"] for card in enabled_cards))
+        self.assertTrue(all(card["enabled"] for card in script_cards))
 
 
 class ScanModelTests(TestCase):
@@ -434,7 +428,7 @@ class ScanApiTests(TestCase):
         self.assertGreaterEqual(targets.get("hosts_count", 0), 1)
         self.assertIn("configured_hosts", snapshot.get("targets", {}))
 
-    def test_cannot_create_script_flow_without_tool(self):
+    def test_script_flow_creation_succeeds_with_default_tools(self):
         self.client.login(username="api_owner", password="pass1234")
         sync_default_scripts()
         script = Script.objects.get(slug="nmap-discovery")
@@ -457,12 +451,7 @@ class ScanApiTests(TestCase):
             ],
         }
         response = self.client.post(url, data=json.dumps(payload), content_type="application/json")
-        self.assertEqual(response.status_code, 403)
-        self.assertIn("Ferramenta", response.json().get("error", ""))
-
-        Tool.objects.create(owner=self.owner, name="Nmap", slug="nmap", path="/bin/true")
-        response_ok = self.client.post(url, data=json.dumps(payload), content_type="application/json")
-        self.assertEqual(response_ok.status_code, 201)
+        self.assertEqual(response.status_code, 201)
 
 
 class ScanExportTests(TestCase):

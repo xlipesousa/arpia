@@ -3,6 +3,43 @@
 # Uso: ./scripts/bootstrap.sh [--run] [GIT_URL]
 set -euo pipefail
 
+install_rustscan() {
+  if command -v rustscan >/dev/null 2>&1; then
+    echo "Rustscan já instalado — pulando."
+    return
+  fi
+
+  echo "Instalando Rustscan (kit básico)..."
+
+  if ! command -v cargo >/dev/null 2>&1; then
+    if command -v apt-get >/dev/null 2>&1; then
+      echo "Instalando cargo via apt-get..."
+      if ! sudo apt-get update; then
+        echo "[WARN] Falha ao executar apt-get update. Instale cargo manualmente e reexecute." >&2
+        return
+      fi
+      if ! sudo apt-get install -y cargo; then
+        echo "[WARN] Falha ao instalar cargo. Instale manualmente e reexecute 'cargo install rustscan'." >&2
+        return
+      fi
+    else
+      echo "[WARN] apt-get não disponível. Instale cargo manualmente para prosseguir com o Rustscan." >&2
+      return
+    fi
+  fi
+
+  if ! command -v cargo >/dev/null 2>&1; then
+    echo "[WARN] cargo ainda não disponível após tentativa de instalação. Rustscan não foi configurado." >&2
+    return
+  fi
+
+  if ! cargo install rustscan; then
+    echo "[WARN] Falha ao instalar Rustscan via cargo. Tente manualmente: cargo install rustscan" >&2
+  else
+    echo "Rustscan instalado com sucesso."
+  fi
+}
+
 GIT_URL="${1:-https://github.com/xlipesousa/arpia.git}"
 RUN_SERVER=false
 if [[ "${1:-}" == "--run" ]]; then
@@ -36,6 +73,8 @@ else
   echo "requirements.txt não encontrado — instalando Django minimo."
   pip install "Django>=4.2,<5"
 fi
+
+install_rustscan
 
 # criar .env básico se não existir
 if [ ! -f .env ]; then
