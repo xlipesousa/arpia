@@ -31,6 +31,15 @@ class ScriptDefinition:
 
 DEFAULT_SCRIPTS: List[ScriptDefinition] = [
     ScriptDefinition(
+        slug="rustscan-top-ports",
+        name="Rustscan — Top 1000 TCP + UDP",
+        filename="rustscan_top_ports.sh",
+        description="Executa Rustscan nos hosts alvo usando top 1000 portas TCP e varredura UDP completa.",
+        tags=["rustscan", "tcp", "udp", "recon"],
+        requires_hosts=True,
+        required_tool_slug="rustscan",
+    ),
+    ScriptDefinition(
         slug="nmap-quick-top1000",
         name="Nmap — Top 1000 TCP",
         filename="example_reset.sh",

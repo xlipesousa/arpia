@@ -17,7 +17,11 @@ from django.utils import timezone
 
 from arpia_core.models import Project, Script, Tool, Wordlist
 from arpia_core.tool_registry import sync_default_tools_for_user
-from arpia_core.views import build_project_macros, render_script_with_macros  # TODO mover p/ util compartilhado
+from arpia_core.views import (
+    build_project_macros,
+    render_script_with_macros,
+    sync_default_scripts,
+)  # TODO mover p/ util compartilhado
 from arpia_log.models import LogEntry
 from arpia_log.services import log_event
 
@@ -149,6 +153,7 @@ def _ensure_connectivity_present(tasks_payload: List[dict]) -> List[dict]:
 def _normalize_tasks(payload: Optional[Iterable[dict]], owner) -> List[PlannedTask]:
     raw_tasks = list(payload or DEFAULT_TASK_DEFINITION)
     sync_default_tools_for_user(owner)
+    sync_default_scripts()
     tasks_payload = _ensure_connectivity_present(raw_tasks)
     planned: List[PlannedTask] = []
 

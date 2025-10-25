@@ -16,7 +16,7 @@ DEFAULT_TOOLS: List[ToolDefinition] = [
     ToolDefinition(
         slug="rustscan",
         name="Rustscan",
-        path="/root/.cargo/bin/rustscan",
+        path="/home/kali/.cargo/bin/rustscan",
         description="Scanner TCP assíncrono focado em agilidade e evasão.",
         category="scanner",
     ),
