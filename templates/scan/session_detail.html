@@ -21,6 +21,52 @@
 <section class="session-report" id="session-root" data-session-id="{{ session.id }}" data-status="{{ session.status }}" data-api-status-url="{% url 'arpia_scan:api_session_status' session.id %}" data-api-logs-url="{{ logs_url }}">
   <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
 
+  <article class="card execution-card" id="execution-card" data-total-tasks="{{ tasks|length }}">
+    <header class="section-header">
+      <div>
+        <h2>Execução ao vivo</h2>
+        <p class="muted">Acompanhe o andamento e a saída das etapas em tempo real.</p>
+      </div>
+    </header>
+
+    <div class="execution-status">
+      <div class="status-beacon status-{{ session.status }}" id="execution-status-beacon">
+        <span class="beacon-dot" aria-hidden="true"></span>
+        <span class="beacon-label" id="execution-status-label">{{ session.get_status_display }}</span>
+      </div>
+      <div class="execution-meta">
+        <span id="execution-task-label">{% if session.is_terminal %}Sessão finalizada.{% else %}Aguardando atualização…{% endif %}</span>
+        <small id="execution-time-indicator">
+          {% if session.started_at %}
+            Iniciado em {{ session.started_at|date:"d/m/Y H:i" }}
+          {% else %}
+            Sessão ainda não iniciada.
+          {% endif %}
+        </small>
+      </div>
+    </div>
+
+    <div class="execution-progress">
+      <div class="progress-bar progress-overall" id="execution-progress-bar" data-progress="{{ overall_progress_percent|default:0 }}">
+        <span style="width: {{ overall_progress_percent|default:0 }}%"></span>
+      </div>
+      <div class="progress-summary">
+        <span class="progress-value" id="execution-progress-value">{{ overall_progress_percent|default:0 }}%</span>
+        <span class="progress-detail" id="execution-progress-detail">{{ completed_tasks_count|default:0 }} de {{ total_tasks_count|default:0 }} etapas concluídas</span>
+      </div>
+    </div>
+
+    <div class="execution-console">
+      <div class="console-header">
+        <span>Saída recente</span>
+      </div>
+      <div class="console-body" id="console-body">
+        <pre id="live-console" class="console-output hidden" aria-live="polite" aria-label="Saída em tempo real"></pre>
+        <div class="empty" id="live-console-empty">Nenhuma saída registrada ainda.</div>
+      </div>
+    </div>
+  </article>
+
   <article class="card session-overview">
     <header class="section-header">
       <h2>Resumo da sessão</h2>
@@ -359,6 +405,8 @@
   </article>
 </section>
 
+{{ session_bootstrap|json_script:"session-bootstrap" }}
+
 <style>
 .page-heading{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.6rem;gap:1rem;}
 .page-heading h1{margin:.3rem 0;font-size:1.85rem;color:var(--text);}
@@ -386,6 +434,34 @@
 .section-header p{margin:0;max-width:520px;}
 .section-actions{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;}
 .section-header > .section-actions{margin-left:auto;}
+
+.execution-card{display:flex;flex-direction:column;gap:1.2rem;}
+.execution-status{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:1rem;}
+.status-beacon{display:inline-flex;align-items:center;gap:.65rem;padding:.55rem 1.1rem;border-radius:999px;font-weight:600;font-size:.9rem;background:rgba(143,192,255,0.22);color:#d3eaff;position:relative;box-shadow:0 0 0 0 rgba(139,197,255,0.4);}
+.status-beacon .beacon-dot{width:.8rem;height:.8rem;border-radius:999px;background:#8bc5ff;box-shadow:0 0 0 0 rgba(139,197,255,0.65);animation:beaconPulse 1.8s ease-out infinite;}
+.status-beacon.status-running{background:rgba(143,192,255,0.22);color:#d3eaff;}
+.status-beacon.status-completed{background:rgba(118,221,174,0.25);color:#d7f7e7;}
+.status-beacon.status-completed .beacon-dot{background:#62d3a1;box-shadow:0 0 0 0 rgba(98,211,161,0.6);}
+.status-beacon.status-failed,.status-beacon.status-error{background:rgba(255,132,132,0.25);color:#ffd7d7;}
+.status-beacon.status-failed .beacon-dot,.status-beacon.status-error .beacon-dot{background:#ff8484;box-shadow:0 0 0 0 rgba(255,132,132,0.55);}
+.status-beacon.status-planned,.status-beacon.status-ready,.status-beacon.status-queued,.status-beacon.status-pending{background:rgba(255,255,255,0.12);color:var(--text);}
+.status-beacon.status-canceled{background:rgba(255,214,165,0.25);color:#ffe6c9;}
+.execution-meta span{font-size:1.05rem;font-weight:600;color:var(--text);display:block;}
+.execution-meta small{display:block;margin-top:.25rem;font-size:.82rem;color:var(--muted);}
+.execution-progress{display:flex;flex-direction:column;gap:.5rem;}
+.progress-overall{height:10px;}
+.progress-summary{display:flex;align-items:center;justify-content:space-between;font-size:.85rem;color:var(--muted);}
+.progress-summary .progress-value{font-size:1.2rem;font-weight:700;color:#8bc5ff;}
+.progress-summary .progress-detail{font-size:.85rem;}
+.execution-console{display:flex;flex-direction:column;gap:.6rem;}
+.console-header{display:flex;align-items:center;justify-content:space-between;font-size:.85rem;color:var(--muted);}
+.console-header span{font-weight:600;color:var(--text);}
+.console-body{position:relative;background:rgba(0,0,0,0.42);border-radius:12px;padding:.9rem;max-height:320px;overflow:auto;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05);}
+.console-output{margin:0;white-space:pre-wrap;word-break:break-word;min-height:140px;max-width:100%;font-family:"Fira Code",monospace;font-size:.86rem;line-height:1.45;color:#d5e8ff;}
+.console-body::-webkit-scrollbar{width:8px;}
+.console-body::-webkit-scrollbar-thumb{background:rgba(139,197,255,0.35);border-radius:10px;}
+
+.hidden{display:none !important;}
 
 .session-overview dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;margin:0;}
 .session-overview dt{font-size:.8rem;text-transform:uppercase;color:var(--muted);letter-spacing:.08em;}
@@ -483,13 +559,15 @@
 
 .empty{padding:1rem;background:rgba(255,255,255,0.02);border-radius:10px;color:var(--muted);}
 .tasks-table pre,.findings-list pre{margin:0;background:rgba(0,0,0,0.45);padding:.6rem .8rem;border-radius:8px;white-space:pre-wrap;word-break:break-word;max-width:100%;overflow:auto;}
-.hidden{display:none !important;}
+
 .live-update-error{color:#ffb8b8;font-size:.85rem;margin-top:.75rem;}
 
 @keyframes pulse{0%{opacity:0.3;}50%{opacity:1;}100%{opacity:0.3;}}
+@keyframes beaconPulse{0%{box-shadow:0 0 0 0 currentColor;opacity:.85;}70%{box-shadow:0 0 0 16px rgba(255,255,255,0);opacity:1;}100%{box-shadow:0 0 0 0 rgba(255,255,255,0);opacity:.75;}}
 @media (max-width:900px){
   .page-heading{flex-direction:column;align-items:flex-start;}
   .session-status{align-items:flex-start;}
+  .execution-status{flex-direction:column;align-items:flex-start;}
   .timeline-meta{flex-direction:column;align-items:flex-start;gap:.35rem;}
   .tasks-table{display:block;overflow-x:auto;}
   .logs-card{max-height:none;}
@@ -511,6 +589,16 @@ document.addEventListener("DOMContentLoaded", () => {
   const logsList = document.getElementById("session-logs");
   const logsEmpty = document.getElementById("logs-empty");
   const toastContainer = document.getElementById("toast-container");
+  const executionCard = document.getElementById("execution-card");
+  const executionStatusBeacon = document.getElementById("execution-status-beacon");
+  const executionStatusLabel = document.getElementById("execution-status-label");
+  const executionTaskLabel = document.getElementById("execution-task-label");
+  const executionProgressBar = document.getElementById("execution-progress-bar");
+  const executionProgressValue = document.getElementById("execution-progress-value");
+  const executionProgressDetail = document.getElementById("execution-progress-detail");
+  const liveConsole = document.getElementById("live-console");
+  const liveConsoleEmpty = document.getElementById("live-console-empty");
+  const consoleBody = document.getElementById("console-body");
 
   const statusUrl = root.dataset.apiStatusUrl;
   const logsUrl = root.dataset.apiLogsUrl;
@@ -520,10 +608,66 @@ document.addEventListener("DOMContentLoaded", () => {
   let previousStatus = initialStatus;
   let latestLogCursor = null;
   let isFetchingLogs = false;
+  const MAX_CONSOLE_LINES = 400;
+  let consoleLines = [];
+  const STATUS_CLASSES = [
+    "status-running",
+    "status-completed",
+    "status-failed",
+    "status-error",
+    "status-canceled",
+    "status-planned",
+    "status-ready",
+    "status-pending",
+    "status-queued",
+  ];
+  let statusPollTimer = null;
+
+  let bootstrapData = {};
+  const bootstrapElement = document.getElementById("session-bootstrap");
+  if (bootstrapElement && bootstrapElement.textContent) {
+    try {
+      bootstrapData = JSON.parse(bootstrapElement.textContent);
+    } catch (error) {
+      console.warn("Falha ao interpretar dados de bootstrap da sessão", error);
+    }
+  }
+  const bootstrapTasks = Array.isArray(bootstrapData.tasks) ? bootstrapData.tasks : [];
+  const bootstrapLogs = Array.isArray(bootstrapData.logs) ? bootstrapData.logs : [];
+  const bootstrapStatus = bootstrapData.status || initialStatus;
+  const bootstrapStatusDisplay = bootstrapData.status_display || (statusPill ? statusPill.textContent : "");
+
+  const scheduleStatusPoll = (delay = 2500) => {
+    if (!statusUrl) return;
+    if (statusPollTimer) {
+      clearTimeout(statusPollTimer);
+    }
+    statusPollTimer = setTimeout(() => {
+      pollStatus();
+    }, Math.max(0, delay));
+  };
 
   const shouldPoll = Boolean(statusUrl) && !terminalStatuses.has(initialStatus);
   if (!shouldPoll && liveIndicator) {
     liveIndicator.classList.add("hidden");
+  }
+
+  if (bootstrapTasks.length) {
+    updateExecutionPanel({
+      status: bootstrapStatus,
+      status_display: bootstrapStatusDisplay,
+    }, bootstrapTasks);
+  } else {
+    updateExecutionPanel({
+      status: bootstrapStatus,
+      status_display: bootstrapStatusDisplay,
+    }, []);
+  }
+  previousStatus = bootstrapStatus;
+  if (bootstrapLogs.length) {
+    appendLogs(bootstrapLogs, true);
+    latestLogCursor = bootstrapData.latest_log_cursor || bootstrapLogs[bootstrapLogs.length - 1]?.timestamp || null;
+    updateLogsEmpty();
   }
 
   const statusToneClass = status => {
@@ -551,6 +695,156 @@ document.addEventListener("DOMContentLoaded", () => {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+
+  function resetConsole() {
+    consoleLines = [];
+    if (liveConsole) {
+      liveConsole.textContent = "";
+    }
+  }
+
+  function updateConsoleEmpty() {
+    if (!liveConsole || !liveConsoleEmpty) return;
+    const hasContent = consoleLines.length > 0;
+    liveConsole.classList.toggle("hidden", !hasContent);
+    liveConsoleEmpty.classList.toggle("hidden", hasContent);
+  }
+
+  function appendConsoleLine(log) {
+    if (!liveConsole) return;
+    const timestamp = log.timestamp_display || log.timestamp || "";
+    const severity = (log.severity || "").toUpperCase();
+    const component = log.component || "";
+    const message = (log.message || "").trim();
+    const parts = [];
+    if (timestamp) parts.push(`[${timestamp}]`);
+    if (severity) parts.push(`[${severity}]`);
+    if (component) parts.push(`[${component}]`);
+    if (message) parts.push(message);
+    if (!parts.length) return;
+    const line = parts.join(" ");
+    consoleLines.push(line);
+    if (consoleLines.length > MAX_CONSOLE_LINES) {
+      consoleLines = consoleLines.slice(-MAX_CONSOLE_LINES);
+    }
+    liveConsole.textContent = consoleLines.join("\n");
+    updateConsoleEmpty();
+    if (consoleBody) {
+      consoleBody.scrollTop = consoleBody.scrollHeight;
+    }
+  }
+
+  function calculateOverallProgress(tasks, sessionStatus) {
+    if (Array.isArray(tasks) && tasks.length) {
+      const total = tasks.reduce((acc, task) => {
+        const parsedPercent = Number(task.progress_percent);
+        if (!Number.isNaN(parsedPercent)) {
+          return acc + Math.max(0, Math.min(100, Math.round(parsedPercent)));
+        }
+        const fallback = typeof task.progress === "number"
+          ? Math.round(Math.max(0, Math.min(1, task.progress)) * 100)
+          : 0;
+        return acc + fallback;
+      }, 0);
+      const average = Math.round(total / tasks.length);
+      const clamped = Math.max(0, Math.min(100, average));
+      if (terminalStatuses.has(sessionStatus)) {
+        return 100;
+      }
+      return clamped;
+    }
+    return terminalStatuses.has(sessionStatus) ? 100 : 0;
+  }
+
+  function resolveOverallProgress(sessionPayload, tasks, fallbackStatus) {
+    if (sessionPayload && Object.prototype.hasOwnProperty.call(sessionPayload, "overall_progress_percent")) {
+      const parsed = Number(sessionPayload.overall_progress_percent);
+      if (!Number.isNaN(parsed)) {
+        const normalized = Math.max(0, Math.min(100, Math.round(parsed)));
+        const referenceStatus = sessionPayload.status || fallbackStatus;
+        if (referenceStatus && terminalStatuses.has(referenceStatus)) {
+          return 100;
+        }
+        return normalized;
+      }
+    }
+    const referenceStatus = sessionPayload && sessionPayload.status ? sessionPayload.status : fallbackStatus;
+    return calculateOverallProgress(tasks, referenceStatus);
+  }
+
+  function updateExecutionPanel(sessionPayload, tasks) {
+    if (!executionCard) return;
+    const status = sessionPayload.status;
+    const statusDisplay = sessionPayload.status_display;
+
+    if (executionCard) {
+      const payloadTotal = sessionPayload && typeof sessionPayload.total_tasks_count === "number"
+        ? sessionPayload.total_tasks_count
+        : null;
+      const storedTotal = Number.parseInt(executionCard.dataset.totalTasks || "0", 10) || 0;
+      const derivedTotal = payloadTotal !== null
+        ? payloadTotal
+        : Array.isArray(tasks) && tasks.length ? tasks.length : storedTotal;
+      const normalizedTotal = Math.max(0, Math.round(derivedTotal));
+      executionCard.dataset.totalTasks = String(normalizedTotal);
+    }
+
+    if (executionStatusBeacon) {
+      STATUS_CLASSES.forEach(cls => executionStatusBeacon.classList.remove(cls));
+      executionStatusBeacon.classList.add(statusToneClass(status));
+    }
+
+    if (executionStatusLabel) {
+      executionStatusLabel.textContent = statusDisplay;
+    }
+
+    if (executionTaskLabel) {
+      const runningTask = tasks.find(task => task.status === "running");
+    const failingTask = tasks.find(task => task.status === "failed" || task.status === "error");
+    const queuedTask = tasks.find(task => ["queued", "pending", "ready", "planned"].includes(task.status));
+      const completedTasks = tasks.filter(task => task.status === "completed");
+      let descriptor = "Aguardando atualização…";
+
+      if (runningTask) {
+        const context = runningTask.script_name || runningTask.tool_name;
+        descriptor = context ? `${runningTask.name} • ${context}` : runningTask.name;
+      } else if (status === "failed" && failingTask) {
+        descriptor = `Falha em ${failingTask.name}`;
+      } else if (queuedTask) {
+        descriptor = `Próxima etapa: ${queuedTask.name}`;
+      } else if (status === "completed" && completedTasks.length) {
+        descriptor = `Última etapa concluída: ${completedTasks[completedTasks.length - 1].name}`;
+      } else if (status === "canceled") {
+        descriptor = "Sessão cancelada.";
+      } else if (!tasks.length && terminalStatuses.has(status)) {
+        descriptor = "Sessão finalizada.";
+      }
+
+      executionTaskLabel.textContent = descriptor;
+    }
+
+    if (executionProgressBar) {
+      const progressPercent = resolveOverallProgress(sessionPayload, tasks, status);
+      executionProgressBar.dataset.progress = progressPercent;
+      syncProgressBars(executionCard);
+      if (executionProgressValue) {
+        executionProgressValue.textContent = `${progressPercent}%`;
+      }
+      if (executionProgressDetail) {
+        const completedFromPayload = sessionPayload && typeof sessionPayload.completed_tasks_count === "number"
+          ? sessionPayload.completed_tasks_count
+          : null;
+        const completedCount = completedFromPayload !== null
+          ? completedFromPayload
+          : tasks.filter(task => task.status === "completed").length;
+        const storedTotal = Number.parseInt(executionCard.dataset.totalTasks || "0", 10) || 0;
+  const totalTasks = storedTotal || tasks.length;
+        executionProgressDetail.textContent = totalTasks
+          ? `${completedCount} de ${totalTasks} etapas concluídas`
+          : "Nenhuma etapa registrada ainda.";
+      }
+    }
+  }
 
   function syncProgressBars(scope = document) {
     scope.querySelectorAll(".progress-bar").forEach(bar => {
@@ -686,10 +980,17 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function pollStatus() {
+    if (!statusUrl) return;
     try {
-      const response = await fetch(statusUrl, { headers: { "X-Requested-With": "XMLHttpRequest" } });
+      const response = await fetch(statusUrl, {
+        headers: {
+          "X-Requested-With": "XMLHttpRequest",
+          "Cache-Control": "no-cache",
+        },
+      });
       if (!response.ok) throw new Error("Falha ao consultar status");
       const payload = await response.json();
+      const tasks = payload.tasks || [];
 
       if (statusPill) {
         statusPill.textContent = payload.status_display;
@@ -698,12 +999,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
       handleStatusTransition(payload.status, payload.status_display);
 
-      if (tasksBody) renderTasks(payload.tasks || []);
+      if (tasksBody) renderTasks(tasks);
+      updateExecutionPanel(payload, tasks);
       if (findingsList) renderFindings(payload.findings || []);
       if (logsUrl) fetchLogs();
 
       if (!terminalStatuses.has(payload.status)) {
-        setTimeout(pollStatus, 2500);
+        if (liveIndicator) {
+          liveIndicator.classList.remove("hidden", "tone-success", "tone-error");
+          liveIndicator.textContent = "Atualizando em tempo real…";
+        }
+        scheduleStatusPoll(2500);
       } else if (liveIndicator) {
         liveIndicator.classList.remove("hidden");
       }
@@ -714,16 +1020,16 @@ document.addEventListener("DOMContentLoaded", () => {
         liveIndicator.classList.remove("hidden", "tone-success", "tone-error");
         liveIndicator.classList.add("tone-error");
       }
-      setTimeout(pollStatus, 5000);
+      scheduleStatusPoll(5000);
     }
   }
 
   syncProgressBars();
-  if (logsUrl) fetchLogs(true);
-  if (shouldPoll) {
+  if (statusUrl) {
     pollStatus();
-  } else if (logsUrl) {
-    fetchLogs();
+  }
+  if (logsUrl) {
+    fetchLogs(true);
   }
 
   function handleStatusTransition(currentStatus, statusDisplay) {
@@ -774,6 +1080,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function appendLogs(logs, initialLoad = false) {
     if (!logsList) return;
+    if (liveConsole && initialLoad) {
+      resetConsole();
+    }
     const fragment = document.createDocumentFragment();
     logs.forEach(log => {
       const li = document.createElement("li");
@@ -790,6 +1099,7 @@ document.addEventListener("DOMContentLoaded", () => {
         </footer>
       `;
       fragment.appendChild(li);
+      appendConsoleLine(log);
     });
 
     if (initialLoad || !logsList.children.length) {
@@ -804,6 +1114,8 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       logsList.scrollTop = logsList.scrollHeight;
     }
+
+    updateConsoleEmpty();
   }
 
   function updateLogsEmpty() {
@@ -811,6 +1123,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const hasLogs = logsList.children.length > 0;
     logsEmpty.classList.toggle("hidden", hasLogs);
     logsList.classList.toggle("hidden", !hasLogs);
+    updateConsoleEmpty();
   }
 
   function showToast({ title, message, tone = "success", timeout = 5000 }) {

@@ -331,6 +331,7 @@ class ScanOrchestrator:
         self._connectivity_results: List[ConnectivityProbeResult] = []
         self._connectivity_hosts: List[str] = []
         self._connectivity_success: bool = False
+        self._task_progress_cache: dict[int, float] = {}
 
     def run(self) -> ScanSession:
         if self.session.status == ScanSession.Status.RUNNING:
@@ -385,6 +386,51 @@ class ScanOrchestrator:
 
         return self.session
 
+    def _record_task_event(
+        self,
+        task: ScanTask,
+        message: str,
+        *,
+        progress: float | None = None,
+        severity: str = LogEntry.Severity.INFO,
+        event_type: str = "scan.task.progress",
+        details: Optional[dict] = None,
+        component: str = "scan.orchestrator",
+    ) -> None:
+        safe_progress: float | None = None
+        if progress is not None:
+            try:
+                safe_progress = max(0.0, min(1.0, float(progress)))
+            except (TypeError, ValueError):  # pragma: no cover - defensivo
+                safe_progress = None
+
+        if safe_progress is not None:
+            previous = self._task_progress_cache.get(task.id)
+            if previous is None or safe_progress > previous + 0.001:
+                task.progress = safe_progress
+                task.save(update_fields=["progress", "updated_at"])
+                self._task_progress_cache[task.id] = safe_progress
+
+        base_details = {
+            "progress": task.progress,
+            "task_id": task.id,
+            "task_kind": task.kind,
+        }
+        if details:
+            base_details.update({k: v for k, v in details.items() if v is not None})
+
+        log_event(
+            source_app="arpia_scan",
+            event_type=event_type,
+            message=message,
+            severity=severity,
+            component=component,
+            context=self._log_context(task=task),
+            correlation=self._log_correlation(task=task),
+            details=base_details,
+            tags=["scan", "task", task.kind, "live"],
+        )
+
     def _run_task(self, task: ScanTask, summary_data: dict) -> None:
         task.status = ScanTask.Status.RUNNING
         task.started_at = timezone.now()
@@ -392,9 +438,18 @@ class ScanOrchestrator:
         task.stdout = ""
         task.stderr = ""
         task.save(update_fields=["status", "started_at", "progress", "stdout", "stderr", "updated_at"])
+        self._task_progress_cache[task.id] = task.progress or 0.0
 
         stdout_lines: List[str] = []
         stdout_lines.append(f"[INFO] Iniciando '{task.name}' às {task.started_at:%H:%M:%S}")
+
+        self._record_task_event(
+            task,
+            f"Etapa '{task.name}' iniciada.",
+            progress=0.1,
+            event_type="scan.task.state",
+            details={"status": task.status},
+        )
 
         log_event(
             source_app="arpia_scan",
@@ -422,16 +477,37 @@ class ScanOrchestrator:
             execution_error = exc
             stdout_lines.append(f"[ERROR] {exc.message}")
             task.stderr = (task.stderr + "\n" if task.stderr else "") + exc.message
+            self._record_task_event(
+                task,
+                f"Erro de validação: {exc.message}",
+                severity=LogEntry.Severity.ERROR,
+                event_type="scan.task.error",
+                details={"error": exc.message},
+            )
         except FileNotFoundError as exc:
             execution_error = exc
             message = str(exc)
             stdout_lines.append(f"[ERROR] {message}")
             task.stderr = (task.stderr + "\n" if task.stderr else "") + message
+            self._record_task_event(
+                task,
+                f"Arquivo não encontrado: {message}",
+                severity=LogEntry.Severity.ERROR,
+                event_type="scan.task.error",
+                details={"error": message},
+            )
         except Exception as exc:  # pragma: no cover - erros inesperados
             execution_error = exc
             message = str(exc)
             stdout_lines.append(f"[ERROR] {message}")
             task.stderr = (task.stderr + "\n" if task.stderr else "") + message
+            self._record_task_event(
+                task,
+                f"Falha inesperada: {message}",
+                severity=LogEntry.Severity.ERROR,
+                event_type="scan.task.error",
+                details={"error": message},
+            )
         finally:
             stdout_lines.append("[INFO] Finalizando etapa.")
 
@@ -440,6 +516,7 @@ class ScanOrchestrator:
             task.progress = 0.0 if execution_error else 1.0
             task.status = ScanTask.Status.FAILED if execution_error else ScanTask.Status.COMPLETED
             task.save(update_fields=["status", "finished_at", "progress", "stdout", "stderr", "updated_at"])
+            self._task_progress_cache[task.id] = task.progress
 
             if execution_error:
                 log_event(
@@ -522,13 +599,36 @@ class ScanOrchestrator:
 
         if not hosts:
             lines.append("[WARN] Nenhum host alvo configurado. Pulando etapa de conectividade.")
+            self._record_task_event(
+                task,
+                "Nenhum host configurado para teste de conectividade.",
+                severity=LogEntry.Severity.WARN,
+                progress=0.25,
+                details={"reason": "no_hosts"},
+            )
             summary_data.setdefault("artifacts", {})["connectivity"] = []
             return lines
 
         ports = self._configured_ports(task)
         timeout = float(task.parameters.get("timeout", 1.5)) if isinstance(task.parameters, dict) else 1.5
+        self._record_task_event(
+            task,
+            "Executando sondas de conectividade.",
+            progress=0.25,
+            details={
+                "hosts": hosts,
+                "ports": [f"{port.port}/{port.protocol}" for port in ports],
+                "timeout": timeout,
+            },
+        )
         runner = ConnectivityRunner(hosts, ports, timeout=timeout)
         results = runner.run()
+        self._record_task_event(
+            task,
+            "Sondas concluídas.",
+            progress=0.45,
+            details={"reachable": sum(1 for result in results if result.reachable)},
+        )
 
         self._connectivity_results = results
         self._connectivity_hosts = [result.host for result in results if result.reachable]
@@ -542,6 +642,16 @@ class ScanOrchestrator:
         lines.append(
             "[INFO] Portas verificadas: "
             + ", ".join(f"{port.port}/{port.protocol}" for port in ports)
+        )
+
+        self._record_task_event(
+            task,
+            "Processando resultados de conectividade.",
+            progress=0.65,
+            details={
+                "connectivity_hosts": self._connectivity_hosts,
+                "unreachable_hosts": [result.host for result in results if not result.reachable],
+            },
         )
 
         for result in results:
@@ -584,6 +694,12 @@ class ScanOrchestrator:
                     "message": "Nenhum host respondeu durante o teste de conectividade.",
                 }
             )
+            self._record_task_event(
+                task,
+                "Nenhum host respondeu ao teste de conectividade.",
+                severity=LogEntry.Severity.WARN,
+                progress=0.8,
+            )
         elif unreachable:
             lines.append(f"[INFO] {len(unreachable)} host(s) não responderam.")
             summary_data.setdefault("insights", []).append(
@@ -591,6 +707,12 @@ class ScanOrchestrator:
                     "level": "info",
                     "message": f"{len(unreachable)} host(s) não responderam ao teste de conectividade.",
                 }
+            )
+            self._record_task_event(
+                task,
+                f"{len(unreachable)} host(s) sem resposta.",
+                severity=LogEntry.Severity.WARN,
+                progress=0.8,
             )
         else:
             lines.append("[INFO] Todos os hosts responderam com sucesso.")
@@ -600,7 +722,14 @@ class ScanOrchestrator:
                     "message": "Todos os hosts configurados responderam ao teste de conectividade.",
                 }
             )
+            self._record_task_event(
+                task,
+                "Todos os hosts responderam ao teste de conectividade.",
+                severity=LogEntry.Severity.INFO,
+                progress=0.85,
+            )
 
+        self._record_task_event(task, "Conectividade concluída.", progress=0.9)
         return lines
 
     def _execute_script_task(self, task: ScanTask, summary_data: dict) -> List[str]:
@@ -628,6 +757,15 @@ class ScanOrchestrator:
             raise ValidationError(f"O executável da ferramenta não foi encontrado em '{tool_path}'.")
 
         rendered_content = render_script_with_macros(script.content, self.macros)
+        self._record_task_event(
+            task,
+            f"Preparando script '{script.slug}'.",
+            progress=0.35,
+            details={
+                "script": script.slug,
+                "tool": tool.slug if tool else None,
+            },
+        )
         temp_file = tempfile.NamedTemporaryFile("w", suffix=f"_{script.slug}.sh", delete=False, encoding="utf-8")
         temp_path: Path | None = None
         try:
@@ -650,6 +788,11 @@ class ScanOrchestrator:
                 else:
                     env[str(key)] = str(value)
 
+            self._record_task_event(
+                task,
+                "Invocando script em shell.",
+                progress=0.45,
+            )
             result = subprocess.run(
                 ["/bin/bash", str(temp_path)],
                 capture_output=True,
@@ -671,12 +814,32 @@ class ScanOrchestrator:
             lines.append(f"[INFO] Hosts alvo: {', '.join(targets)}")
         lines.append(f"[INFO] Código de saída: {result.returncode}")
 
+        self._record_task_event(
+            task,
+            "Execução finalizada.",
+            progress=0.7,
+            details={"returncode": result.returncode},
+        )
+
         if result.stdout:
             preview = result.stdout.strip()
             lines.append(f"[STDOUT] {preview[:4000]}")
+            self._record_task_event(
+                task,
+                "STDOUT capturado.",
+                progress=0.75,
+                details={"stdout_sample": preview[:250]},
+            )
         if result.stderr:
             preview_err = result.stderr.strip()
             lines.append(f"[STDERR] {preview_err[:4000]}")
+            self._record_task_event(
+                task,
+                "STDERR capturado.",
+                severity=LogEntry.Severity.WARN,
+                progress=0.8,
+                details={"stderr_sample": preview_err[:250]},
+            )
 
         summary_data.setdefault("artifacts", {}).setdefault("scripts", {})[script.slug] = {
             "returncode": result.returncode,
@@ -686,6 +849,12 @@ class ScanOrchestrator:
 
         if result.returncode != 0:
             raise ValidationError(f"Execução do script '{script.name}' retornou código {result.returncode}.")
+
+        self._record_task_event(
+            task,
+            f"Script '{script.name}' finalizado com sucesso.",
+            progress=0.9,
+        )
 
         summary_data.setdefault("insights", []).append(
             {
@@ -705,7 +874,23 @@ class ScanOrchestrator:
         lines.append(f"[INFO] Portas alvo: {', '.join(clean_ports)}")
         if task.wordlist:
             lines.append(f"[INFO] Wordlist associada: {task.wordlist.name}")
+        self._record_task_event(
+            task,
+            "Varredura Rustscan simulada em andamento.",
+            progress=0.3,
+            details={
+                "hosts": hosts,
+                "ports": clean_ports,
+                "wordlist": getattr(task.wordlist, "slug", None),
+            },
+        )
         summary_data.setdefault("artifacts", {})["rustscan"] = self._generate_rustscan_payload(hosts)
+        self._record_task_event(
+            task,
+            "Payload Rustscan gerado.",
+            progress=0.6,
+            details={"host_count": len(hosts)},
+        )
         return lines
 
     def _simulate_nmap(self, task: ScanTask, summary_data: dict) -> List[str]:
@@ -714,7 +899,22 @@ class ScanOrchestrator:
             lines.append(f"[INFO] Script selecionado: {task.script.name}")
         lines.append("[INFO] Executando perfis de ruído crescente para hosts prioritários.")
         hosts = self._target_hosts()
+        self._record_task_event(
+            task,
+            "Simulação de perfis Nmap.",
+            progress=0.35,
+            details={
+                "hosts": hosts,
+                "script": getattr(task.script, "slug", None),
+            },
+        )
         summary_data.setdefault("artifacts", {})["nmap"] = self._generate_nmap_payload(hosts)
+        self._record_task_event(
+            task,
+            "Payload Nmap gerado.",
+            progress=0.65,
+            details={"host_count": len(hosts)},
+        )
         return lines
 
     def _target_hosts(self) -> List[str]:

@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
 import os
+import sys
 from pathlib import Path
 from dotenv import load_dotenv
 from urllib.parse import urlparse
@@ -30,6 +31,7 @@ SECRET_KEY = os.getenv("SECRET_KEY", "arpia-dev-placeholder-secret")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DEBUG", "True").lower() in ("1", "true", "yes")
+TESTING = any(arg == "test" for arg in sys.argv)
 
 ALLOWED_HOSTS = [h.strip() for h in os.getenv("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",") if h.strip()]
 
@@ -117,6 +119,10 @@ else:
         }
     }
 
+
+if DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":
+    sqlite_options = DATABASES["default"].setdefault("OPTIONS", {})
+    sqlite_options.setdefault("timeout", int(os.getenv("SQLITE_BUSY_TIMEOUT", "20")))
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators

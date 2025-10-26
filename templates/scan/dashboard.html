@@ -485,47 +485,36 @@ document.addEventListener("DOMContentLoaded", () => {
       const sessionData = await createResponse.json();
 
       setFeedback({
-        title: "Sessão criada",
-        body: "Disparando execução das etapas…",
-        icon: "🚀",
+        title: "Execução em andamento",
+        body: "Abrindo acompanhamento em tempo real…",
+        icon: "📡",
       });
 
+      const detailUrl = sessionData.detail_url;
       const startUrl = startUrlTemplate.replace("00000000-0000-0000-0000-000000000000", sessionData.id);
-      const startResponse = await fetch(startUrl, {
+
+      fetch(startUrl, {
         method: "POST",
         headers: {
           "X-CSRFToken": getCookie("csrftoken"),
         },
-      });
-
-      if (!startResponse.ok) {
-        const errorPayload = await startResponse.json().catch(() => ({}));
-        throw new Error(errorPayload.error || "Falha ao iniciar sessão");
-      }
-
-      const startedData = await startResponse.json();
-      const status = startedData.status;
-
-      if (TERMINAL_STATUSES.has(status)) {
-        setFeedback({
-          title: "Execução concluída",
-          body: "Redirecionando para o detalhamento da sessão…",
-          icon: status === "completed" ? "✅" : "⚠️",
-          tone: status === "completed" ? "success" : "error",
+        keepalive: true,
+      })
+        .then(response => {
+          if (!response.ok) {
+            return response.json().catch(() => ({})).then(errorPayload => {
+              console.error("Falha ao iniciar sessão", errorPayload.error || response.statusText);
+            });
+          }
+        })
+        .catch(error => {
+          console.error("Erro ao iniciar sessão", error);
         });
-        setTimeout(() => {
-          window.location.href = sessionData.detail_url;
-        }, 1200);
-      } else {
-        setFeedback({
-          title: "Execução em andamento",
-          body: "Acompanhe o progresso em tempo real no detalhamento da sessão.",
-          icon: "📡",
-        });
-        setTimeout(() => {
-          window.location.href = sessionData.detail_url;
-        }, 1200);
-      }
+
+      setTimeout(() => {
+        window.location.href = detailUrl;
+      }, 200);
+      return;
     } catch (error) {
       console.error(error);
       setFeedback({

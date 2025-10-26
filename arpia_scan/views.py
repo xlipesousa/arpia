@@ -1,21 +1,26 @@
 import csv
+import json
+import logging
+import threading
+import time
 from statistics import mean
 
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
-from django.db.models import Q
-from django.http import Http404, JsonResponse, HttpResponse
-from django.shortcuts import get_object_or_404, redirect
-from django.views import View
-from django.views.decorators.http import require_http_methods
-from django.views.generic import TemplateView
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ValidationError
+from django.db import close_old_connections
+from django.db.models import Q
+from django.http import Http404, HttpResponse, JsonResponse
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.utils.http import urlencode
-
-import json
+from django.views import View
+from django.views.decorators.http import require_http_methods
+from django.views.generic import TemplateView
 
 
 def _format_duration(seconds: float | int | None) -> str:
@@ -42,9 +47,167 @@ from arpia_core.models import Project, Script, Tool
 from arpia_core.views import build_project_macros  # TODO: mover para util dedicado
 
 from arpia_log.models import LogEntry
+from arpia_log.services import log_event
 
 from .models import ScanFinding, ScanSession, ScanTask
 from .services import ScanOrchestrator, create_planned_session
+
+
+logger = logging.getLogger(__name__)
+UserModel = get_user_model()
+
+TERMINAL_SESSION_STATUSES = {
+    ScanSession.Status.COMPLETED,
+    ScanSession.Status.FAILED,
+    ScanSession.Status.CANCELED,
+}
+
+
+def _dispatch_session_execution(session_id, user_id=None) -> None:
+    """Dispara execução de sessão em uma thread de fundo."""
+
+    session_snapshot = (
+        ScanSession.objects.filter(pk=session_id)
+        .values("reference", "project_id", "status")
+        .first()
+    )
+
+    reference = (
+        session_snapshot.get("reference")
+        if session_snapshot and session_snapshot.get("reference")
+        else str(session_id)
+    )
+    project_id = session_snapshot.get("project_id") if session_snapshot else None
+
+    logger.info("Despachando sessão %s para execução assíncrona", reference)
+
+    log_event(
+        source_app="arpia_scan",
+        event_type="scan.session.dispatch",
+        message=f"Despacho da sessão {reference} para execução em background",
+        component="scan.dispatcher",
+        context={
+            "session_id": str(session_id),
+            "session_reference": reference,
+            "project_id": str(project_id) if project_id else None,
+        },
+        correlation={
+            "scan_session_id": str(session_id),
+            "project_id": str(project_id) if project_id else None,
+        },
+        tags=["scan", "session", "dispatcher"],
+    )
+
+    def _runner():  # pragma: no cover - executa apenas em runtime
+        close_old_connections()
+        try:
+            session = (
+                ScanSession.objects.select_related("project", "owner")
+                .prefetch_related("tasks__tool", "tasks__script")
+                .get(pk=session_id)
+            )
+        except ScanSession.DoesNotExist:
+            logger.warning("Sessão %s não encontrada para execução assíncrona", session_id)
+            close_old_connections()
+            return
+
+        user = None
+        if user_id:
+            try:
+                user = UserModel.objects.get(pk=user_id)
+            except UserModel.DoesNotExist:
+                logger.warning("Usuário %s não encontrado para execução de sessão %s", user_id, session_id)
+
+        thread_name = threading.current_thread().name
+        started = time.perf_counter()
+
+        log_event(
+            source_app="arpia_scan",
+            event_type="scan.session.thread.started",
+            message=f"Thread {thread_name} iniciou execução da sessão {session.reference}",
+            component="scan.dispatcher",
+            context={
+                "session_id": str(session.pk),
+                "session_reference": session.reference,
+                "project_id": str(session.project_id),
+                "thread_name": thread_name,
+            },
+            correlation={
+                "scan_session_id": str(session.pk),
+                "project_id": str(session.project_id),
+            },
+            tags=["scan", "session", "dispatcher", "thread"],
+        )
+
+        try:
+            ScanOrchestrator(session, run_as_user=user).run()
+        except ValidationError as exc:
+            logger.warning("Execução da sessão %s terminou com erro de validação: %s", session_id, exc)
+            log_event(
+                source_app="arpia_scan",
+                event_type="scan.session.thread.validation_error",
+                message=f"Execução da sessão {session.reference} encerrada por erro de validação",
+                severity=LogEntry.Severity.WARNING,
+                component="scan.dispatcher",
+                context={
+                    "session_id": str(session.pk),
+                    "session_reference": session.reference,
+                    "project_id": str(session.project_id),
+                    "thread_name": thread_name,
+                },
+                correlation={
+                    "scan_session_id": str(session.pk),
+                    "project_id": str(session.project_id),
+                },
+                details={"error": str(exc)},
+                tags=["scan", "session", "dispatcher", "thread", "validation"],
+            )
+        except Exception as exc:  # pragma: no cover - caminho não determinístico
+            logger.exception("Falha ao executar sessão %s em background", session_id)
+            log_event(
+                source_app="arpia_scan",
+                event_type="scan.session.thread.crashed",
+                message=f"Execução da sessão {session.reference} falhou inesperadamente",
+                severity=LogEntry.Severity.ERROR,
+                component="scan.dispatcher",
+                context={
+                    "session_id": str(session.pk),
+                    "session_reference": session.reference,
+                    "project_id": str(session.project_id),
+                    "thread_name": thread_name,
+                },
+                correlation={
+                    "scan_session_id": str(session.pk),
+                    "project_id": str(session.project_id),
+                },
+                details={"error": str(exc)},
+                tags=["scan", "session", "dispatcher", "thread", "exception"],
+            )
+        else:
+            elapsed = time.perf_counter() - started
+            log_event(
+                source_app="arpia_scan",
+                event_type="scan.session.thread.completed",
+                message=f"Thread {thread_name} concluiu execução da sessão {session.reference}",
+                component="scan.dispatcher",
+                context={
+                    "session_id": str(session.pk),
+                    "session_reference": session.reference,
+                    "project_id": str(session.project_id),
+                    "thread_name": thread_name,
+                },
+                correlation={
+                    "scan_session_id": str(session.pk),
+                    "project_id": str(session.project_id),
+                },
+                details={"duration_seconds": round(elapsed, 3)},
+                tags=["scan", "session", "dispatcher", "thread", "completed"],
+            )
+        finally:
+            close_old_connections()
+
+    thread = threading.Thread(target=_runner, name=f"scan-session-{session_id}", daemon=True)
+    thread.start()
 
 
 def _macro_entries(macros: dict | None) -> list[dict]:
@@ -297,7 +460,7 @@ class ScanDashboardView(LoginRequiredMixin, TemplateView):
         )
 
     def _resolve_selected_project(self, projects):
-        requested_id = self.request.GET.get("project", "" ) or ""
+        requested_id = self.request.GET.get("project", "") or ""
         if requested_id:
             for project in projects:
                 if str(project.pk) == str(requested_id):
@@ -388,6 +551,16 @@ class ScanSessionDetailView(LoginRequiredMixin, TemplateView):
         tasks = list(
             session.tasks.select_related("tool", "script", "wordlist").order_by("order", "id")
         )
+        serialized_tasks = [_serialize_task(task) for task in tasks]
+        total_tasks_count = len(tasks)
+        completed_tasks_count = _calculate_completed_tasks(tasks)
+        overall_progress_percent = _calculate_overall_progress(session.status, tasks)
+        logs_limit = 100
+        bootstrap_logs_qs = (
+            LogEntry.objects.filter(correlation__scan_session_id=str(session.pk))
+            .order_by("timestamp", "id")[:logs_limit]
+        )
+        serialized_logs = [_serialize_log_entry(entry) for entry in bootstrap_logs_qs]
         findings_qs = session.findings.select_related("source_task").order_by("order", "id")
         finding_rows = [
             {
@@ -408,6 +581,9 @@ class ScanSessionDetailView(LoginRequiredMixin, TemplateView):
                 "session": session,
                 "project": session.project,
                 "tasks": tasks,
+                "overall_progress_percent": overall_progress_percent,
+                "completed_tasks_count": completed_tasks_count,
+                "total_tasks_count": total_tasks_count,
                 "findings": finding_rows,
                 "macros": macros,
                 "macro_entries": macro_entries,
@@ -422,6 +598,16 @@ class ScanSessionDetailView(LoginRequiredMixin, TemplateView):
                 "timeline_entries": _build_timeline_entries(snapshot),
                 "report_url": self._build_report_url(session),
                 "logs_url": reverse("arpia_scan:api_session_logs", args=[session.pk]),
+                "session_bootstrap": {
+                    "status": session.status,
+                    "status_display": session.get_status_display(),
+                    "tasks": serialized_tasks,
+                    "logs": serialized_logs,
+                    "overall_progress_percent": overall_progress_percent,
+                    "completed_tasks_count": completed_tasks_count,
+                    "total_tasks_count": total_tasks_count,
+                    "latest_log_cursor": serialized_logs[-1]["timestamp"] if serialized_logs else None,
+                },
             }
         )
         return context
@@ -615,6 +801,90 @@ def _serialize_task(task) -> dict:
     }
 
 
+def _resolve_task_status(task) -> str:
+    if isinstance(task, dict):
+        status = task.get("status")
+    else:
+        status = getattr(task, "status", "")
+    return (status or "").lower()
+
+
+def _resolve_task_progress_percent(task) -> int:
+    if isinstance(task, dict):
+        percent = task.get("progress_percent")
+        progress_value = task.get("progress")
+    else:
+        percent = getattr(task, "progress_percent", None)
+        progress_value = getattr(task, "progress", None)
+
+    if percent is None:
+        try:
+            percent = float(progress_value or 0)
+            percent = int(round(percent * 100))
+        except (TypeError, ValueError):
+            percent = 0
+
+    try:
+        return max(0, min(100, int(percent)))
+    except (TypeError, ValueError):  # pragma: no cover - defensivo
+        return 0
+
+
+def _calculate_completed_tasks(tasks) -> int:
+    return sum(1 for task in tasks if _resolve_task_status(task) == ScanTask.Status.COMPLETED)
+
+
+def _calculate_overall_progress(session_status: str, tasks) -> int:
+    if not tasks:
+        return 100 if session_status in TERMINAL_SESSION_STATUSES else 0
+
+    total = 0
+    count = 0
+
+    for task in tasks:
+        total += _resolve_task_progress_percent(task)
+        count += 1
+
+    if not count:
+        return 100 if session_status in TERMINAL_SESSION_STATUSES else 0
+
+    average = int(round(total / count))
+    normalized = max(0, min(100, average))
+
+    if session_status in TERMINAL_SESSION_STATUSES:
+        return 100
+
+    return normalized
+
+
+def _build_session_payload(session: ScanSession) -> dict:
+    tasks = [_serialize_task(task) for task in session.tasks.order_by("order", "id")]
+    payload = _serialize_session(session)
+    payload["tasks"] = tasks
+    payload["total_tasks_count"] = len(tasks)
+    payload["completed_tasks_count"] = _calculate_completed_tasks(tasks)
+    payload["overall_progress_percent"] = _calculate_overall_progress(session.status, tasks)
+    return payload
+
+
+def _await_status_transition(session: ScanSession, *, timeout: float = 1.5, interval: float = 0.1) -> None:
+    """Espera transição de status após disparo assíncrono."""
+
+    if timeout <= 0:
+        return
+
+    deadline = time.monotonic() + timeout
+    planned_status = ScanSession.Status.PLANNED
+
+    while time.monotonic() < deadline:
+        session.refresh_from_db()
+        if session.status != planned_status:
+            return
+        if session.is_terminal:
+            return
+        time.sleep(interval)
+
+
 @login_required
 @require_http_methods(["POST"])
 def api_session_create(request):
@@ -640,9 +910,7 @@ def api_session_create(request):
     except ValidationError as exc:
         return JsonResponse({"error": exc.message}, status=403)
 
-    tasks = [_serialize_task(task) for task in session.tasks.order_by("order", "id")]
-    response = _serialize_session(session)
-    response["tasks"] = tasks
+    response = _build_session_payload(session)
     return JsonResponse(response, status=201)
 
 
@@ -652,16 +920,44 @@ def api_session_start(request, pk):
     session = get_object_or_404(ScanSession, pk=pk)
     if not _user_has_access(request.user, session.project):
         return JsonResponse({"error": "Usuário não possui acesso a este projeto."}, status=403)
-    try:
-        ScanOrchestrator(session, run_as_user=request.user).run()
-    except ValidationError as exc:
-        return JsonResponse({"error": exc.message}, status=400)
+    if session.status == ScanSession.Status.RUNNING:
+        return JsonResponse(_build_session_payload(session), status=409)
 
+    if session.is_terminal:
+        return JsonResponse({"error": "Sessão já foi finalizada."}, status=400)
+
+    if settings.TESTING:
+        try:
+            ScanOrchestrator(session, run_as_user=request.user).run()
+        except ValidationError as exc:
+            return JsonResponse({"error": exc.message}, status=400)
+        session.refresh_from_db()
+        return JsonResponse(_build_session_payload(session))
+
+    log_event(
+        source_app="arpia_scan",
+        event_type="scan.session.start.requested",
+        message=f"Início da sessão {session.reference} solicitado",
+        component="scan.api",
+        context={
+            "session_id": str(session.pk),
+            "session_reference": session.reference,
+            "project_id": str(session.project_id),
+        },
+        correlation={
+            "scan_session_id": str(session.pk),
+            "project_id": str(session.project_id),
+        },
+        tags=["scan", "session", "api", "start"],
+        request=request,
+    )
+
+    _dispatch_session_execution(session.pk, request.user.pk)
+    _await_status_transition(session)
     session.refresh_from_db()
 
-    response = _serialize_session(session)
-    response["tasks"] = [_serialize_task(task) for task in session.tasks.order_by("order", "id")]
-    return JsonResponse(response)
+    response = _build_session_payload(session)
+    return JsonResponse(response, status=202)
 
 
 @login_required
@@ -670,8 +966,12 @@ def api_session_status(request, pk):
     session = get_object_or_404(ScanSession, pk=pk)
     if not _user_has_access(request.user, session.project):
         return JsonResponse({"error": "Usuário não possui acesso a este projeto."}, status=403)
+    tasks = [_serialize_task(task) for task in session.tasks.order_by("order", "id")]
     response = _serialize_session(session)
-    response["tasks"] = [_serialize_task(task) for task in session.tasks.order_by("order", "id")]
+    response["tasks"] = tasks
+    response["total_tasks_count"] = len(tasks)
+    response["completed_tasks_count"] = _calculate_completed_tasks(tasks)
+    response["overall_progress_percent"] = _calculate_overall_progress(session.status, tasks)
     response["findings"] = [
         {
             "id": finding.id,
