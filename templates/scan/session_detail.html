@@ -86,15 +86,15 @@
         </div>
         <div>
           <dt>Iniciada</dt>
-          <dd>{{ session.started_at|default:session.created_at|date:"d/m/Y H:i" }}</dd>
+          <dd id="session-started-at" data-empty-text="—">{{ session.started_at|default:session.created_at|date:"d/m/Y H:i" }}</dd>
         </div>
         <div>
           <dt>Finalizada</dt>
-          <dd>{% if session.finished_at %}{{ session.finished_at|date:"d/m/Y H:i" }}{% else %}<span class="muted">—</span>{% endif %}</dd>
+          <dd id="session-finished-at" data-empty-text="—">{% if session.finished_at %}{{ session.finished_at|date:"d/m/Y H:i" }}{% else %}<span class="muted">—</span>{% endif %}</dd>
         </div>
         <div class="notes">
           <dt>Notas</dt>
-          <dd>{{ session.notes|default:"Nenhuma anotação." }}</dd>
+          <dd id="session-notes" data-empty-text="Nenhuma anotação.">{{ session.notes|default:"Nenhuma anotação." }}</dd>
         </div>
       </dl>
     </div>
@@ -105,7 +105,7 @@
       <h2>Resumo executivo</h2>
       <p class="muted">Panorama consolidado com base no snapshot da sessão.</p>
     </header>
-    <div class="metrics-grid">
+    <div class="metrics-grid" id="metrics-grid" data-empty-text="Nenhuma métrica disponível até o momento.">
       {% for metric in overview_metrics %}
         <div class="metric-card">
           <span class="metric-value">{{ metric.value|default:"—" }}</span>
@@ -114,16 +114,15 @@
         </div>
       {% endfor %}
     </div>
-    {% if report_insights %}
-      <ul class="insights-list">
-        {% for insight in report_insights %}
-          <li class="insight insight-{{ insight.level|default:'info' }}">{{ insight.message }}</li>
-        {% endfor %}
-      </ul>
-    {% endif %}
+    <ul class="insights-list{% if not report_insights %} hidden{% endif %}" id="insights-list" data-empty-text="Nenhum insight registrado.">
+      {% for insight in report_insights %}
+        <li class="insight insight-{{ insight.level|default:'info' }}">{{ insight.message }}</li>
+      {% endfor %}
+    </ul>
+  <div class="empty{% if report_insights %} hidden{% endif %}" id="insights-empty" data-empty-text="Nenhum insight registrado.">Nenhum insight registrado.</div>
   </article>
 
-  <article class="card connectivity-card">
+  <article class="card connectivity-card" data-empty-text="Nenhum dado de conectividade registrado.">
     <header class="section-header">
       <div>
         <h2>Resumo de conectividade</h2>
@@ -134,86 +133,83 @@
         <a href="{% url 'arpia_scan:session_targets_export_json' session.id %}" class="btn-secondary" target="_blank" rel="noopener noreferrer">Exportar JSON</a>
       </div>
     </header>
-    {% if connectivity_overview.hosts %}
-      <div class="connectivity-totals">
-        <div>
-          <span class="counter">{{ connectivity_overview.totals.reachable }}</span>
-          <span class="label">Hosts alcançados</span>
-        </div>
-        <div>
-          <span class="counter">{{ connectivity_overview.totals.unreachable }}</span>
-          <span class="label">Hosts sem resposta</span>
-        </div>
-        <div>
-          <span class="counter">{{ connectivity_overview.totals.checked_ports }}</span>
-          <span class="label">Portas verificadas</span>
-        </div>
+    <div class="connectivity-totals" id="connectivity-totals">
+      <div>
+        <span class="counter">{{ connectivity_overview.totals.reachable }}</span>
+        <span class="label">Hosts alcançados</span>
       </div>
+      <div>
+        <span class="counter">{{ connectivity_overview.totals.unreachable }}</span>
+        <span class="label">Hosts sem resposta</span>
+      </div>
+      <div>
+        <span class="counter">{{ connectivity_overview.totals.checked_ports }}</span>
+        <span class="label">Portas verificadas</span>
+      </div>
+    </div>
 
-      <div class="connectivity-hosts">
-        {% for host in connectivity_overview.hosts %}
-          <article class="connectivity-host {% if host.reachable %}reachable{% else %}unreachable{% endif %}">
-            <header>
-              <div>
-                <h3>{{ host.host }}</h3>
-                <span class="status-chip {% if host.reachable %}status-open{% else %}status-closed{% endif %}">
-                  {% if host.reachable %}Alcançado{% else %}Sem resposta{% endif %}
-                </span>
-              </div>
-              <div class="latency-summary">
-                {% if host.latency_avg %}
-                  <span>Média {{ host.latency_avg }} ms</span>
-                  {% if host.latency_min and host.latency_max %}
-                    <small class="muted">{{ host.latency_min }} – {{ host.latency_max }} ms</small>
-                  {% endif %}
-                {% else %}
-                  <span class="muted">Sem métricas de latência</span>
+    <div class="connectivity-hosts" id="connectivity-hosts">
+      {% for host in connectivity_overview.hosts %}
+        <article class="connectivity-host {% if host.reachable %}reachable{% else %}unreachable{% endif %}">
+          <header>
+            <div>
+              <h3>{{ host.host }}</h3>
+              <span class="status-chip {% if host.reachable %}status-open{% else %}status-closed{% endif %}">
+                {% if host.reachable %}Alcançado{% else %}Sem resposta{% endif %}
+              </span>
+            </div>
+            <div class="latency-summary">
+              {% if host.latency_avg %}
+                <span>Média {{ host.latency_avg }} ms</span>
+                {% if host.latency_min and host.latency_max %}
+                  <small class="muted">{{ host.latency_min }} – {{ host.latency_max }} ms</small>
                 {% endif %}
-              </div>
-            </header>
+              {% else %}
+                <span class="muted">Sem métricas de latência</span>
+              {% endif %}
+            </div>
+          </header>
 
-            <table class="connectivity-table">
-              <thead>
-                <tr>
-                  <th>Porta</th>
-                  <th>Status</th>
-                  <th>Latência</th>
-                  <th>Observações</th>
+          <table class="connectivity-table">
+            <thead>
+              <tr>
+                <th>Porta</th>
+                <th>Status</th>
+                <th>Latência</th>
+                <th>Observações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for port in host.open_ports %}
+                <tr class="status-open">
+                  <td>{{ port.port }}</td>
+                  <td><span class="status-chip status-open">Aberta</span></td>
+                  <td>{% if port.latency_ms is not None %}{{ port.latency_ms }} ms{% else %}<span class="muted">—</span>{% endif %}</td>
+                  <td><span class="muted">—</span></td>
                 </tr>
-              </thead>
-              <tbody>
-                {% for port in host.open_ports %}
-                  <tr class="status-open">
-                    <td>{{ port.port }}</td>
-                    <td><span class="status-chip status-open">Aberta</span></td>
-                    <td>{% if port.latency_ms is not None %}{{ port.latency_ms }} ms{% else %}<span class="muted">—</span>{% endif %}</td>
-                    <td><span class="muted">—</span></td>
-                  </tr>
-                {% endfor %}
-                {% for port in host.closed_ports %}
-                  <tr class="status-closed">
-                    <td>{{ port.port }}</td>
-                    <td><span class="status-chip status-closed">Fechada</span></td>
-                    <td><span class="muted">—</span></td>
-                    <td>{{ port.error|default:"Conexão recusada" }}</td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
+              {% endfor %}
+              {% for port in host.closed_ports %}
+                <tr class="status-closed">
+                  <td>{{ port.port }}</td>
+                  <td><span class="status-chip status-closed">Fechada</span></td>
+                  <td><span class="muted">—</span></td>
+                  <td>{{ port.error|default:"Conexão recusada" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
 
-            {% if host.errors %}
-              <ul class="host-alerts">
-                {% for error in host.errors %}
-                  <li>{{ error }}</li>
-                {% endfor %}
-              </ul>
-            {% endif %}
-          </article>
-        {% endfor %}
-      </div>
-    {% else %}
-      <div class="empty">Nenhum dado de conectividade registrado.</div>
-    {% endif %}
+          {% if host.errors %}
+            <ul class="host-alerts">
+              {% for error in host.errors %}
+                <li>{{ error }}</li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+        </article>
+      {% endfor %}
+    </div>
+  <div class="empty{% if connectivity_overview.hosts %} hidden{% endif %}" id="connectivity-empty" data-empty-text="Nenhum dado de conectividade registrado.">Nenhum dado de conectividade registrado.</div>
   </article>
 
   <article class="card timeline-card">
@@ -221,25 +217,22 @@
       <h2>Linha do tempo das etapas</h2>
       <p class="muted">Ordens cronológicas com início, término e duração.</p>
     </header>
-    {% if timeline_entries %}
-      <ol class="timeline">
-        {% for step in timeline_entries %}
-          <li>
-            <div class="timeline-item">
-              <div class="timeline-title">{{ step.label }}</div>
-              <div class="timeline-meta">
-                <span class="status-chip status-{{ step.status|default:'pending' }}">{{ step.status_display|default:step.status|default:"—" }}</span>
-                <span>Início {{ step.started_at }}</span>
-                <span>Término {{ step.finished_at }}</span>
-                <span>Duração {{ step.duration }}</span>
-              </div>
+    <ol class="timeline{% if not timeline_entries %} hidden{% endif %}" id="timeline-list">
+      {% for step in timeline_entries %}
+        <li>
+          <div class="timeline-item">
+            <div class="timeline-title">{{ step.label }}</div>
+            <div class="timeline-meta">
+              <span class="status-chip status-{{ step.status|default:'pending' }}">{{ step.status_display|default:step.status|default:"—" }}</span>
+              <span>Início {{ step.started_at }}</span>
+              <span>Término {{ step.finished_at }}</span>
+              <span>Duração {{ step.duration }}</span>
             </div>
-          </li>
-        {% endfor %}
-      </ol>
-    {% else %}
-      <div class="empty">Nenhuma etapa executada até o momento.</div>
-    {% endif %}
+          </div>
+        </li>
+      {% endfor %}
+    </ol>
+  <div class="empty{% if timeline_entries %} hidden{% endif %}" id="timeline-empty" data-empty-text="Nenhuma etapa executada até o momento.">Nenhuma etapa executada até o momento.</div>
   </article>
 
   <article class="card tasks-card" data-empty-text="Nenhuma etapa registrada para esta sessão.">
@@ -599,6 +592,18 @@ document.addEventListener("DOMContentLoaded", () => {
   const liveConsole = document.getElementById("live-console");
   const liveConsoleEmpty = document.getElementById("live-console-empty");
   const consoleBody = document.getElementById("console-body");
+  const executionTimeIndicator = document.getElementById("execution-time-indicator");
+  const sessionStartedAt = document.getElementById("session-started-at");
+  const sessionFinishedAt = document.getElementById("session-finished-at");
+  const sessionNotes = document.getElementById("session-notes");
+  const metricsGrid = document.getElementById("metrics-grid");
+  const insightsList = document.getElementById("insights-list");
+  const insightsEmpty = document.getElementById("insights-empty");
+  const connectivityTotals = document.getElementById("connectivity-totals");
+  const connectivityHosts = document.getElementById("connectivity-hosts");
+  const connectivityEmpty = document.getElementById("connectivity-empty");
+  const timelineList = document.getElementById("timeline-list");
+  const timelineEmpty = document.getElementById("timeline-empty");
 
   const statusUrl = root.dataset.apiStatusUrl;
   const logsUrl = root.dataset.apiLogsUrl;
@@ -670,6 +675,23 @@ document.addEventListener("DOMContentLoaded", () => {
     updateLogsEmpty();
   }
 
+  if (bootstrapData && typeof bootstrapData === "object" && Object.keys(bootstrapData).length > 0) {
+    if (bootstrapData.session) {
+      updateSessionOverview(bootstrapData.session);
+    } else {
+      updateSessionOverview(bootstrapData);
+    }
+    if (Object.prototype.hasOwnProperty.call(bootstrapData, "overview_metrics") || Object.prototype.hasOwnProperty.call(bootstrapData, "report_insights")) {
+      renderOverviewMetrics(bootstrapData.overview_metrics || [], bootstrapData.report_insights || []);
+    }
+    if (Object.prototype.hasOwnProperty.call(bootstrapData, "connectivity_overview")) {
+      renderConnectivity(bootstrapData.connectivity_overview || null);
+    }
+    if (Object.prototype.hasOwnProperty.call(bootstrapData, "timeline_entries")) {
+      renderTimeline(bootstrapData.timeline_entries || []);
+    }
+  }
+
   function statusToneClass(status) {
     switch (status) {
       case "running": return "status-running";
@@ -679,7 +701,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  const formatDate = iso => {
+  function formatDate(iso) {
     if (!iso) return "—";
     const date = new Date(iso);
     if (Number.isNaN(date.getTime())) return "—";
@@ -687,7 +709,17 @@ document.addEventListener("DOMContentLoaded", () => {
       dateStyle: "short",
       timeStyle: "medium",
     }).format(date);
-  };
+  }
+
+  function formatDateShort(iso) {
+    if (!iso) return null;
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return null;
+    return new Intl.DateTimeFormat("pt-BR", {
+      dateStyle: "short",
+      timeStyle: "short",
+    }).format(date);
+  }
 
   function escapeHtml(value) {
     const safeValue = value == null ? "" : String(value);
@@ -697,6 +729,252 @@ document.addEventListener("DOMContentLoaded", () => {
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#39;");
+  }
+
+  function setEmptyState(element, message) {
+    if (!element) return;
+    const text = message || element.dataset.emptyText || "—";
+    element.innerHTML = `<span class="muted">${escapeHtml(text)}</span>`;
+  }
+
+  function setPlainText(element, value, fallbackMessage) {
+    if (!element) return;
+    const stringValue = value == null ? "" : String(value);
+    if (stringValue.trim()) {
+      element.textContent = stringValue;
+    } else {
+      element.textContent = fallbackMessage || element.dataset.emptyText || "";
+    }
+  }
+
+  function updateSessionOverview(sessionPayload) {
+    if (!sessionPayload) return;
+    const startedAtValue = sessionPayload.started_at || sessionPayload.created_at || null;
+    const finishedAtValue = sessionPayload.finished_at || null;
+    const notesValue = sessionPayload.notes || "";
+
+    const formattedStarted = formatDateShort(startedAtValue);
+    if (sessionStartedAt) {
+      if (formattedStarted) {
+        sessionStartedAt.textContent = formattedStarted;
+      } else {
+        setEmptyState(sessionStartedAt);
+      }
+    }
+
+    const formattedFinished = formatDateShort(finishedAtValue);
+    if (sessionFinishedAt) {
+      if (formattedFinished) {
+        sessionFinishedAt.textContent = formattedFinished;
+      } else {
+        setEmptyState(sessionFinishedAt);
+      }
+    }
+
+    if (sessionNotes) {
+      setPlainText(sessionNotes, notesValue, sessionNotes.dataset.emptyText || "");
+    }
+
+    if (executionTimeIndicator) {
+      if (formattedFinished) {
+        executionTimeIndicator.textContent = `Finalizada em ${formattedFinished}`;
+      } else if (formattedStarted) {
+        executionTimeIndicator.textContent = `Iniciada em ${formattedStarted}`;
+      } else {
+        executionTimeIndicator.textContent = "Sessão ainda não iniciada.";
+      }
+    }
+  }
+
+  function renderOverviewMetrics(metrics = [], insights = []) {
+    if (metricsGrid) {
+      metricsGrid.innerHTML = "";
+      const hasMetrics = Array.isArray(metrics) && metrics.length > 0;
+      if (hasMetrics) {
+        metrics.forEach(metric => {
+          const card = document.createElement("div");
+          card.className = "metric-card";
+          const value = metric.value ?? "—";
+          const label = metric.label ?? "Métrica";
+          const note = metric.note ?? "";
+          card.innerHTML = `
+            <span class="metric-value">${escapeHtml(String(value))}</span>
+            <span class="metric-label">${escapeHtml(String(label))}</span>
+            ${note ? `<span class="metric-note">${escapeHtml(String(note))}</span>` : ""}
+          `;
+          metricsGrid.appendChild(card);
+        });
+      } else {
+        const emptyMessage = metricsGrid.dataset.emptyText || "Nenhuma métrica disponível.";
+        const placeholder = document.createElement("div");
+        placeholder.className = "empty";
+        placeholder.textContent = emptyMessage;
+        metricsGrid.appendChild(placeholder);
+      }
+    }
+
+    if (insightsList && insightsEmpty) {
+      insightsList.innerHTML = "";
+      const hasInsights = Array.isArray(insights) && insights.length > 0;
+      insightsList.classList.toggle("hidden", !hasInsights);
+      insightsEmpty.classList.toggle("hidden", hasInsights);
+
+      if (hasInsights) {
+        insights.forEach(insight => {
+          const li = document.createElement("li");
+          const level = insight.level || "info";
+          li.className = `insight insight-${escapeHtml(String(level))}`;
+          li.textContent = insight.message || "Insight registrado";
+          insightsList.appendChild(li);
+        });
+      } else {
+        const emptyMessage = insightsEmpty.dataset.emptyText || insightsList.dataset.emptyText || insightsEmpty.textContent;
+        insightsEmpty.textContent = emptyMessage;
+      }
+    }
+  }
+
+  function renderConnectivity(overview) {
+    if (!connectivityTotals || !connectivityHosts || !connectivityEmpty) return;
+    const totals = overview && typeof overview === "object" ? overview.totals || {} : {};
+    const hosts = overview && Array.isArray(overview.hosts) ? overview.hosts : [];
+
+    const reachable = totals.reachable ?? 0;
+    const unreachable = totals.unreachable ?? 0;
+    const checkedPorts = totals.checked_ports ?? 0;
+
+    connectivityTotals.innerHTML = `
+      <div>
+        <span class="counter">${escapeHtml(String(reachable))}</span>
+        <span class="label">Hosts alcançados</span>
+      </div>
+      <div>
+        <span class="counter">${escapeHtml(String(unreachable))}</span>
+        <span class="label">Hosts sem resposta</span>
+      </div>
+      <div>
+        <span class="counter">${escapeHtml(String(checkedPorts))}</span>
+        <span class="label">Portas verificadas</span>
+      </div>
+    `;
+
+    connectivityHosts.innerHTML = "";
+    const hasHosts = hosts.length > 0;
+    if (hasHosts) {
+      hosts.forEach(host => {
+        const article = document.createElement("article");
+        article.className = `connectivity-host ${host.reachable ? "reachable" : "unreachable"}`;
+        const latencySummary = (() => {
+          if (host.latency_avg != null) {
+            const min = host.latency_min != null ? `${escapeHtml(String(host.latency_min))} ms` : null;
+            const max = host.latency_max != null ? `${escapeHtml(String(host.latency_max))} ms` : null;
+            const detail = min && max ? `${min} – ${max}` : min || max || "";
+            const detailBlock = detail ? `<small class="muted">${detail}</small>` : "";
+            return `
+              <span>Média ${escapeHtml(String(host.latency_avg))} ms</span>
+              ${detailBlock}
+            `;
+          }
+          return '<span class="muted">Sem métricas de latência</span>';
+        })();
+
+        const openPorts = Array.isArray(host.open_ports) ? host.open_ports : [];
+        const closedPorts = Array.isArray(host.closed_ports) ? host.closed_ports : [];
+        const openRows = openPorts.map(port => `
+          <tr class="status-open">
+            <td>${escapeHtml(String(port.port ?? "—"))}</td>
+            <td><span class="status-chip status-open">Aberta</span></td>
+            <td>${port.latency_ms != null ? `${escapeHtml(String(port.latency_ms))} ms` : '<span class="muted">—</span>'}</td>
+            <td><span class="muted">—</span></td>
+          </tr>
+        `).join("");
+        const closedRows = closedPorts.map(port => `
+          <tr class="status-closed">
+            <td>${escapeHtml(String(port.port ?? "—"))}</td>
+            <td><span class="status-chip status-closed">Fechada</span></td>
+            <td><span class="muted">—</span></td>
+            <td>${escapeHtml(String(port.error || "Conexão recusada"))}</td>
+          </tr>
+        `).join("");
+        const tableBody = openRows + closedRows;
+
+        const hostErrors = Array.isArray(host.errors) ? host.errors : [];
+        const errorsList = hostErrors.length
+          ? `<ul class="host-alerts">${hostErrors.map(error => `<li>${escapeHtml(String(error))}</li>`).join("")}</ul>`
+          : "";
+
+        article.innerHTML = `
+          <header>
+            <div>
+              <h3>${escapeHtml(String(host.host || "Host"))}</h3>
+              <span class="status-chip ${host.reachable ? "status-open" : "status-closed"}">
+                ${host.reachable ? "Alcançado" : "Sem resposta"}
+              </span>
+            </div>
+            <div class="latency-summary">${latencySummary}</div>
+          </header>
+          <table class="connectivity-table">
+            <thead>
+              <tr>
+                <th>Porta</th>
+                <th>Status</th>
+                <th>Latência</th>
+                <th>Observações</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${tableBody || `
+                <tr>
+                  <td colspan="4"><span class="muted">Nenhuma porta registrada.</span></td>
+                </tr>
+              `}
+            </tbody>
+          </table>
+          ${errorsList}
+        `;
+        connectivityHosts.appendChild(article);
+      });
+    }
+
+    const emptyMessage = connectivityEmpty.dataset.emptyText || connectivityEmpty.textContent;
+    connectivityEmpty.textContent = emptyMessage;
+    connectivityEmpty.classList.toggle("hidden", hasHosts);
+    connectivityHosts.classList.toggle("hidden", !hasHosts);
+  }
+
+  function renderTimeline(entries = []) {
+    if (!timelineList || !timelineEmpty) return;
+    timelineList.innerHTML = "";
+    const hasEntries = Array.isArray(entries) && entries.length > 0;
+    if (hasEntries) {
+      entries.forEach(step => {
+        const li = document.createElement("li");
+        const label = step.label || "Etapa";
+        const status = step.status || "pending";
+        const statusDisplay = step.status_display || status;
+        const startedAt = step.started_at || "—";
+        const finishedAt = step.finished_at || "—";
+        const duration = step.duration || "—";
+
+        li.innerHTML = `
+          <div class="timeline-item">
+            <div class="timeline-title">${escapeHtml(String(label))}</div>
+            <div class="timeline-meta">
+              <span class="status-chip status-${escapeHtml(String(status))}">${escapeHtml(String(statusDisplay))}</span>
+              <span>Início ${escapeHtml(String(startedAt))}</span>
+              <span>Término ${escapeHtml(String(finishedAt))}</span>
+              <span>Duração ${escapeHtml(String(duration))}</span>
+            </div>
+          </div>
+        `;
+        timelineList.appendChild(li);
+      });
+    }
+
+    const emptyMessage = timelineEmpty.dataset.emptyText || timelineEmpty.textContent;
+    timelineEmpty.textContent = emptyMessage;
+    timelineList.classList.toggle("hidden", !hasEntries);
+    timelineEmpty.classList.toggle("hidden", hasEntries);
   }
 
   function resetConsole() {
@@ -803,8 +1081,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (executionTaskLabel) {
       const runningTask = tasks.find(task => task.status === "running");
-    const failingTask = tasks.find(task => task.status === "failed" || task.status === "error");
-    const queuedTask = tasks.find(task => ["queued", "pending", "ready", "planned"].includes(task.status));
+      const failingTask = tasks.find(task => task.status === "failed" || task.status === "error");
+      const queuedTask = tasks.find(task => ["queued", "pending", "ready", "planned"].includes(task.status));
       const completedTasks = tasks.filter(task => task.status === "completed");
       let descriptor = "Aguardando atualização…";
 
@@ -841,7 +1119,7 @@ document.addEventListener("DOMContentLoaded", () => {
           ? completedFromPayload
           : tasks.filter(task => task.status === "completed").length;
         const storedTotal = Number.parseInt(executionCard.dataset.totalTasks || "0", 10) || 0;
-  const totalTasks = storedTotal || tasks.length;
+        const totalTasks = storedTotal || tasks.length;
         executionProgressDetail.textContent = totalTasks
           ? `${completedCount} de ${totalTasks} etapas concluídas`
           : "Nenhuma etapa registrada ainda.";
@@ -1000,11 +1278,15 @@ document.addEventListener("DOMContentLoaded", () => {
         statusPill.className = "status-pill " + statusToneClass(payload.status);
       }
 
-      handleStatusTransition(payload.status, payload.status_display);
+    handleStatusTransition(payload.status, payload.status_display);
+    updateSessionOverview(payload);
+    renderOverviewMetrics(payload.overview_metrics || [], payload.report_insights || []);
+    renderConnectivity(payload.connectivity_overview || null);
+    renderTimeline(payload.timeline_entries || []);
 
-      if (tasksBody) renderTasks(tasks);
-      updateExecutionPanel(payload, tasks);
-      if (findingsList) renderFindings(payload.findings || []);
+    if (tasksBody) renderTasks(tasks);
+    updateExecutionPanel(payload, tasks);
+    if (findingsList) renderFindings(payload.findings || []);
       if (logsUrl) fetchLogs();
 
       if (!terminalStatuses.has(payload.status)) {

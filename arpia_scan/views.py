@@ -575,6 +575,7 @@ class ScanSessionDetailView(LoginRequiredMixin, TemplateView):
         summary = snapshot.get("summary", {}) if isinstance(snapshot.get("summary"), dict) else {}
         connectivity_overview = _build_connectivity_overview(summary)
         overview_metrics = _build_overview_metrics(session, snapshot, connectivity_overview)
+        timeline_entries = _build_timeline_entries(snapshot)
 
         context.update(
             {
@@ -595,10 +596,11 @@ class ScanSessionDetailView(LoginRequiredMixin, TemplateView):
                 "report_stats": snapshot.get("stats", {}),
                 "report_targets": snapshot.get("targets", {}),
                 "report_services": snapshot.get("services", {}),
-                "timeline_entries": _build_timeline_entries(snapshot),
+                "timeline_entries": timeline_entries,
                 "report_url": self._build_report_url(session),
                 "logs_url": reverse("arpia_scan:api_session_logs", args=[session.pk]),
                 "session_bootstrap": {
+                    "session": _serialize_session(session),
                     "status": session.status,
                     "status_display": session.get_status_display(),
                     "tasks": serialized_tasks,
@@ -607,6 +609,14 @@ class ScanSessionDetailView(LoginRequiredMixin, TemplateView):
                     "completed_tasks_count": completed_tasks_count,
                     "total_tasks_count": total_tasks_count,
                     "latest_log_cursor": serialized_logs[-1]["timestamp"] if serialized_logs else None,
+                    "overview_metrics": overview_metrics,
+                    "report_insights": snapshot.get("insights", []),
+                    "connectivity_overview": connectivity_overview,
+                    "timeline_entries": timeline_entries,
+                    "report_summary": summary,
+                    "report_stats": snapshot.get("stats", {}),
+                    "report_targets": snapshot.get("targets", {}),
+                    "report_services": snapshot.get("services", {}),
                 },
             }
         )
@@ -760,6 +770,7 @@ def _serialize_session(session: ScanSession) -> dict:
         "title": session.title,
         "status": session.status,
         "status_display": session.get_status_display(),
+    "notes": session.notes or "",
         "created_at": session.created_at.isoformat(),
         "started_at": session.started_at.isoformat() if session.started_at else None,
         "finished_at": session.finished_at.isoformat() if session.finished_at else None,
@@ -985,7 +996,21 @@ def api_session_status(request, pk):
         }
         for finding in session.findings.order_by("order", "id")
     ]
-    response["report_snapshot"] = session.report_snapshot or {}
+    snapshot = session.report_snapshot or {}
+    summary = snapshot.get("summary", {}) if isinstance(snapshot.get("summary"), dict) else {}
+    connectivity_overview = _build_connectivity_overview(summary)
+    overview_metrics = _build_overview_metrics(session, snapshot, connectivity_overview)
+    timeline_entries = _build_timeline_entries(snapshot)
+
+    response["report_snapshot"] = snapshot
+    response["report_summary"] = summary
+    response["overview_metrics"] = overview_metrics
+    response["connectivity_overview"] = connectivity_overview
+    response["report_insights"] = snapshot.get("insights", [])
+    response["report_stats"] = snapshot.get("stats", {})
+    response["report_targets"] = snapshot.get("targets", {})
+    response["report_services"] = snapshot.get("services", {})
+    response["timeline_entries"] = timeline_entries
     return JsonResponse(response)
 
 

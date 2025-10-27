@@ -17,6 +17,11 @@ HOSTS=$(cat <<'EOF'
 EOF
 )
 
+PORT_SPEC_RAW=$(cat <<'EOF'
+{{TARGET_PORTS}}
+EOF
+)
+
 if [[ -z "${HOSTS//[[:space:]]/}" ]]; then
   echo "[WARN] Nenhum host definido para ${PROJECT_NAME}." >&2
   exit 0
@@ -30,8 +35,68 @@ fi
 OUTPUT_ROOT="${OUTPUT_DIR:-./recon/${PROJECT_NAME// /_}}"
 mkdir -p "${OUTPUT_ROOT}"
 
-TCP_RANGE="1-65535"
-UDP_RANGE="1-65535"
+DEFAULT_TCP_RANGE="1-65535"
+DEFAULT_UDP_RANGE="1-65535"
+
+trim() {
+  local value="$1"
+  value="${value#${value%%[![:space:]]*}}"
+  value="${value%${value##*[![:space:]]}}"
+  printf '%s' "$value"
+}
+
+add_unique_port() {
+  local port="$1"
+  local array_name="$2"
+  local -n array_ref="$array_name"
+  for existing in "${array_ref[@]-}"; do
+    if [[ "$existing" == "$port" ]]; then
+      return
+    fi
+  done
+  array_ref+=("$port")
+}
+
+declare -a TCP_PORTS=()
+declare -a UDP_PORTS=()
+
+sanitized_spec=$(echo "$PORT_SPEC_RAW" | tr ';' ',' | tr '\n' ',' | tr '\r' ',' | tr '\t' ',' )
+custom_ports_defined=0
+if [[ -n "${PORT_SPEC_RAW//[[:space:]]/}" ]]; then
+  custom_ports_defined=1
+fi
+
+if [[ -n "${sanitized_spec//[[:space:],]/}" ]]; then
+  IFS=',' read -r -a port_tokens <<<"$sanitized_spec"
+  for token in "${port_tokens[@]}"; do
+    trimmed=$(trim "$token")
+    [[ -z "$trimmed" ]] && continue
+
+    lower=${trimmed,,}
+    if [[ "$lower" == */udp ]]; then
+      port_value="${trimmed%/*}"
+      [[ -n "$port_value" ]] && add_unique_port "$port_value" UDP_PORTS
+    elif [[ "$lower" == */tcp ]]; then
+      port_value="${trimmed%/*}"
+      [[ -n "$port_value" ]] && add_unique_port "$port_value" TCP_PORTS
+    else
+      add_unique_port "$trimmed" TCP_PORTS
+    fi
+  done
+fi
+
+TCP_ARG_MODE="range"
+UDP_ARG_MODE="range"
+
+if ((${#TCP_PORTS[@]})); then
+  TCP_ARG_MODE="list"
+  TCP_PORT_SPEC=$(IFS=','; printf '%s' "${TCP_PORTS[*]}")
+fi
+
+if ((${#UDP_PORTS[@]})); then
+  UDP_ARG_MODE="list"
+  UDP_PORT_SPEC=$(IFS=','; printf '%s' "${UDP_PORTS[*]}")
+fi
 
 run_rustscan() {
   local label="$1"
@@ -72,13 +137,29 @@ while IFS= read -r HOST; do
   HOST_DIR="${OUTPUT_ROOT}/rustscan_${SAFE_HOST}"
   mkdir -p "${HOST_DIR}"
 
-  echo "[INFO] Executando Rustscan TCP completo em ${HOST}"
-  run_rustscan "a varredura TCP" "${HOST_DIR}/rustscan_tcp.txt" \
-    -a "${HOST}" -r "${TCP_RANGE}"
+  if [[ "${TCP_ARG_MODE}" == "list" ]]; then
+    echo "[INFO] Executando Rustscan TCP personalizado em ${HOST} (portas: ${TCP_PORT_SPEC})"
+    run_rustscan "a varredura TCP" "${HOST_DIR}/rustscan_tcp.txt" \
+      -a "${HOST}" -p "${TCP_PORT_SPEC}"
+  elif [[ "$custom_ports_defined" -eq 0 ]]; then
+    echo "[INFO] Executando Rustscan TCP completo em ${HOST}"
+    run_rustscan "a varredura TCP" "${HOST_DIR}/rustscan_tcp.txt" \
+      -a "${HOST}" -r "${DEFAULT_TCP_RANGE}"
+  else
+    echo "[WARN] Nenhuma porta TCP definida nas macros; pulando varredura TCP para ${HOST}."
+  fi
 
-  echo "[INFO] Executando Rustscan UDP completo em ${HOST}"
-  run_rustscan "a varredura UDP" "${HOST_DIR}/rustscan_udp.txt" \
-    -a "${HOST}" -r "${UDP_RANGE}" --udp
+  if [[ "${UDP_ARG_MODE}" == "list" ]]; then
+    echo "[INFO] Executando Rustscan UDP personalizado em ${HOST} (portas: ${UDP_PORT_SPEC})"
+    run_rustscan "a varredura UDP" "${HOST_DIR}/rustscan_udp.txt" \
+      -a "${HOST}" -p "${UDP_PORT_SPEC}" --udp
+  elif [[ "$custom_ports_defined" -eq 0 ]]; then
+    echo "[INFO] Executando Rustscan UDP completo em ${HOST}"
+    run_rustscan "a varredura UDP" "${HOST_DIR}/rustscan_udp.txt" \
+      -a "${HOST}" -r "${DEFAULT_UDP_RANGE}" --udp
+  else
+    echo "[WARN] Nenhuma porta UDP definida nas macros; pulando varredura UDP para ${HOST}."
+  fi
 
   echo "[INFO] Resultados salvos em ${HOST_DIR}"
 done <<< "${HOSTS}"

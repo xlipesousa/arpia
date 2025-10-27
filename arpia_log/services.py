@@ -20,6 +20,19 @@ def _merge_dict(base: Optional[Dict[str, Any]], extra: Optional[Dict[str, Any]])
     return merged
 
 
+def _normalize_message(message: str) -> tuple[str, Dict[str, Any]]:
+    max_length = LogEntry._meta.get_field("message").max_length  # type: ignore[attr-defined]
+    normalized = message or ""
+    extra_details: Dict[str, Any] = {}
+
+    if len(normalized) > max_length:
+        extra_details["message_truncated"] = True
+        extra_details["message_full"] = normalized
+        normalized = normalized[: max_length - 1] + "\u2026"
+
+    return normalized, extra_details
+
+
 def log_event(
     *,
     source_app: str,
@@ -43,6 +56,12 @@ def log_event(
     if not event_type:
         raise exceptions.ValidationError({"event_type": "Obrigatório"})
 
+    safe_message, truncation_details = _normalize_message(str(message))
+    details_payload: Dict[str, Any] = dict(details or {})
+    if truncation_details:
+        details_payload.setdefault("__meta__", {})
+        details_payload["__meta__"].update(truncation_details)
+
     payload: Dict[str, Any] = {
         "version": version,
         "timestamp": timestamp or timezone.now(),
@@ -50,8 +69,8 @@ def log_event(
         "component": component,
         "event_type": event_type,
         "severity": severity,
-        "message": message,
-        "details": details or {},
+        "message": safe_message,
+        "details": details_payload,
         "context": context or {},
         "correlation": correlation or {},
         "tags": list(tags or []),

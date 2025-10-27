@@ -1,5 +1,10 @@
 // dados fictícios para protótipo do dashboard
 document.addEventListener('DOMContentLoaded', function () {
+  const dashboardContainer = document.querySelector('.dashboard-frame');
+  if (!dashboardContainer) {
+    return;
+  }
+
   const setTextContentIfPresent = (id, value) => {
     const element = document.getElementById(id);
     if (element) {
