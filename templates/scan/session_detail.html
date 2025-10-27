@@ -670,14 +670,14 @@ document.addEventListener("DOMContentLoaded", () => {
     updateLogsEmpty();
   }
 
-  const statusToneClass = status => {
+  function statusToneClass(status) {
     switch (status) {
       case "running": return "status-running";
       case "completed": return "status-completed";
       case "failed": return "status-failed";
       default: return "status-" + status;
     }
-  };
+  }
 
   const formatDate = iso => {
     if (!iso) return "—";
@@ -689,12 +689,15 @@ document.addEventListener("DOMContentLoaded", () => {
     }).format(date);
   };
 
-  const escapeHtml = value => value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+  function escapeHtml(value) {
+    const safeValue = value == null ? "" : String(value);
+    return safeValue
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
 
   function resetConsole() {
     consoleLines = [];

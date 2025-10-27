@@ -290,6 +290,33 @@ class ScanScriptTaskTests(TestCase):
             ScanOrchestrator(session).run()
         self.assertIn("executável da ferramenta", str(ctx.exception))
 
+    @mock.patch("arpia_scan.services.ConnectivityRunner")
+    def test_script_task_logs_stdout_lines(self, runner_cls):
+        script = self._create_script(required_tool_slug="dummy")
+        Tool.objects.create(owner=self.user, name="Dummy", slug="dummy", path="/bin/true")
+
+        runner_cls.return_value.run.return_value = [
+            ConnectivityProbeResult(host="127.0.0.1", reachable=True, ports=[], error=None),
+        ]
+
+        config = {
+            "tasks": [
+                {"kind": ScanTask.Kind.CONNECTIVITY, "name": "Teste de conectividade"},
+                {
+                    "kind": ScanTask.Kind.SCRIPT,
+                    "name": script.name,
+                    "script": script.slug,
+                    "tool": script.required_tool_slug,
+                },
+            ]
+        }
+
+        session = create_planned_session(owner=self.user, project=self.project, title="Fluxo com script", config=config)
+        ScanOrchestrator(session).run()
+
+        output_logs = LogEntry.objects.filter(event_type="scan.task.output", message__icontains="ok")
+        self.assertTrue(output_logs.exists())
+
 class ScanSessionDetailViewTests(TestCase):
     def setUp(self):
         self.owner = get_user_model().objects.create_user(

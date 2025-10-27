@@ -1,10 +1,17 @@
 // dados fictícios para protótipo do dashboard
 document.addEventListener('DOMContentLoaded', function () {
+  const setTextContentIfPresent = (id, value) => {
+    const element = document.getElementById(id);
+    if (element) {
+      element.textContent = value;
+    }
+  };
+
   // populate KPIs (fictitious)
-  document.getElementById('kpi-total').textContent = 342;
-  document.getElementById('kpi-high').textContent = 78;
-  document.getElementById('kpi-medium').textContent = 190;
-  document.getElementById('kpi-low').textContent = 74;
+  setTextContentIfPresent('kpi-total', 342);
+  setTextContentIfPresent('kpi-high', 78);
+  setTextContentIfPresent('kpi-medium', 190);
+  setTextContentIfPresent('kpi-low', 74);
 
   // Bar chart - vulnerabilities by severity (fictitious)
   const sevCtx = document.getElementById('sevBar');

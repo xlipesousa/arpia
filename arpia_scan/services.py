@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import socket
+import selectors
 import subprocess
 import tempfile
 import time
@@ -431,6 +432,45 @@ class ScanOrchestrator:
             tags=["scan", "task", task.kind, "live"],
         )
 
+    def _stream_task_output(self, task: ScanTask, raw_output: str, *, stream: str) -> None:
+        if not raw_output:
+            return
+
+        normalized_lines = [line.strip() for line in raw_output.splitlines() if line and line.strip()]
+        if not normalized_lines:
+            return
+
+        max_lines = 200
+        component = f"scan.task.{stream or 'output'}"
+        severity = LogEntry.Severity.ERROR if stream == "stderr" else LogEntry.Severity.INFO
+
+        for idx, line in enumerate(normalized_lines[:max_lines], start=1):
+            self._record_task_event(
+                task,
+                line,
+                severity=severity,
+                event_type="scan.task.output",
+                details={
+                    "stream": stream,
+                    "line_number": idx,
+                },
+                component=component,
+            )
+
+        if len(normalized_lines) > max_lines:
+            skipped = len(normalized_lines) - max_lines
+            self._record_task_event(
+                task,
+                f"… ({skipped} linhas adicionais não exibidas)",
+                severity=severity,
+                event_type="scan.task.output.truncated",
+                details={
+                    "stream": stream,
+                    "skipped_lines": skipped,
+                },
+                component=component,
+            )
+
     def _run_task(self, task: ScanTask, summary_data: dict) -> None:
         task.status = ScanTask.Status.RUNNING
         task.started_at = timezone.now()
@@ -793,36 +833,93 @@ class ScanOrchestrator:
                 "Invocando script em shell.",
                 progress=0.45,
             )
-            result = subprocess.run(
+
+            process = subprocess.Popen(
                 ["/bin/bash", str(temp_path)],
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
                 env=env,
-                check=False,
+                bufsize=1,
             )
+
+            selector = selectors.DefaultSelector()
+            if process.stdout:
+                selector.register(process.stdout, selectors.EVENT_READ, data="stdout")
+            if process.stderr:
+                selector.register(process.stderr, selectors.EVENT_READ, data="stderr")
+
+            stdout_chunks: list[str] = []
+            stderr_chunks: list[str] = []
+
+            while selector.get_map():
+                events = selector.select(timeout=0.2)
+                if not events:
+                    if process.poll() is not None:
+                        break
+                    continue
+
+                for key, _ in events:
+                    stream_name = key.data
+                    stream = key.fileobj
+                    if stream is None:
+                        continue
+
+                    data = stream.readline()
+                    if data == "":
+                        selector.unregister(stream)
+                        continue
+
+                    if stream_name == "stdout":
+                        stdout_chunks.append(data)
+                    else:
+                        stderr_chunks.append(data)
+
+                    self._stream_task_output(task, data, stream=stream_name)
+
+            process.wait()
+            returncode = process.returncode
+
+            if process.stdout:
+                leftover_stdout = process.stdout.read()
+                if leftover_stdout:
+                    stdout_chunks.append(leftover_stdout)
+                    self._stream_task_output(task, leftover_stdout, stream="stdout")
+                process.stdout.close()
+            if process.stderr:
+                leftover_stderr = process.stderr.read()
+                if leftover_stderr:
+                    stderr_chunks.append(leftover_stderr)
+                    self._stream_task_output(task, leftover_stderr, stream="stderr")
+                process.stderr.close()
+
+            returncode = returncode if returncode is not None else 0
+
+            result_stdout = "".join(stdout_chunks)
+            result_stderr = "".join(stderr_chunks)
         finally:
             temp_file.close()
             if temp_path is not None:
                 with suppress(FileNotFoundError):
                     temp_path.unlink(missing_ok=True)
 
-        lines = ["[STEP] Execução de script" , f"[INFO] Script: {script.name}"]
+        lines = ["[STEP] Execução de script", f"[INFO] Script: {script.name}"]
         if tool:
             lines.append(f"[INFO] Ferramenta utilizada: {tool.name} ({tool.path})")
         targets = self._target_hosts()
         if targets:
             lines.append(f"[INFO] Hosts alvo: {', '.join(targets)}")
-        lines.append(f"[INFO] Código de saída: {result.returncode}")
+        lines.append(f"[INFO] Código de saída: {returncode}")
 
         self._record_task_event(
             task,
             "Execução finalizada.",
             progress=0.7,
-            details={"returncode": result.returncode},
+            details={"returncode": returncode},
         )
 
-        if result.stdout:
-            preview = result.stdout.strip()
+        if result_stdout:
+            preview = result_stdout.strip()
             lines.append(f"[STDOUT] {preview[:4000]}")
             self._record_task_event(
                 task,
@@ -830,8 +927,8 @@ class ScanOrchestrator:
                 progress=0.75,
                 details={"stdout_sample": preview[:250]},
             )
-        if result.stderr:
-            preview_err = result.stderr.strip()
+        if result_stderr:
+            preview_err = result_stderr.strip()
             lines.append(f"[STDERR] {preview_err[:4000]}")
             self._record_task_event(
                 task,
@@ -842,13 +939,13 @@ class ScanOrchestrator:
             )
 
         summary_data.setdefault("artifacts", {}).setdefault("scripts", {})[script.slug] = {
-            "returncode": result.returncode,
-            "stdout": result.stdout,
-            "stderr": result.stderr,
+            "returncode": returncode,
+            "stdout": result_stdout,
+            "stderr": result_stderr,
         }
 
-        if result.returncode != 0:
-            raise ValidationError(f"Execução do script '{script.name}' retornou código {result.returncode}.")
+        if returncode != 0:
+            raise ValidationError(f"Execução do script '{script.name}' retornou código {returncode}.")
 
         self._record_task_event(
             task,
