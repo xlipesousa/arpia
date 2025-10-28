@@ -1,9 +1,11 @@
 from django.contrib.auth import get_user_model
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from arpia_core.models import Project
 from arpia_scan.models import ScanSession
+from .models import ProjectReport, ScanReportEntry
 from .views import ReportLandingView
 
 
@@ -110,6 +112,24 @@ class ReportModuleTests(TestCase):
 		}
 		self.session.report_snapshot = self.snapshot
 		self.session.save(update_fields=["report_snapshot"])
+		self.scan_report_entry = ScanReportEntry.objects.create(
+			project=self.project,
+			session=self.session,
+			title="Relatório de Scan - Sessão relatório",
+			summary="Resumo do scan",
+			payload=self.snapshot,
+			status="completed",
+			started_at=timezone.now(),
+			finished_at=timezone.now(),
+		)
+		self.project_report = ProjectReport.objects.create(
+			project=self.project,
+			title="Relatório consolidado",
+			summary="Consolidação de achados",
+			payload={"sections": ["scan", "vuln"], "totals": {"scan": 2}},
+			status=ProjectReport.Status.IN_REVIEW,
+			generated_at=timezone.now(),
+		)
 		self.factory = RequestFactory()
 
 	def test_landing_requires_login(self):
@@ -135,6 +155,14 @@ class ReportModuleTests(TestCase):
 		highlights = context["report_highlights"]
 		self.assertGreaterEqual(len(highlights), 1)
 		self.assertIn("report_json", context)
+		self.assertIsNotNone(context["project_report"])
+		self.assertIn("project_report_payload_json", context)
+		self.assertIn("scan_entry", context)
+		self.assertIsNotNone(context["scan_entry"])
+		self.assertEqual(len(context["scan_tasks"]), len(self.snapshot["tasks"]))
+		self.assertEqual(len(context["scan_timeline"]), len(self.snapshot["timeline"]))
+		self.assertEqual(len(context["scan_findings"]), len(self.snapshot["findings"]))
+		self.assertTrue(context["scan_snapshot_json"]) 
 
 	def test_landing_without_snapshot_marks_empty_state(self):
 		empty_session = ScanSession.objects.create(project=self.project, owner=self.owner, title="Sem snapshot")
@@ -147,6 +175,31 @@ class ReportModuleTests(TestCase):
 		view.kwargs = {}
 		context = view.get_context_data()
 		self.assertFalse(context["has_report"])
+		self.assertIsNone(context["scan_entry"])
+		self.assertIn("\"scan\"", context["project_report_payload_json"])
+		self.assertEqual(context["scan_snapshot_json"], "")
+
+	def test_landing_with_project_parameter_uses_project_entries(self):
+		report_url = reverse("arpia_report:report_home")
+		request = self.factory.get(report_url, {"project": str(self.project.pk)})
+		request.user = self.owner
+		view = ReportLandingView()
+		view.request = request
+		view.args = ()
+		view.kwargs = {}
+		context = view.get_context_data()
+		self.assertTrue(context["sections"])
+		self.assertIsNone(context["session"])
+		self.assertEqual(context["project"], self.project)
+		self.assertIsNotNone(context["project_report"])
+		self.assertIn("\"scan\"", context["project_report_payload_json"])
+		self.assertIn("\"vuln\"", context["project_report_payload_json"])
+		scan_section = context["scan_section"]
+		self.assertGreaterEqual(len(scan_section.items), 1)
+		self.assertEqual(
+			context["scan_entry"].metadata.get("session_id"),
+			str(self.session.pk),
+		)
 
 	def test_api_requires_authentication(self):
 		url = reverse("arpia_report:api_session_report", args=[self.session.pk])

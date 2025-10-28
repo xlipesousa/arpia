@@ -1,15 +1,17 @@
 import json
+from typing import Any
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404
-from django.utils.safestring import mark_safe
 from django.views.decorators.http import require_http_methods
 from django.views.generic import TemplateView
 
 from arpia_core.models import Project
 from arpia_scan.models import ScanSession, ScanTask
+
+from .services import ReportAggregator, SectionData
 
 
 def _user_has_access(user, project: Project) -> bool:
@@ -24,37 +26,57 @@ class ReportLandingView(LoginRequiredMixin, TemplateView):
 	def get_context_data(self, **kwargs):
 		context = super().get_context_data(**kwargs)
 		session = self._resolve_session()
-		report = session.report_snapshot if session and session.report_snapshot else {}
-		stats = report.get("stats", {}) if isinstance(report, dict) else {}
-		timeline = report.get("timeline", []) if isinstance(report, dict) else []
-		tasks = report.get("tasks", []) if isinstance(report, dict) else []
-		insights = report.get("insights", []) if isinstance(report, dict) else []
-		targets = report.get("targets", {}) if isinstance(report, dict) else {}
-		services = report.get("services", {}) if isinstance(report, dict) else {}
-		findings = report.get("findings", []) if isinstance(report, dict) else []
-		timeline_sorted = sorted(
-			[t for t in timeline if t.get("started_at") or t.get("finished_at")],
-			key=lambda item: (item.get("started_at") or "", item.get("finished_at") or ""),
+		project = self._resolve_project(session=session)
+		aggregator = ReportAggregator(project=project, session=session) if project else None
+
+		sections = aggregator.build_sections() if aggregator else {}
+		scan_section = sections.get("scan") if sections else None
+		scan_entry = scan_section.items[0] if scan_section and scan_section.items else None
+		scan_snapshot = scan_entry.payload if scan_entry else {}
+		status_chart = self._build_status_chart(scan_snapshot.get("stats", {})) if scan_snapshot else []
+		project_report = aggregator.build_project_report() if aggregator else {}
+		project_report_payload = project_report.get("payload", {}) if project_report else {}
+		project_report_payload_json = (
+			json.dumps(project_report_payload, indent=2, ensure_ascii=False)
+			if project_report_payload
+			else ""
 		)
-		status_chart = self._build_status_chart(stats)
-		report_json = json.dumps(report, ensure_ascii=False, indent=2) if report else "{}"
-		highlight_insights = insights[:3]
+		scan_tasks = scan_snapshot.get("tasks", []) if isinstance(scan_snapshot, dict) else []
+		scan_timeline = scan_snapshot.get("timeline", []) if isinstance(scan_snapshot, dict) else []
+		scan_findings = scan_snapshot.get("findings", []) if isinstance(scan_snapshot, dict) else []
+		scan_summary = scan_snapshot.get("summary", {}) if isinstance(scan_snapshot, dict) else {}
+		scan_observations = scan_snapshot.get("summary", {}).get("observations") if isinstance(scan_snapshot.get("summary"), dict) else {}
+		scan_targets = scan_snapshot.get("targets", {}) if isinstance(scan_snapshot, dict) else {}
+		scan_services = scan_snapshot.get("services", {}) if isinstance(scan_snapshot, dict) else {}
+		scan_snapshot_json = json.dumps(scan_snapshot, indent=2, ensure_ascii=False) if scan_snapshot else ""
+
+		# expose common keys expected by templates and tests
 		context.update(
 			{
 				"session": session,
-				"project": session.project if session else None,
-				"report": report,
-				"report_stats": stats,
-				"report_timeline": timeline_sorted,
-				"report_tasks": tasks,
-				"report_insights": insights,
-				"report_highlights": highlight_insights,
-				"report_targets": targets,
-				"report_services": services,
-				"report_findings": findings,
+				"project": project,
+				"sections": sections,
+				"scan_section": scan_section,
+				"scan_entry": scan_entry,
+				"scan_snapshot": scan_snapshot,
+				"scan_tasks": scan_tasks,
+				"scan_timeline": scan_timeline,
+				"scan_findings": scan_findings,
+				"scan_summary": scan_summary,
+				"scan_observations": scan_observations or {},
+				"scan_targets": scan_targets,
+				"scan_services": scan_services,
+				"scan_snapshot_json": scan_snapshot_json,
+				"report_json": scan_snapshot,
+				"report_highlights": scan_snapshot.get("insights", []),
+				"report_stats": scan_snapshot.get("stats", {}),
+				"report_targets": scan_snapshot.get("targets", {}),
+				"report_services": scan_snapshot.get("services", {}),
+				"report_findings": scan_snapshot.get("findings", []),
 				"status_chart": status_chart,
-				"report_json": mark_safe(report_json),
-				"has_report": bool(report),
+				"project_report": project_report,
+				"project_report_payload_json": project_report_payload_json,
+				"has_report": bool(scan_snapshot) or any(section.items for section in sections.values()) if sections else False,
 			}
 		)
 		return context
@@ -96,6 +118,17 @@ class ReportLandingView(LoginRequiredMixin, TemplateView):
 
 		return session
 
+	def _resolve_project(self, session: ScanSession | None = None) -> Project | None:
+		if session:
+			return session.project
+		project_id = self.request.GET.get("project")
+		if not project_id:
+			return None
+		project = get_object_or_404(Project, pk=project_id)
+		if not _user_has_access(self.request.user, project):
+			raise Http404("Projeto não encontrado")
+		return project
+
 
 @login_required
 @require_http_methods(["GET"])
@@ -107,6 +140,9 @@ def api_session_report(request, pk):
 	if not _user_has_access(request.user, session.project):
 		return JsonResponse({"error": "Usuário não possui acesso a este projeto."}, status=403)
 	report = session.report_snapshot or {}
+	aggregator = ReportAggregator(project=session.project, session=session)
+	sections = _serialize_sections(aggregator.build_sections())
+	project_report = aggregator.build_project_report()
 	response = {
 		"session": {
 			"id": str(session.pk),
@@ -120,5 +156,53 @@ def api_session_report(request, pk):
 			"slug": session.project.slug,
 		},
 		"report": report,
+		"sections": sections,
+		"project_report": project_report,
 	}
 	return JsonResponse(response, json_dumps_params={"ensure_ascii": False, "indent": 2})
+
+
+@login_required
+@require_http_methods(["GET"])
+def api_project_report(request, pk):
+	project = get_object_or_404(Project.objects.select_related("owner"), pk=pk)
+	if not _user_has_access(request.user, project):
+		return JsonResponse({"error": "Usuário não possui acesso a este projeto."}, status=403)
+
+	aggregator = ReportAggregator(project=project)
+	sections = _serialize_sections(aggregator.build_sections())
+	project_report = aggregator.build_project_report()
+
+	return JsonResponse(
+		{
+			"project": {
+				"id": str(project.pk),
+				"name": project.name,
+				"slug": project.slug,
+			},
+			"sections": sections,
+			"project_report": project_report,
+		}
+	)
+
+
+def _serialize_sections(sections: dict[str, SectionData]) -> dict[str, Any]:
+	serialized: dict[str, Any] = {}
+	for key, section in sections.items():
+		serialized[key] = {
+			"key": section.key,
+			"label": section.label,
+			"description": section.description,
+			"empty_text": section.empty_text,
+			"items": [
+				{
+					"title": item.title,
+					"summary": item.summary,
+					"payload": item.payload,
+					"metadata": item.metadata,
+					"link": item.link,
+				}
+				for item in section.items
+			],
+		}
+	return serialized

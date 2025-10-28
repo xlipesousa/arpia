@@ -37,12 +37,6 @@ urlpatterns = [
     path("wordlists/<slug:slug>/delete/", views.WordlistDeleteView.as_view(), name="wordlists_delete"),
     path("wordlists/<slug:slug>/download/", views.wordlists_download, name="wordlists_download"),
 
-    # Reports & Logs
-    path("reports/", views.ReportsListView.as_view(), name="reports_list"),
-    path("reports/<int:pk>/", views.ReportDetailView.as_view(), name="reports_detail"),
-    path("reports/<int:pk>/generate/", views.ReportGenerateView.as_view(), name="reports_generate"),
-    path("reports/<int:pk>/download/", views.reports_download, name="reports_download"),
-
     # Logs: delega para arpia_log.views
     path("logs/", arpia_log_views.LogsListView.as_view(), name="logs_list"),
     path("logs/api/", arpia_log_views.logs_api, name="logs_api"),

@@ -15,7 +15,7 @@ from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods
-from django.views.generic import TemplateView, View
+from django.views.generic import TemplateView
 from django.views.generic.edit import CreateView, DeleteView, FormMixin, UpdateView
 
 from .forms import ScriptForm, ToolForm, WordlistForm
@@ -572,34 +572,8 @@ class ToolsListView(LoginRequiredMixin, TemplateView):
     template_name = "tools/list.html"
 
 
-class ReportsListView(LoginRequiredMixin, TemplateView):
-    template_name = "reports/list.html"
-
-
 class LogsListView(LoginRequiredMixin, TemplateView):
     template_name = "logs/list.html"
-
-
-# --- novos placeholders para reports ---
-class ReportDetailView(LoginRequiredMixin, TemplateView):
-    template_name = "reports/detail.html"
-
-
-class ReportGenerateView(LoginRequiredMixin, View):
-    """
-    Placeholder que simula enfileiramento/geração do relatório.
-    Retorna JSON com estado.
-    """
-    def post(self, request, pk, *args, **kwargs):
-        # Simular processo assíncrono: retornar queued
-        return JsonResponse({"status": "queued", "id": pk})
-
-
-def reports_download(request, pk):
-    """
-    Placeholder de download: retorna JSON simulando um link ou content.
-    """
-    return JsonResponse({"status": "ok", "id": pk, "download_url": f"/media/reports/report-{pk}.pdf"})
 
 
 def _parse_datetime_local(value: str):

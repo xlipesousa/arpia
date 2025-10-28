@@ -638,7 +638,7 @@ class ScanSessionDetailView(LoginRequiredMixin, TemplateView):
 
     def _build_report_url(self, session: ScanSession) -> str:
         base = reverse("arpia_report:report_home")
-        return f"{base}?{urlencode({'session': str(session.pk)})}"
+        return f"{base}?{urlencode({'project': str(session.project_id)})}"
 
 
 class ScanSessionReportPreviewView(LoginRequiredMixin, View):
@@ -650,7 +650,7 @@ class ScanSessionReportPreviewView(LoginRequiredMixin, View):
         if not _user_has_access(request.user, session.project):
             raise Http404("Projeto não encontrado")
 
-        query = urlencode({"session": str(session.pk)})
+        query = urlencode({"project": str(session.project_id)})
         report_url = f"{reverse('arpia_report:report_home')}?{query}"
         return redirect(report_url)
 
@@ -762,7 +762,7 @@ def _user_has_access(user, project: Project) -> bool:
 
 
 def _serialize_session(session: ScanSession) -> dict:
-    report_url = f"{reverse('arpia_report:report_home')}?{urlencode({'session': str(session.pk)})}"
+    report_url = f"{reverse('arpia_report:report_home')}?{urlencode({'project': str(session.project_id)})}"
     return {
         "id": str(session.pk),
         "reference": session.reference,

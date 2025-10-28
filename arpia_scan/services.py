@@ -1399,3 +1399,30 @@ class ScanOrchestrator:
         sanitized = json.loads(json.dumps(snapshot))
         self.session.report_snapshot = sanitized
         self.session.save(update_fields=["report_snapshot", "updated_at"])
+
+        try:
+            from arpia_report.models import ScanReportEntry  # local import to avoid circular dependency
+        except ImportError:  # pragma: no cover - app não disponível
+            ScanReportEntry = None
+
+        if ScanReportEntry is not None:
+            summary_block = summary_data.get("summary") if isinstance(summary_data, dict) else {}
+            summary_text = ""
+            if isinstance(summary_block, dict):
+                summary_text = summary_block.get("message") or summary_block.get("summary") or ""
+            elif isinstance(summary_block, str):
+                summary_text = summary_block
+
+            ScanReportEntry.objects.update_or_create(
+                session=self.session,
+                defaults={
+                    "project": self.session.project,
+                    "title": self.session.title,
+                    "summary": summary_text,
+                    "payload": sanitized,
+                    "status": self.session.status,
+                    "started_at": self.session.started_at,
+                    "finished_at": self.session.finished_at,
+                    "tags": ["scan", self.session.status],
+                },
+            )
