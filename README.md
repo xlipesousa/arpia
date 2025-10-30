@@ -54,5 +54,17 @@ Atenção
 - O comando `python manage.py runserver` agora aplica migrações pendentes automaticamente antes de subir o servidor.
   - Caso precise pular esse comportamento (ex.: scripts de CI), use `python manage.py runserver --skip-auto-migrate`.
 
+## Módulo de vulnerabilidades — visão rápida
+
+- Dashboard dinâmico com polling a cada 30 segundos via endpoint `GET /vuln/api/dashboard/`, exibindo métricas consolidadas e links diretos para os módulos de Scan e Reports.
+- Distribuição de severidade, contagem de findings abertos e resumo das últimas sessões agora aparecem em tempo real para o projeto selecionado.
+- A lista de achados recentes e a tabela de sessões são atualizadas automaticamente sem recarregar a página.
+- Automação de playbooks:
+  - Acione `plan_vulnerability_session` (ou o endpoint `POST /vuln/api/sessions/plan/`) para provisionar sessões com pipeline padrão ou personalizado.
+  - O dashboard agora possui o botão “Nova sessão automatizada”, que agenda tarefas pendentes reutilizáveis (Nmap vuln/targeted, Greenbone) com um clique.
+  - O payload suporta `include_targeted`, `include_targeted_nse`, `include_greenbone` e listas `pipeline` para ajustar rapidamente o playbook.
+- Cada `VulnScanSession` armazena `macros_snapshot`, garantindo que as macros do projeto fiquem disponíveis mesmo fora de ambiente conectado (execuções offline, replays, etc.).
+- Para consumir o snapshot em integrações externas, autentique-se normalmente e consulte `https://<host>/vuln/api/dashboard/?project=<uuid_do_projeto>`.
+
 Suporte rápido
 - Problemas ao rodar o servidor ou migrar? Cole a saída de:

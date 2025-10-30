@@ -27,6 +27,13 @@ DEFAULT_TOOLS: List[ToolDefinition] = [
         description="Scanner de rede clássico amplamente utilizado.",
         category="scanner",
     ),
+    ToolDefinition(
+        slug="gvm",
+        name="Greenbone Vulnerability Manager (gvm-cli)",
+        path="/usr/bin/gvm-cli",
+        description="Cliente GMP para controle do Greenbone/OpenVAS via linha de comando.",
+        category="vulnerability",
+    ),
 ]
 
 

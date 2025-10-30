@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 
 # Nmap vulnerability scan leveraging NSE scripts.
-# Placeholders:
-#   {{PROJECT_NAME}} -> project name
-#   {{TARGET_HOSTS}} -> newline-separated hostnames/IPs
+# Macros disponíveis:
+#   PROJECT_NAME   -> project name
+#   TARGET_HOSTS   -> newline-separated hostnames/IPs
+#   TARGET_NETWORKS-> newline-separated networks (fallback)
 
 set -euo pipefail
 

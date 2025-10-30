@@ -78,16 +78,6 @@ DEFAULT_SCRIPTS: List[ScriptDefinition] = [
         requires_hosts=True,
         required_tool_slug="nmap",
     ),
-    ScriptDefinition(
-        slug="nmap-vuln-nse",
-        name="Nmap — NSE Vulnerabilities",
-        filename="nmap_vuln_nse.sh",
-        description="Executa NSE --script vuln contra hosts ou redes do projeto.",
-        tags=["nmap", "nse", "vuln"],
-        requires_hosts=False,
-        requires_networks=True,
-        required_tool_slug="nmap",
-    ),
 ]
 
 

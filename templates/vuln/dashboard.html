@@ -1,0 +1,787 @@
+{% extends "base.html" %}
+{% block title %}Vulnerabilidades — ARPIA{% endblock %}
+
+{% block content %}
+<section class="page-heading">
+  <div>
+    <h1>Gestão de vulnerabilidades</h1>
+    <p class="page-subtitle">Conecte descobertas do módulo de scan, consolide achados e acompanhe sessões dedicadas.</p>
+  </div>
+  {% if has_project %}
+    <div class="active-project">
+      <span class="label">Projeto ativo</span>
+      <strong>{{ selected_project.name }}</strong>
+      {% if selected_project.client_name %}
+        <span class="muted">{{ selected_project.client_name }}</span>
+      {% endif %}
+    </div>
+  {% endif %}
+</section>
+
+<section class="scan-shell" data-dashboard-root data-project-selected="{{ has_project|yesno:'true,false' }}" data-api-url="{{ dashboard_api_url }}" data-plan-api-url="{{ plan_api_url }}">
+  <div class="left-column">
+    <article class="panel projects-panel">
+      <header class="panel-header">
+        <div>
+          <h2>Projetos</h2>
+          <p class="muted">Você tem acesso a {{ projects|length }} projeto(s).</p>
+        </div>
+        {% if projects %}
+          <a class="see-all" href="{% url 'projects_list' %}">Ver todos</a>
+        {% endif %}
+      </header>
+      {% if projects %}
+        <div class="projects-scroll">
+          <ul class="project-items">
+            {% for project in projects %}
+              <li class="project-item {% if project.id|stringformat:'s' == selected_project_id %}is-active{% endif %}">
+                <a href="?project={{ project.id }}" class="project-card" aria-current="{% if project.id|stringformat:'s' == selected_project_id %}page{% else %}false{% endif %}">
+                  <div class="project-card-body">
+                    <h3>{{ project.name }}</h3>
+                    {% if project.description %}<p class="description">{{ project.description }}</p>{% endif %}
+                    {% if project.client_name %}<span class="client">{{ project.client_name }}</span>{% endif %}
+                  </div>
+                  <span class="project-chevron" aria-hidden="true">→</span>
+                </a>
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% else %}
+        <div class="empty">
+          <p>Nenhum projeto disponível. Crie um projeto para habilitar os fluxos de vulnerabilidades.</p>
+        </div>
+      {% endif %}
+    </article>
+
+    <article class="panel macros-panel" aria-live="polite">
+      <header class="panel-header">
+        <div>
+          <h2>Macros do projeto</h2>
+          <p class="muted">Snapshots de hosts, credenciais e parâmetros herdados do módulo de scan.</p>
+        </div>
+      </header>
+      {% if macro_entries %}
+        <ul class="macro-list">
+          {% for macro in macro_entries %}
+            <li>
+              <span class="macro-key">{{ macro.key }}</span>
+              {% if macro.is_pre %}
+                <pre>{{ macro.value }}</pre>
+              {% else %}
+                <span class="macro-value">{{ macro.value|default:"—" }}</span>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% elif has_project %}
+        <div class="empty">Nenhuma macro capturada para este projeto ainda.</div>
+      {% else %}
+        <div class="empty">Selecione um projeto para visualizar macros disponíveis.</div>
+      {% endif %}
+    </article>
+  </div>
+
+  <div class="right-column">
+    <article class="panel summary-panel">
+      <header class="panel-header">
+        <div>
+          <h2>Resumo rápido</h2>
+          <p class="muted">Indicadores das últimas sessões e achados registrados.</p>
+        </div>
+      </header>
+      <ul class="summary-grid">
+        <li>
+          <span class="metric" data-metric="recent_sessions">{{ recent_sessions|length }}</span>
+          <span class="label">Sessões recentes</span>
+        </li>
+        <li>
+          <span class="metric" data-metric="recent_findings">{{ recent_findings|length }}</span>
+          <span class="label">Achados recentes</span>
+        </li>
+        <li>
+          <span class="metric" data-metric="project_sessions">{{ total_sessions_count }}</span>
+          <span class="label">Sessões monitoradas</span>
+        </li>
+        <li>
+          <span class="metric" data-metric="open_findings">{{ open_findings_total }}</span>
+          <span class="label">Findings abertos</span>
+        </li>
+      </ul>
+      <div class="severity-overview">
+        <h3>Distribuição por severidade</h3>
+        <ul class="severity-grid">
+          {% for item in severity_overview %}
+            <li>
+              <span class="badge severity-{{ item.key }}">{{ item.label }}</span>
+              <span class="metric" data-severity-count="{{ item.key }}">{{ item.count }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+      <div class="summary-actions">
+        {% if link_scan_dashboard %}
+          <a class="inline-link" data-link="scan-dashboard" href="{{ link_scan_dashboard }}">Abrir módulo de scan</a>
+        {% endif %}
+        {% if link_report %}
+          <a class="inline-link" data-link="report-home" href="{{ link_report }}">Abrir relatórios</a>
+        {% endif %}
+      </div>
+    </article>
+
+    <article class="panel plan-panel">
+      <header class="panel-header">
+        <div>
+          <h2>Nova sessão automatizada</h2>
+          <p class="muted">Planeje uma sessão com o playbook padrão e personalize etapas antes da execução.</p>
+        </div>
+      </header>
+      {% if has_project %}
+  <form data-role="plan-form" class="plan-form" data-project-name="{{ selected_project.name|default:'' }}">
+          {% csrf_token %}
+          <input type="hidden" name="project_id" value="{{ selected_project_id }}">
+          <div class="form-row">
+            <label for="plan-title">Título</label>
+            <input id="plan-title" name="title" type="text" placeholder="Sessão de vulnerabilidades" value="Sessão de vulnerabilidades" required>
+          </div>
+          <fieldset class="form-grid">
+            <legend>Playbook</legend>
+            <label class="checkbox">
+              <input type="checkbox" name="include_targeted" checked>
+              <span>Incluir enumeração direcionada (Nmap targeted)</span>
+            </label>
+            <label class="checkbox">
+              <input type="checkbox" name="include_targeted_nse" checked>
+              <span>Executar NSE focado após enumeração</span>
+            </label>
+            <label class="checkbox">
+              <input type="checkbox" name="include_greenbone" checked>
+              <span>Agendar varredura Greenbone</span>
+            </label>
+          </fieldset>
+          <p class="muted small">Os scripts padrão são sincronizados automaticamente e usam as macros armazenadas no projeto.</p>
+          <div class="form-actions">
+            <button type="submit" class="button primary" data-role="plan-submit">Planejar sessão</button>
+            <p class="form-feedback" data-plan-feedback hidden></p>
+          </div>
+        </form>
+      {% else %}
+        <div class="empty">
+          <p>Selecione um projeto para habilitar o planejamento de sessões de vulnerabilidades.</p>
+        </div>
+      {% endif %}
+    </article>
+
+    <article class="panel sessions-panel" data-empty-text="Nenhuma sessão registrada.">
+      <header class="panel-header">
+        <div>
+          <h2>Sessões recentes</h2>
+          <p class="muted">Últimas execuções de varreduras de vulnerabilidades.</p>
+        </div>
+      </header>
+      <div class="sessions-body">
+        <table class="sessions-table" data-role="sessions-table" {% if not recent_sessions %}hidden{% endif %}>
+          <thead>
+            <tr>
+              <th>Título</th>
+              <th>Status</th>
+              <th>Início</th>
+              <th>Responsável</th>
+            </tr>
+          </thead>
+          <tbody id="dashboard-sessions-body">
+            {% for session in recent_sessions %}
+              <tr>
+                <td>
+                  <a href="{% url 'arpia_vuln:session_detail' session.id %}">{{ session.title }}</a>
+                  <span class="ref">#{{ session.reference }}</span>
+                </td>
+                <td><span class="status status-{{ session.status }}">{{ session.get_status_display }}</span></td>
+                <td>{{ session.started_at|default:session.created_at|date:"Y-m-d H:i" }}</td>
+                <td>{{ session.owner.get_username }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <div class="empty" data-role="sessions-empty" {% if recent_sessions %}hidden{% endif %}>{{ empty_sessions_text }}</div>
+      </div>
+    </article>
+
+    <article class="panel findings-panel">
+      <header class="panel-header">
+        <div>
+          <h2>Achados recentes</h2>
+          <p class="muted">Os seis achados mais recentes associados às sessões filtradas.</p>
+        </div>
+        {% if link_report %}
+          <a class="see-all" data-link="report-home" href="{{ link_report }}">Abrir relatórios</a>
+        {% endif %}
+      </header>
+      <ul class="findings-list" data-role="findings-list" {% if not recent_findings %}hidden{% endif %}>
+        {% for finding in recent_findings %}
+          <li>
+            <div class="finding-head">
+              <span class="badge severity-{{ finding.severity }}">{{ finding.get_severity_display }}</span>
+              <span class="badge status-{{ finding.status }}">{{ finding.get_status_display }}</span>
+              {% if finding.cve %}
+                <span class="badge cve">{{ finding.cve }}</span>
+              {% endif %}
+            </div>
+            <h3>{{ finding.title }}</h3>
+            <p class="muted">{{ finding.summary|default:"Sem descrição adicional." }}</p>
+            <dl class="finding-meta">
+              {% if finding.host %}<div><dt>Host</dt><dd>{{ finding.host }}</dd></div>{% endif %}
+              {% if finding.service %}<div><dt>Serviço</dt><dd>{{ finding.service }}</dd></div>{% endif %}
+              {% if finding.port %}<div><dt>Porta</dt><dd>{{ finding.port }} {{ finding.protocol|upper }}</dd></div>{% endif %}
+              <div><dt>Registrada</dt><dd>{{ finding.detected_at|date:"d/m/Y H:i" }}</dd></div>
+            </dl>
+            <a class="inline-link" href="{% url 'arpia_vuln:session_detail' finding.session_id %}">Abrir sessão</a>
+          </li>
+        {% endfor %}
+      </ul>
+      <div class="empty" data-role="findings-empty" {% if recent_findings %}hidden{% endif %}>{{ empty_findings_text }}</div>
+    </article>
+  </div>
+</section>
+
+{{ dashboard_bootstrap|json_script:"vuln-dashboard-bootstrap" }}
+
+<script>
+(function(){
+  const root = document.querySelector('[data-dashboard-root]');
+  if (!root) {
+    return;
+  }
+
+  const apiUrl = root.dataset.apiUrl || "";
+  const planApiUrl = root.dataset.planApiUrl || "";
+  const refreshInterval = 30000;
+  let timerId;
+
+  const planForm = root.querySelector('[data-role="plan-form"]');
+  const planFeedback = planForm ? planForm.querySelector('[data-plan-feedback]') : null;
+  let planningBusy = false;
+
+  let snapshot = null;
+  const bootstrapTag = document.getElementById('vuln-dashboard-bootstrap');
+  if (bootstrapTag) {
+    try {
+      snapshot = JSON.parse(bootstrapTag.textContent);
+    } catch (error) {
+      console.warn('Não foi possível interpretar o snapshot inicial do dashboard.', error);
+    }
+  }
+
+  if (snapshot) {
+    render(snapshot);
+  }
+
+  initializePlanForm();
+
+  async function fetchSnapshot() {
+    if (!apiUrl) {
+      return;
+    }
+    if (timerId) {
+      clearTimeout(timerId);
+      timerId = null;
+    }
+    try {
+      const response = await fetch(apiUrl, {headers: {Accept: 'application/json'}});
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const data = await response.json();
+      render(data);
+    } catch (error) {
+      console.warn('Falha ao atualizar painel de vulnerabilidades:', error);
+    } finally {
+      schedule();
+    }
+  }
+
+  function schedule() {
+    if (!apiUrl) {
+      return;
+    }
+    if (timerId) {
+      clearTimeout(timerId);
+    }
+    timerId = window.setTimeout(fetchSnapshot, refreshInterval);
+  }
+
+  if (apiUrl) {
+    fetchSnapshot();
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        if (timerId) {
+          clearTimeout(timerId);
+        }
+      } else {
+        fetchSnapshot();
+      }
+    });
+  }
+
+  function render(data) {
+    root.dataset.projectSelected = data.project ? 'true' : 'false';
+    updateMetrics(data.metrics || {});
+    updateSeverity((data.metrics && data.metrics.severity_counts) || {});
+    updateSessions(data.sessions || [], data.meta ? data.meta.empty_sessions_text : undefined);
+    updateFindings(data.findings || [], data.meta ? data.meta.empty_findings_text : undefined);
+    updateLinks(data.links || {});
+    updatePlanAvailability(data.project || null);
+  }
+
+  function updateMetrics(metrics) {
+    const mapping = {
+      recent_sessions: 'recent_sessions',
+      recent_findings: 'recent_findings',
+      total_sessions: 'project_sessions',
+      open_findings: 'open_findings',
+    };
+    Object.entries(mapping).forEach(([sourceKey, targetAttr]) => {
+      const el = root.querySelector(`[data-metric="${targetAttr}"]`);
+      if (!el) {
+        return;
+      }
+      const value = metrics[sourceKey];
+      el.textContent = value === undefined || value === null ? '—' : value;
+    });
+  }
+
+  function updateSeverity(counts) {
+    const items = root.querySelectorAll('[data-severity-count]');
+    items.forEach((el) => {
+      const key = el.getAttribute('data-severity-count');
+      const value = counts && Object.prototype.hasOwnProperty.call(counts, key) ? counts[key] : 0;
+      el.textContent = value ?? 0;
+    });
+  }
+
+  function updateSessions(sessions, emptyText) {
+    const table = root.querySelector('[data-role="sessions-table"]');
+    const empty = root.querySelector('[data-role="sessions-empty"]');
+    const tbody = root.querySelector('#dashboard-sessions-body');
+    if (!tbody) {
+      return;
+    }
+    tbody.innerHTML = '';
+    if (!sessions.length) {
+      if (table) {
+        table.hidden = true;
+      }
+      if (empty) {
+        if (emptyText) {
+          empty.textContent = emptyText;
+        }
+        empty.hidden = false;
+      }
+      return;
+    }
+
+    sessions.forEach((session) => {
+      const tr = document.createElement('tr');
+
+      const titleCell = document.createElement('td');
+      const link = document.createElement('a');
+      link.href = session.detail_url;
+      link.textContent = session.title;
+      link.rel = 'noopener';
+      titleCell.appendChild(link);
+      if (session.reference) {
+        const ref = document.createElement('span');
+        ref.className = 'ref';
+        ref.textContent = `#${session.reference}`;
+        titleCell.appendChild(ref);
+      }
+      tr.appendChild(titleCell);
+
+      const statusCell = document.createElement('td');
+      const statusBadge = document.createElement('span');
+      statusBadge.className = `status status-${session.status}`;
+      statusBadge.textContent = session.status_display || session.status;
+      statusCell.appendChild(statusBadge);
+      tr.appendChild(statusCell);
+
+      const startedCell = document.createElement('td');
+      startedCell.textContent = session.started_display || '—';
+      tr.appendChild(startedCell);
+
+      const ownerCell = document.createElement('td');
+      ownerCell.textContent = session.owner || '—';
+      tr.appendChild(ownerCell);
+
+      tbody.appendChild(tr);
+    });
+
+    if (table) {
+      table.hidden = false;
+    }
+    if (empty) {
+      empty.hidden = true;
+    }
+  }
+
+  function updateFindings(findings, emptyText) {
+    const list = root.querySelector('[data-role="findings-list"]');
+    const empty = root.querySelector('[data-role="findings-empty"]');
+    if (!list) {
+      return;
+    }
+    list.innerHTML = '';
+    if (!findings.length) {
+      list.hidden = true;
+      if (empty) {
+        if (emptyText) {
+          empty.textContent = emptyText;
+        }
+        empty.hidden = false;
+      }
+      return;
+    }
+
+    findings.forEach((finding) => {
+      const item = document.createElement('li');
+
+      const head = document.createElement('div');
+      head.className = 'finding-head';
+
+      const severity = document.createElement('span');
+      severity.className = `badge severity-${finding.severity}`;
+      severity.textContent = finding.severity_display || finding.severity;
+      head.appendChild(severity);
+
+      const status = document.createElement('span');
+      status.className = `badge status-${finding.status}`;
+      status.textContent = finding.status_display || finding.status;
+      head.appendChild(status);
+
+      if (finding.cve) {
+        const cve = document.createElement('span');
+        cve.className = 'badge cve';
+        cve.textContent = finding.cve;
+        head.appendChild(cve);
+      }
+
+      item.appendChild(head);
+
+      const title = document.createElement('h3');
+      title.textContent = finding.title;
+      item.appendChild(title);
+
+      const summary = document.createElement('p');
+      summary.className = 'muted';
+      summary.textContent = finding.summary || 'Sem descrição adicional.';
+      item.appendChild(summary);
+
+      const meta = document.createElement('dl');
+      meta.className = 'finding-meta';
+      if (finding.host) {
+        meta.appendChild(buildMetaEntry('Host', finding.host));
+      }
+      if (finding.service) {
+        meta.appendChild(buildMetaEntry('Serviço', finding.service));
+      }
+      if (finding.port) {
+        const protocol = finding.protocol ? String(finding.protocol).toUpperCase() : '';
+        const portLabel = protocol ? `${finding.port} ${protocol}` : finding.port;
+        meta.appendChild(buildMetaEntry('Porta', portLabel));
+      }
+      if (finding.detected_display) {
+        meta.appendChild(buildMetaEntry('Registrada', finding.detected_display));
+      }
+      item.appendChild(meta);
+
+      const link = document.createElement('a');
+      link.className = 'inline-link';
+      link.href = finding.session_detail_url;
+      link.rel = 'noopener';
+      link.textContent = 'Abrir sessão';
+      item.appendChild(link);
+
+      list.appendChild(item);
+    });
+
+    list.hidden = false;
+    if (empty) {
+      empty.hidden = true;
+    }
+  }
+
+  function buildMetaEntry(label, value) {
+    const wrapper = document.createElement('div');
+    const dt = document.createElement('dt');
+    dt.textContent = label;
+    const dd = document.createElement('dd');
+    dd.textContent = value;
+    wrapper.appendChild(dt);
+    wrapper.appendChild(dd);
+    return wrapper;
+  }
+
+  function updateLinks(links) {
+    const scanLink = root.querySelector('[data-link="scan-dashboard"]');
+    if (scanLink && links.scan_dashboard) {
+      scanLink.href = links.scan_dashboard;
+    }
+    const reportLinks = root.querySelectorAll('[data-link="report-home"]');
+    reportLinks.forEach((element) => {
+      if (links.report_home) {
+        element.href = links.report_home;
+      }
+    });
+  }
+
+  function initializePlanForm() {
+    if (!planForm) {
+      return;
+    }
+    const projectIdInput = planForm.querySelector('input[name="project_id"]');
+    const initialProject = snapshot && snapshot.project
+      ? snapshot.project
+      : (root.dataset.projectSelected === 'true' && projectIdInput && projectIdInput.value
+        ? {id: projectIdInput.value, name: planForm.dataset.projectName || ''}
+        : null);
+    updatePlanAvailability(initialProject);
+
+    planForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (planningBusy) {
+        return;
+      }
+      if (!planApiUrl) {
+        setPlanFeedback('Endpoint de planejamento não configurado.', true);
+        return;
+      }
+
+      const formData = new FormData(planForm);
+      const projectId = formData.get('project_id');
+      if (!projectId) {
+        setPlanFeedback('Selecione um projeto para planejar a sessão.', true);
+        return;
+      }
+
+      const payload = {
+        project_id: projectId,
+      };
+
+      const title = formData.get('title');
+      if (title) {
+        payload.title = title;
+      }
+      payload.include_targeted = formData.get('include_targeted') !== null;
+      payload.include_targeted_nse = formData.get('include_targeted_nse') !== null;
+      payload.include_greenbone = formData.get('include_greenbone') !== null;
+
+      const submitButton = planForm.querySelector('[data-role="plan-submit"]');
+      const csrfInput = planForm.querySelector('input[name="csrfmiddlewaretoken"]');
+      const csrfToken = csrfInput ? csrfInput.value : getCsrfToken();
+
+      planningBusy = true;
+      if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.dataset.originalText = submitButton.dataset.originalText || submitButton.textContent;
+        submitButton.textContent = 'Planejando…';
+      }
+      setPlanFeedback('', false);
+
+      try {
+        const response = await fetch(planApiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-CSRFToken': csrfToken,
+          },
+          body: JSON.stringify(payload),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const message = data && data.error ? data.error : 'Falha ao planejar sessão.';
+          throw new Error(message);
+        }
+        setPlanFeedback('Sessão planejada! Redirecionando…', false);
+        const detailUrl = data && data.detail_url;
+        window.setTimeout(() => {
+          if (detailUrl) {
+            window.location.href = detailUrl;
+          } else {
+            window.location.reload();
+          }
+        }, 800);
+      } catch (error) {
+        setPlanFeedback(error.message || 'Erro ao planejar sessão.', true);
+      } finally {
+        planningBusy = false;
+        if (submitButton) {
+          submitButton.disabled = false;
+          if (submitButton.dataset.originalText) {
+            submitButton.textContent = submitButton.dataset.originalText;
+          }
+        }
+      }
+    });
+  }
+
+  function updatePlanAvailability(projectPayload) {
+    if (!planForm) {
+      return;
+    }
+    const hasProject = !!(projectPayload && projectPayload.id);
+    const projectIdInput = planForm.querySelector('input[name="project_id"]');
+    if (projectIdInput) {
+      projectIdInput.value = hasProject ? projectPayload.id : '';
+    }
+    planForm.dataset.projectName = hasProject ? (projectPayload.name || '') : '';
+
+    const controls = planForm.querySelectorAll('input, button, select, textarea');
+    controls.forEach((control) => {
+      if (control.name === 'csrfmiddlewaretoken' || control.name === 'project_id') {
+        return;
+      }
+      control.disabled = !hasProject;
+    });
+
+    planForm.classList.toggle('is-disabled', !hasProject);
+    if (!hasProject) {
+      setPlanFeedback('', false);
+      return;
+    }
+
+    const titleInput = planForm.querySelector('input[name="title"]');
+    if (titleInput && (!titleInput.value || titleInput.value === 'Sessão de vulnerabilidades')) {
+      const projectName = planForm.dataset.projectName || projectPayload.name || 'Sessão de vulnerabilidades';
+      titleInput.value = `${projectName} — Vulnerabilidades`;
+    }
+  }
+
+  function setPlanFeedback(message, isError) {
+    if (!planFeedback) {
+      return;
+    }
+    if (!message) {
+      planFeedback.hidden = true;
+      planFeedback.textContent = '';
+      planFeedback.classList.remove('is-error');
+      return;
+    }
+    planFeedback.hidden = false;
+    planFeedback.textContent = message;
+    planFeedback.classList.toggle('is-error', !!isError);
+  }
+
+  function getCsrfToken() {
+    const cookies = document.cookie ? document.cookie.split(';') : [];
+    for (const cookie of cookies) {
+      const trimmed = cookie.trim();
+      if (trimmed.substring(0, 10) === 'csrftoken=') {
+        return decodeURIComponent(trimmed.substring(10));
+      }
+    }
+    return '';
+  }
+})();
+</script>
+
+<style>
+.page-heading{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.6rem;gap:1rem;}
+.page-heading h1{margin:0;font-size:1.9rem;color:var(--text);}
+.active-project{display:flex;flex-direction:column;gap:.25rem;background:rgba(255,255,255,0.02);padding:.8rem 1rem;border-radius:10px;border:1px solid rgba(255,255,255,0.06);min-width:220px;}
+.active-project .label{font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
+.scan-shell{display:grid;grid-template-columns:minmax(384px,432px) 1fr;gap:1.6rem;align-items:start;}
+.left-column{display:flex;flex-direction:column;gap:1.6rem;}
+.right-column{display:flex;flex-direction:column;gap:1.6rem;}
+.panel{background:rgba(8,23,43,0.78);border-radius:16px;padding:1.4rem;border:1px solid rgba(255,255,255,0.05);box-shadow:0 18px 38px rgba(5,16,32,0.35);position:relative;overflow:hidden;}
+.panel-header{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:1.2rem;}
+.panel-header h2{margin:0;color:var(--text);font-size:1.35rem;}
+.muted{color:var(--muted);}
+.see-all{color:var(--muted);font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;}
+.projects-panel{display:flex;flex-direction:column;max-height:22rem;}
+.projects-panel .panel-header{margin-bottom:.9rem;}
+.projects-scroll{flex:1;min-height:0;overflow:auto;padding-right:.4rem;}
+.project-items{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.9rem;}
+.project-item{position:relative;transition:.2s ease;}
+.project-card{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;padding:1.05rem 1.2rem;border-radius:14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.03);text-decoration:none;color:inherit;transition:.2s ease;}
+.project-card:hover{border-color:rgba(127,181,255,0.25);box-shadow:0 0 0 1px rgba(127,181,255,0.15);}
+.project-item.is-active .project-card{border-color:rgba(127,181,255,0.6);box-shadow:0 0 0 2px rgba(127,181,255,0.2);background:rgba(127,181,255,0.08);}
+.project-card-body{display:flex;flex-direction:column;gap:.4rem;}
+.project-card h3{margin:0;font-size:1.05rem;color:var(--text);}
+.project-card .description{margin:0;color:var(--muted);font-size:.85rem;}
+.project-card .client{display:inline-flex;align-items:center;gap:.35rem;margin-top:.2rem;padding:.2rem .6rem;border-radius:999px;background:rgba(127,181,255,0.15);color:#cfe4ff;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;}
+.project-chevron{display:inline-flex;align-items:center;justify-content:center;min-width:1.75rem;height:1.75rem;border-radius:999px;background:rgba(255,255,255,0.06);color:rgba(230,241,255,0.7);font-size:1.1rem;transition:.2s ease;}
+.project-card:hover .project-chevron{background:rgba(127,181,255,0.2);color:#e8f2ff;transform:translateX(2px);}
+.macro-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.7rem;}
+.macro-list li{display:flex;flex-direction:column;gap:.35rem;background:rgba(255,255,255,0.02);padding:.75rem 1rem;border-radius:10px;border:1px solid rgba(255,255,255,0.03);}
+.macro-key{font-family:"Fira Code",monospace;color:#89d1ff;font-size:.85rem;}
+.macro-value{color:var(--text);}
+.macro-list pre{margin:0;background:rgba(0,0,0,0.4);padding:.6rem .8rem;border-radius:8px;white-space:pre-wrap;word-break:break-word;font-family:"Fira Code",monospace;font-size:.78rem;max-width:100%;overflow:auto;}
+.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;list-style:none;margin:0;padding:0;}
+.summary-grid .metric{display:block;font-size:2rem;font-weight:700;color:#8bc5ff;}
+.summary-grid .label{font-size:.85rem;color:var(--muted);}
+.severity-overview{margin-top:1.2rem;padding-top:1rem;border-top:1px solid rgba(255,255,255,0.05);}
+.severity-overview h3{margin:0 0 .6rem;font-size:1rem;color:var(--text);}
+.severity-grid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.6rem;}
+.severity-grid li{display:flex;align-items:center;justify-content:space-between;padding:.55rem .8rem;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);}
+.severity-grid .metric{font-size:1.35rem;font-weight:600;color:#cfe4ff;}
+.summary-actions{display:flex;flex-wrap:wrap;gap:.9rem;margin-top:1.2rem;}
+.sessions-table{width:100%;border-collapse:collapse;font-size:.92rem;}
+.sessions-table th,.sessions-table td{padding:.55rem .75rem;border-bottom:1px solid rgba(255,255,255,0.05);text-align:left;}
+.sessions-table th{font-weight:600;color:var(--muted);text-transform:uppercase;font-size:.75rem;letter-spacing:.06em;}
+.sessions-table td .ref{display:block;font-size:.75rem;color:var(--muted);}
+.status{display:inline-flex;align-items:center;gap:.4rem;padding:.2rem .6rem;border-radius:999px;font-size:.75rem;font-weight:600;color:var(--text);background:rgba(255,255,255,0.08);}
+.status-running{background:rgba(123,195,255,0.15);}
+.status-completed{background:rgba(118,221,174,0.2);}
+.status-failed{background:rgba(255,132,132,0.18);}
+.status-planned,.status-ready{background:rgba(255,255,255,0.08);}
+.findings-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1rem;}
+.findings-list li{padding:1rem 1.2rem;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);box-shadow:0 10px 24px rgba(5,16,32,0.18);}
+.finding-head{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin-bottom:.5rem;}
+.badge{display:inline-flex;align-items:center;gap:.3rem;padding:.2rem .6rem;border-radius:999px;font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;}
+.badge.severity-critical{background:rgba(255,86,86,0.15);color:#ffb3b3;}
+.badge.severity-high{background:rgba(255,138,76,0.18);color:#ffd4b8;}
+.badge.severity-medium{background:rgba(255,214,102,0.18);color:#ffe8b3;}
+.badge.severity-low{background:rgba(118,221,174,0.18);color:#daf7e7;}
+.badge.severity-info{background:rgba(118,187,255,0.18);color:#d5ecff;}
+.badge.severity-unknown{background:rgba(255,255,255,0.08);color:#f0f6ff;}
+.badge.status-open{background:rgba(255,255,255,0.08);color:#f0f6ff;}
+.badge.status-ack{background:rgba(118,187,255,0.18);color:#d5ecff;}
+.badge.status-resolved{background:rgba(118,221,174,0.18);color:#daf7e7;}
+.badge.cve{background:rgba(127,181,255,0.18);color:#e0f1ff;font-weight:600;}
+.findings-list h3{margin:.2rem 0;font-size:1.1rem;color:var(--text);}
+.findings-list p{margin:0 0 .6rem;font-size:.9rem;color:var(--muted);}
+.finding-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.6rem;}
+.finding-meta div{display:flex;flex-direction:column;gap:.15rem;font-size:.8rem;color:var(--muted);}
+.finding-meta dt{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
+.finding-meta dd{margin:0;color:var(--text);font-weight:600;}
+.inline-link{display:inline-flex;align-items:center;gap:.4rem;margin-top:.8rem;color:#8bc5ff;text-decoration:none;font-weight:600;}
+.inline-link:hover{color:#b9dcff;}
+.plan-form{display:flex;flex-direction:column;gap:1rem;}
+.plan-form.is-disabled{opacity:0.65;pointer-events:none;filter:grayscale(0.2);}
+.plan-form .form-row{display:flex;flex-direction:column;gap:.4rem;}
+.plan-form label{font-size:.85rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.08em;}
+.plan-form input[type="text"]{border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(0,0,0,0.35);padding:.7rem 1rem;color:var(--text);font-size:.95rem;}
+.plan-form input[type="text"]::placeholder{color:rgba(255,255,255,0.35);}
+.plan-form fieldset{margin:0;border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:1rem 1.2rem;display:flex;flex-direction:column;gap:.6rem;}
+.plan-form legend{padding:0 .3rem;font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
+.plan-form .checkbox{display:flex;align-items:flex-start;gap:.6rem;font-size:.9rem;color:var(--text);}
+.plan-form .checkbox input{margin-top:.25rem;width:1rem;height:1rem;}
+.plan-form .form-actions{display:flex;flex-direction:column;gap:.6rem;}
+.plan-form .button.primary{align-self:flex-start;padding:.65rem 1.4rem;border-radius:12px;border:none;background:linear-gradient(135deg,#4ea3ff,#2a6fe8);color:#fff;font-weight:600;cursor:pointer;box-shadow:0 12px 30px rgba(36,103,230,0.35);transition:.2s ease;}
+.plan-form .button.primary:disabled{cursor:not-allowed;opacity:0.7;box-shadow:none;}
+.plan-form .form-feedback{font-size:.85rem;}
+.plan-form .form-feedback.is-error{color:#ffb3b3;}
+.empty{padding:1rem;background:rgba(255,255,255,0.02);border-radius:10px;color:var(--muted);text-align:left;}
+@media (max-width:1280px){
+  .scan-shell{grid-template-columns:1fr;}
+}
+@media (max-width:1024px){
+  .left-column{gap:1.2rem;}
+}
+@media (max-width:960px){
+  .page-heading{flex-direction:column;align-items:flex-start;}
+  .active-project{width:100%;}
+  .scan-shell{grid-template-columns:1fr;}
+}
+</style>
+{% endblock %}

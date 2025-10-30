@@ -61,6 +61,11 @@
         <span class="label">Scan</span>
       </a>
 
+      <a href="{% url 'arpia_vuln:dashboard' %}" class="menu-item" title="Vulnerabilidades">
+        <img src="{% static 'icons/view-grid.svg' %}" class="icon" alt="Vuln">
+        <span class="label">Vuln</span>
+      </a>
+
       <a href="{% url 'scripts_list' %}" class="menu-item" title="Scripts">
         <img src="{% static 'icons/code-bracket.svg' %}" class="icon" alt="Scripts">
         <span class="label">Scripts</span>
@@ -101,10 +106,12 @@
   <header class="topbar">
     <div class="top-left">
       <div class="module-switch">
-        <a href="{% url 'arpia_scan:dashboard' %}" class="module active">Scan</a>
-        <a href="#" class="module">Vuln</a>
-        <a href="#" class="module">Hunt</a>
-        <a href="#" class="module">Pentest</a>
+        {% with current_namespace=request.resolver_match.namespace %}
+          <a href="{% url 'arpia_scan:dashboard' %}" class="module {% if current_namespace == 'arpia_scan' %}active{% endif %}">Scan</a>
+          <a href="{% url 'arpia_vuln:dashboard' %}" class="module {% if current_namespace == 'arpia_vuln' %}active{% endif %}">Vuln</a>
+          <a href="#" class="module">Hunt</a>
+          <a href="#" class="module">Pentest</a>
+        {% endwith %}
       </div>
     </div>
 

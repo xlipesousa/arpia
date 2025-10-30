@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from arpia_core.models import Project
 from arpia_scan.models import ScanFinding, ScanSession
+from arpia_vuln.models import VulnScanSession, VulnerabilityFinding
 
 from .models import (
     HuntReportEntry,
@@ -143,14 +144,132 @@ class ReportAggregator:
     def _build_vuln_section(self) -> SectionData:
         entries = [
             self._entry_to_section_item(entry)
-            for entry in VulnerabilityReportEntry.objects.filter(project=self.project)
+            for entry in VulnerabilityReportEntry.objects.filter(project=self.project).order_by("-created_at", "-id")
         ]
+        if not entries:
+            fallback_item = self._build_vuln_fallback_item()
+            if fallback_item:
+                entries = [fallback_item]
+
         return SectionData(
             key="vuln",
             label="Relatórios de Vulnerabilidades",
             description="Exibe vulnerabilidades encontradas e respectivas CVEs.",
             items=entries,
             empty_text="Nenhuma vulnerabilidade consolidada.",
+        )
+
+    def _build_vuln_fallback_item(self) -> Optional[SectionItem]:
+        candidates = (
+            VulnScanSession.objects.filter(project=self.project)
+            .prefetch_related("findings")
+            .order_by("-finished_at", "-started_at", "-created_at")
+        )
+        session = None
+        findings: List[VulnerabilityFinding] = []
+
+        for candidate in candidates:
+            candidate_findings = list(candidate.findings.all())
+            if candidate_findings:
+                session = candidate
+                findings = candidate_findings
+                break
+
+        if not session or not findings:
+            return None
+
+        severity_counts: Dict[str, int] = {}
+        cves: set[str] = set()
+        sources: set[str] = set()
+        open_total = 0
+        hosts: set[str] = set()
+        max_cvss: Optional[float] = None
+
+        for finding in findings:
+            severity_counts[finding.severity] = severity_counts.get(finding.severity, 0) + 1
+            if finding.status == VulnerabilityFinding.Status.OPEN:
+                open_total += 1
+            if finding.cve:
+                cves.add(finding.cve)
+            data = finding.data or {}
+            for cve_code in data.get("cves") or []:
+                cves.add(cve_code)
+            source_kind = data.get("source_kind") or data.get("source")
+            if source_kind:
+                sources.add(source_kind)
+            if finding.host:
+                hosts.add(finding.host)
+            if finding.cvss_score is not None:
+                score = float(finding.cvss_score)
+                if max_cvss is None or score > max_cvss:
+                    max_cvss = score
+
+        artifacts: List[Dict[str, str]] = []
+        finding_payload: List[Dict[str, Any]] = []
+        for finding in findings:
+            data = finding.data or {}
+            artifact_path = data.get("file_path")
+            if artifact_path:
+                artifacts.append(
+                    {
+                        "path": artifact_path,
+                        "source": data.get("source_kind") or data.get("source"),
+                    }
+                )
+            finding_payload.append(
+                {
+                    "id": str(finding.pk),
+                    "title": finding.title,
+                    "summary": finding.summary,
+                    "severity": finding.severity,
+                    "status": finding.status,
+                    "host": finding.host,
+                    "service": finding.service,
+                    "port": finding.port,
+                    "protocol": finding.protocol,
+                    "cve": finding.cve,
+                    "cvss_score": float(finding.cvss_score) if finding.cvss_score is not None else None,
+                    "cvss_vector": finding.cvss_vector,
+                }
+            )
+
+        summary_text = (
+            f"{len(findings)} vulnerabilidade(s) identificadas — {open_total} abertas."
+        )
+
+        payload: Dict[str, Any] = {
+            "generated_at": timezone.now().isoformat(),
+            "session": {
+                "id": str(session.pk),
+                "reference": session.reference,
+                "title": session.title,
+                "status": session.status,
+                "started_at": session.started_at,
+                "finished_at": session.finished_at,
+            },
+            "summary": {
+                "totals": {"total": len(findings), "open": open_total},
+                "severity": severity_counts,
+                "cves": sorted(cves),
+                "hosts_impacted": len(hosts),
+                "sources": sorted(sources),
+                "max_cvss": max_cvss,
+            },
+            "artifacts": artifacts,
+            "findings": finding_payload,
+        }
+
+        metadata = {
+            "severity_distribution": severity_counts,
+            "cves": sorted(cves),
+            "source_identifier": f"vuln-session:{session.pk}",
+        }
+
+        return SectionItem(
+            title=f"Resumo automático — {session.title}",
+            summary=summary_text,
+            payload=payload,
+            metadata=metadata,
         )
 
     # ---------------------------------------------------------------------

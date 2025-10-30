@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Relatório de vulnerabilidades — {{ session.title }}{% endblock %}
+
+{% block content %}
+<section class="page-heading">
+  <div>
+    <a href="{% url 'arpia_vuln:session_detail' session.id %}" class="back-link">← Voltar para a sessão</a>
+    <h1>Relatório em preparação</h1>
+    <p class="page-subtitle">Estamos estruturando uma visualização dedicada para consolidar achados da sessão <strong>{{ session.title }}</strong>.</p>
+  </div>
+  <div class="session-status">
+    <span class="label">Status</span>
+    <span class="status-pill status-{{ session.status }}">{{ session.get_status_display }}</span>
+  </div>
+</section>
+
+<section class="report-placeholder">
+  <article class="card highlight">
+    <h2>Resumo rápido</h2>
+    <p class="muted">Acompanhe estatísticas gerais enquanto o relatório final não fica pronto.</p>
+    <dl class="quick-metrics">
+      <div><dt>Projeto</dt><dd>{{ project.name }}</dd></div>
+      <div><dt>Sessão</dt><dd>#{{ session.reference }}</dd></div>
+      <div><dt>Status</dt><dd>{{ session.get_status_display }}</dd></div>
+      <div><dt>Iniciada</dt><dd>{% if session.started_at %}{{ session.started_at|date:"d/m/Y H:i" }}{% else %}<span class="muted">—</span>{% endif %}</dd></div>
+      <div><dt>Finalizada</dt><dd>{% if session.finished_at %}{{ session.finished_at|date:"d/m/Y H:i" }}{% else %}<span class="muted">—</span>{% endif %}</dd></div>
+    </dl>
+  </article>
+
+  <article class="card insights">
+    <h2>Snapshot bruto</h2>
+    <p class="muted">Conteúdo atual do snapshot de relatório (formato JSON).</p>
+    {% if report_json %}
+      <pre class="snapshot-json">{{ report_json }}</pre>
+    {% else %}
+      <p class="empty">Nenhum dado disponível ainda.</p>
+    {% endif %}
+  </article>
+
+  <article class="card next-steps">
+    <h2>O que vem a seguir?</h2>
+    <p>Este espaço evoluirá para uma visualização rica com severidades agregadas, gráficos CVSS e recomendações automatizadas. Enquanto isso, utilize a página da sessão para navegar pelos achados.</p>
+    <a href="{% url 'arpia_vuln:session_detail' session.id %}" class="btn-primary">Abrir detalhes da sessão</a>
+  </article>
+</section>
+
+<style>
+.page-heading{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.6rem;gap:1rem;}
+.page-heading h1{margin:.3rem 0;font-size:1.9rem;color:var(--text);}
+.back-link{text-decoration:none;color:var(--muted);font-size:.9rem;}
+.back-link:hover{color:var(--text);}
+.session-status{display:flex;flex-direction:column;gap:.3rem;align-items:flex-end;}
+.session-status .label{font-size:.75rem;text-transform:uppercase;color:var(--muted);letter-spacing:.08em;}
+.status-pill{display:inline-flex;align-items:center;padding:.25rem .75rem;border-radius:999px;font-weight:600;font-size:.8rem;color:var(--text);background:rgba(255,255,255,0.08);} 
+.report-placeholder{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.4rem;align-items:start;}
+.card{background:rgba(8,23,43,0.8);border-radius:14px;padding:1.4rem;border:1px solid rgba(255,255,255,0.05);box-shadow:0 18px 38px rgba(5,16,32,0.35);}
+.quick-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:0;padding:0;}
+.quick-metrics div{display:flex;flex-direction:column;gap:.2rem;}
+.quick-metrics dt{font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
+.quick-metrics dd{margin:0;color:var(--text);font-weight:600;}
+.snapshot-json{margin:0;background:rgba(0,0,0,0.42);padding:1rem;border-radius:10px;max-height:420px;overflow:auto;font-family:"Fira Code",monospace;font-size:.82rem;color:#dceeff;white-space:pre-wrap;word-break:break-word;}
+.empty{color:var(--muted);}
+.btn-primary{display:inline-flex;align-items:center;justify-content:center;padding:.6rem 1.2rem;border-radius:999px;font-weight:600;background:rgba(76,148,255,0.2);border:1px solid rgba(76,148,255,0.25);color:#8bc5ff;text-decoration:none;transition:.2s ease;}
+.btn-primary:hover{background:rgba(117,187,255,0.28);}
+@media (max-width:900px){.page-heading{flex-direction:column;align-items:flex-start;}.session-status{align-items:flex-start;}.report-placeholder{grid-template-columns:1fr;}}
+</style>
+{% endblock %}

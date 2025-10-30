@@ -1,0 +1,304 @@
+{% extends "base.html" %}
+{% block title %}Vulnerabilidades {{ session.title }} — ARPIA{% endblock %}
+
+{% block content %}
+<section class="page-heading">
+  <div>
+    <a href="{% url 'arpia_vuln:dashboard' %}?project={{ project.id }}" class="back-link">← Voltar para dashboard de vulnerabilidades</a>
+    <h1>{{ session.title }}</h1>
+    <p class="page-subtitle">Projeto {{ project.name }} • Referência #{{ session.reference }}</p>
+  </div>
+  <div class="session-status">
+    <span class="label">Status</span>
+    <span class="status-pill status-{{ session.status }}">{{ session.get_status_display }}</span>
+    {% if not session.is_terminal %}
+      <span class="live-indicator">Monitoramento em andamento…</span>
+  {% if session.status != 'running' %}
+        <button class="btn-start" type="button" data-action="start-session" data-start-url="{% url 'arpia_vuln:api_session_start' session.pk %}">Iniciar agora</button>
+        <p id="session-start-feedback" class="start-feedback" hidden></p>
+      {% else %}
+        <p class="start-feedback muted">Sessão em execução.</p>
+      {% endif %}
+    {% endif %}
+    {% if report_url %}
+      <a href="{{ report_url }}" class="report-link" target="_blank" rel="noopener noreferrer">Ver relatório provisório</a>
+    {% endif %}
+  </div>
+</section>
+
+<section class="session-layout">
+  <article class="card session-meta">
+    <header class="section-header">
+      <h2>Resumo da sessão</h2>
+    </header>
+    <dl>
+      <div><dt>Projeto</dt><dd>{{ project.name }}</dd></div>
+      <div><dt>Responsável</dt><dd>{{ session.owner.get_username }}</dd></div>
+      <div><dt>Início</dt><dd>{% if session.started_at %}{{ session.started_at|date:"d/m/Y H:i" }}{% else %}<span class="muted">—</span>{% endif %}</dd></div>
+      <div><dt>Término</dt><dd>{% if session.finished_at %}{{ session.finished_at|date:"d/m/Y H:i" }}{% else %}<span class="muted">—</span>{% endif %}</dd></div>
+      {% if source_scan_session %}
+        <div><dt>Sessão de scan</dt><dd><a class="inline-link" href="{% url 'arpia_scan:session_detail' source_scan_session.id %}" target="_blank" rel="noopener noreferrer">Abrir sessão relacionada</a></dd></div>
+      {% endif %}
+      {% if session.notes %}
+        <div class="notes"><dt>Anotações</dt><dd>{{ session.notes }}</dd></div>
+      {% endif %}
+      {% if session.last_error %}
+        <div class="notes error"><dt>Último erro</dt><dd>{{ session.last_error }}</dd></div>
+      {% endif %}
+    </dl>
+  </article>
+
+  <article class="card metrics-card">
+    <header class="section-header">
+      <h2>Métricas consolidadas</h2>
+      <p class="muted">Derivadas do snapshot atual da sessão.</p>
+    </header>
+    {% if metrics %}
+      <ul class="metrics-grid">
+        {% for key, value in metrics.items %}
+          <li>
+            <span class="metric-value">{{ value }}</span>
+            <span class="metric-label">{{ key|title }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <div class="empty">Nenhuma métrica disponível até o momento.</div>
+    {% endif %}
+    <div class="insights-block">
+      <h3>Insights</h3>
+      {% if report_insights %}
+        <ul class="insights-list">
+          {% for insight in report_insights %}
+            <li class="insight insight-{{ insight.level|default:'info' }}">{{ insight.message }}</li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <div class="empty">Nenhum insight registrado ainda.</div>
+      {% endif %}
+    </div>
+  </article>
+
+  <article class="card tasks-card">
+    <header class="section-header">
+      <h2>Etapas executadas</h2>
+      <p class="muted">Fluxo de tarefas responsáveis pela coleta de evidências.</p>
+    </header>
+    {% if tasks %}
+      <table class="tasks-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Etapa</th>
+            <th>Tipo</th>
+            <th>Ferramenta</th>
+            <th>Status</th>
+            <th>Progresso</th>
+            <th>Início</th>
+            <th>Término</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for task in tasks %}
+            <tr>
+              <td>{{ forloop.counter }}</td>
+              <td>
+                <strong>{{ task.name }}</strong>
+                {% if task.script %}<span class="muted">Script {{ task.script.slug }}</span>{% endif %}
+              </td>
+              <td>{{ task.get_kind_display }}</td>
+              <td>{{ task.tool|default:"—" }}</td>
+              <td><span class="status status-{{ task.status }}">{{ task.get_status_display }}</span></td>
+              <td>
+                <div class="progress-bar" data-progress="{{ task.progress }}"><span style="width: {{ task.progress|floatformat:0 }}%"></span></div>
+                <small class="muted">{{ task.progress|floatformat:0 }}%</small>
+              </td>
+              <td>{% if task.started_at %}{{ task.started_at|date:"d/m/Y H:i" }}{% else %}<span class="muted">—</span>{% endif %}</td>
+              <td>{% if task.finished_at %}{{ task.finished_at|date:"d/m/Y H:i" }}{% else %}<span class="muted">—</span>{% endif %}</td>
+            </tr>
+            {% if task.stdout %}
+              <tr class="task-output">
+                <td colspan="8"><details><summary>Ver saída</summary><pre>{{ task.stdout }}</pre></details></td>
+              </tr>
+            {% endif %}
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="empty">Nenhuma etapa registrada.</div>
+    {% endif %}
+  </article>
+
+  <article class="card findings-card">
+    <header class="section-header">
+      <h2>Achados documentados</h2>
+      <p class="muted">Vulnerabilidades agregadas desta sessão.</p>
+    </header>
+    {% if findings %}
+      <ul class="findings-list">
+        {% for finding in findings %}
+          <li>
+            <div class="finding-head">
+              <span class="badge severity-{{ finding.severity }}">{{ finding.get_severity_display }}</span>
+              <span class="badge status-{{ finding.status }}">{{ finding.get_status_display }}</span>
+              {% if finding.cve %}<span class="badge cve">{{ finding.cve }}</span>{% endif %}
+              {% if finding.display_score %}<span class="badge score">CVSS {{ finding.display_score }}</span>{% endif %}
+            </div>
+            <h3>{{ finding.title }}</h3>
+            <p class="muted">{{ finding.summary|default:"Sem descrição adicional." }}</p>
+            <dl class="finding-meta">
+              {% if finding.host %}<div><dt>Host</dt><dd>{{ finding.host }}</dd></div>{% endif %}
+              {% if finding.service %}<div><dt>Serviço</dt><dd>{{ finding.service }}</dd></div>{% endif %}
+              {% if finding.port %}<div><dt>Porta</dt><dd>{{ finding.port }} {{ finding.protocol|upper }}</dd></div>{% endif %}
+              {% if finding.source_task %}<div><dt>Etapa</dt><dd>{{ finding.source_task.name }}</dd></div>{% endif %}
+              <div><dt>Registrada</dt><dd>{{ finding.created_at|date:"d/m/Y H:i" }}</dd></div>
+            </dl>
+            {% if finding.data %}
+              <details class="raw-data">
+                <summary>Ver dados completos</summary>
+                <pre>{{ finding.data }}</pre>
+              </details>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <div class="empty">Nenhum achado documentado para esta sessão.</div>
+    {% endif %}
+  </article>
+</section>
+
+<style>
+.page-heading{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.6rem;gap:1rem;}
+.page-heading h1{margin:0;font-size:1.9rem;color:var(--text);}
+.back-link{text-decoration:none;color:var(--muted);font-size:.9rem;}
+.back-link:hover{color:var(--text);}
+.session-status{display:flex;flex-direction:column;gap:.3rem;align-items:flex-end;}
+.session-status .label{font-size:.75rem;text-transform:uppercase;color:var(--muted);letter-spacing:.08em;}
+.status-pill{display:inline-flex;align-items:center;padding:.25rem .75rem;border-radius:999px;font-weight:600;font-size:.8rem;color:var(--text);background:rgba(255,255,255,0.08);} 
+.live-indicator{font-size:.8rem;color:#8bc5ff;}
+.report-link{color:#8bc5ff;font-weight:600;text-decoration:none;}
+.report-link:hover{color:#bfe0ff;}
+.session-layout{display:flex;flex-direction:column;gap:1.6rem;}
+.btn-start{margin-top:.45rem;padding:.5rem 1.1rem;border-radius:999px;background:linear-gradient(90deg,#52d2ff,#7fb5ff);color:#021223;font-weight:700;border:none;cursor:pointer;transition:opacity .18s ease,transform .18s ease;}
+.btn-start:hover{opacity:.88;transform:translateY(-1px);}
+.btn-start:disabled{opacity:.55;cursor:not-allowed;transform:none;}
+.start-feedback{margin:.45rem 0 0;font-size:.85rem;color:#ff8b8b;}
+.card{background:rgba(8,23,43,0.78);border-radius:16px;padding:1.4rem;border:1px solid rgba(255,255,255,0.05);box-shadow:0 18px 38px rgba(5,16,32,0.35);}
+.section-header{display:flex;flex-direction:column;gap:.4rem;margin-bottom:1.1rem;}
+.section-header h2{margin:0;color:var(--text);font-size:1.35rem;}
+.section-header p{margin:0;color:var(--muted);font-size:.9rem;}
+.session-meta dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;margin:0;}
+.session-meta div{display:flex;flex-direction:column;gap:.25rem;}
+.session-meta dt{font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
+.session-meta dd{margin:0;color:var(--text);font-weight:600;}
+.session-meta .notes dd{font-weight:400;color:var(--muted);} 
+.session-meta .notes.error dd{color:#ffb3b3;}
+.metrics-grid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;}
+.metrics-grid li{display:flex;flex-direction:column;gap:.25rem;padding:1rem;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);} 
+.metric-value{font-size:1.6rem;font-weight:700;color:#8bc5ff;}
+.metric-label{font-size:.85rem;color:var(--muted);}
+.insights-block{margin-top:1.2rem;display:flex;flex-direction:column;gap:.6rem;}
+.insights-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.6rem;}
+.insight{padding:.75rem 1rem;border-radius:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);}
+.insight-info{border-color:rgba(127,181,255,0.25);} 
+.insight-success{border-color:rgba(118,221,174,0.25);} 
+.insight-warning{border-color:rgba(255,214,165,0.3);} 
+.insight-error{border-color:rgba(255,132,132,0.35);} 
+.tasks-table{width:100%;border-collapse:collapse;font-size:.92rem;}
+.tasks-table th,.tasks-table td{padding:.55rem .75rem;border-bottom:1px solid rgba(255,255,255,0.05);text-align:left;}
+.tasks-table th{font-weight:600;color:var(--muted);text-transform:uppercase;font-size:.75rem;letter-spacing:.06em;}
+.progress-bar{width:100%;height:.5rem;border-radius:999px;background:rgba(255,255,255,0.08);overflow:hidden;}
+.progress-bar span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#7fb5ff,#52d2ff);}
+.tasks-table .muted{font-size:.8rem;color:var(--muted);} 
+.task-output details summary{cursor:pointer;color:#8bc5ff;font-weight:600;}
+.task-output pre{margin:.6rem 0 0;background:rgba(0,0,0,0.45);padding:.8rem;border-radius:8px;max-height:320px;overflow:auto;font-family:"Fira Code",monospace;font-size:.78rem;color:#e8f2ff;}
+.findings-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1rem;}
+.findings-list li{padding:1rem 1.2rem;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);box-shadow:0 10px 24px rgba(5,16,32,0.18);} 
+.finding-head{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;}
+.badge{display:inline-flex;align-items:center;gap:.3rem;padding:.2rem .6rem;border-radius:999px;font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;}
+.badge.severity-critical{background:rgba(255,86,86,0.15);color:#ffb3b3;}
+.badge.severity-high{background:rgba(255,138,76,0.18);color:#ffd4b8;}
+.badge.severity-medium{background:rgba(255,214,102,0.18);color:#ffe8b3;}
+.badge.severity-low{background:rgba(118,221,174,0.18);color:#daf7e7;}
+.badge.severity-info{background:rgba(118,187,255,0.18);color:#d5ecff;}
+.badge.severity-unknown{background:rgba(255,255,255,0.08);color:#f0f6ff;}
+.badge.status-open{background:rgba(255,255,255,0.08);color:#f0f6ff;}
+.badge.status-ack{background:rgba(118,187,255,0.18);color:#d5ecff;}
+.badge.status-resolved{background:rgba(118,221,174,0.18);color:#daf7e7;}
+.badge.cve{background:rgba(127,181,255,0.18);color:#e0f1ff;font-weight:600;}
+.badge.score{background:rgba(255,255,255,0.1);color:#f6fbff;}
+.findings-list h3{margin:.2rem 0;font-size:1.1rem;color:var(--text);} 
+.findings-list p{margin:0 0 .6rem;font-size:.9rem;color:var(--muted);} 
+.finding-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.6rem;}
+.finding-meta div{display:flex;flex-direction:column;gap:.15rem;font-size:.8rem;color:var(--muted);} 
+.finding-meta dt{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);} 
+.finding-meta dd{margin:0;color:var(--text);font-weight:600;}
+.raw-data summary{cursor:pointer;color:#8bc5ff;font-weight:600;}
+.raw-data pre{margin:.6rem 0 0;background:rgba(0,0,0,0.45);padding:.8rem;border-radius:8px;max-height:360px;overflow:auto;font-family:"Fira Code",monospace;font-size:.78rem;color:#e8f2ff;}
+.empty{padding:1rem;background:rgba(255,255,255,0.02);border-radius:10px;color:var(--muted);}
+.inline-link{color:#8bc5ff;text-decoration:none;font-weight:600;}
+.inline-link:hover{color:#bfe0ff;}
+@media (max-width:960px){
+  .session-status{align-items:flex-start;}
+}
+
+</style>
+
+<script>
+(function(){
+  const startBtn = document.querySelector('[data-action="start-session"]');
+  if(!startBtn){
+    return;
+  }
+
+  const feedbackEl = document.getElementById('session-start-feedback');
+
+  function getCsrfToken(){
+    if(typeof window.getCookie === 'function'){
+      return window.getCookie('csrftoken');
+    }
+    const entry = document.cookie.split('; ').find(part => part.startsWith('csrftoken='));
+    return entry ? decodeURIComponent(entry.split('=')[1]) : '';
+  }
+
+  async function handleStart(){
+    const url = startBtn.dataset.startUrl;
+    const originalText = startBtn.textContent;
+    startBtn.disabled = true;
+    startBtn.textContent = 'Iniciando...';
+    if(feedbackEl){
+      feedbackEl.hidden = true;
+      feedbackEl.textContent = '';
+    }
+
+    try{
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCsrfToken(),
+        },
+        body: '{}',
+      });
+      const data = await response.json().catch(() => ({}));
+      if(!response.ok){
+        throw new Error(data.error || 'Falha ao iniciar a sessão.');
+      }
+      window.location.reload();
+    } catch(error){
+      startBtn.disabled = false;
+      startBtn.textContent = originalText;
+      if(feedbackEl){
+        feedbackEl.textContent = error.message;
+        feedbackEl.hidden = false;
+      } else {
+        alert(error.message);
+      }
+    }
+  }
+
+  startBtn.addEventListener('click', handleStart);
+})();
+</script>
+{% endblock %}
