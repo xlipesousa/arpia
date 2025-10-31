@@ -10,6 +10,16 @@ from arpia_core.script_registry import ScriptDefinition
 
 VULN_DEFAULT_SCRIPTS: List[ScriptDefinition] = [
 	ScriptDefinition(
+		slug="nmap-targeted-open-ports",
+		name="Nmap — Portas abertas focadas",
+		filename="nmap_targeted_ports.sh",
+		description="Executa Nmap (-sS -sV) apenas nas portas previamente descobertas para cada host do projeto.",
+		tags=["nmap", "ports", "focused"],
+		category="vuln",
+		requires_hosts=True,
+		required_tool_slug="nmap",
+	),
+	ScriptDefinition(
 		slug="nmap-targeted-nse",
 		name="Nmap — NSE focado",
 		filename="nmap_targeted_nse.sh",

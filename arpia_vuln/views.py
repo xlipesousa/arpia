@@ -16,8 +16,13 @@ from arpia_core.models import Project
 from arpia_scan.models import ScanSession
 from arpia_core.views import build_project_macros
 
-from .models import VulnerabilityFinding, VulnScanSession
-from .services import plan_vulnerability_session, run_vulnerability_pipeline
+from .models import VulnerabilityFinding, VulnScanSession, VulnTask
+from .services import (
+	VulnGreenboneExecutionError,
+	plan_vulnerability_session,
+	run_greenbone_scan,
+	run_vulnerability_pipeline,
+)
 
 
 def _user_projects(user):
@@ -316,6 +321,24 @@ class VulnSessionDetailView(LoginRequiredMixin, TemplateView):
 			else []
 		)
 		metrics = report_snapshot.get("stats", {}) if isinstance(report_snapshot, dict) else {}
+		failed_greenbone_task = next(
+			(
+				task
+				for task in tasks
+				if task.kind == VulnTask.Kind.GREENBONE_SCAN and task.status == VulnTask.Status.FAILED
+			),
+			None,
+		)
+		has_greenbone_task = any(task.kind == VulnTask.Kind.GREENBONE_SCAN for task in tasks)
+		failure_related_to_greenbone = (
+			self.session.status == VulnScanSession.Status.FAILED
+			and "greenbone" in (self.session.last_error or "").lower()
+		)
+		can_retry_greenbone = (
+			has_greenbone_task
+			and self.session.status != VulnScanSession.Status.RUNNING
+			and (failed_greenbone_task is not None or failure_related_to_greenbone)
+		)
 
 		context.update(
 			{
@@ -328,6 +351,8 @@ class VulnSessionDetailView(LoginRequiredMixin, TemplateView):
 				"metrics": metrics,
 				"has_snapshot": bool(report_snapshot),
 				"report_url": reverse("arpia_vuln:session_report_preview", args=[self.session.pk]),
+				"can_retry_greenbone": can_retry_greenbone,
+				"retry_greenbone_url": reverse("arpia_vuln:api_session_retry", args=[self.session.pk]),
 			}
 		)
 		return context
@@ -481,3 +506,87 @@ def api_session_start(request, pk):
 
 	session.refresh_from_db()
 	return JsonResponse(_serialize_session_for_api(session), status=200, json_dumps_params={"ensure_ascii": False})
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_session_retry(request, pk):
+	session = get_object_or_404(
+		VulnScanSession.objects.select_related("project", "owner"),
+		pk=pk,
+	)
+
+	if not _user_has_access(request.user, session.project):
+		return JsonResponse({"error": "Usuário não possui acesso a este projeto."}, status=403)
+
+	if session.status == VulnScanSession.Status.RUNNING:
+		return JsonResponse({"error": "Sessão já está em execução."}, status=409)
+
+	try:
+		payload = json.loads(request.body or "{}")
+	except json.JSONDecodeError:
+		return JsonResponse({"error": "JSON inválido."}, status=400)
+
+	action = str(payload.get("action") or payload.get("step") or "greenbone").strip().lower()
+	if action not in {"greenbone", "gvm"}:
+		return JsonResponse({"error": "Ação de retry inválida."}, status=400)
+
+	greenbone_qs = session.tasks.filter(kind=VulnTask.Kind.GREENBONE_SCAN)
+	if not greenbone_qs.exists():
+		return JsonResponse({"error": "Sessão não possui etapa Greenbone para retry."}, status=400)
+
+	failed_exists = greenbone_qs.filter(status=VulnTask.Status.FAILED).exists()
+	failure_related_to_greenbone = "greenbone" in (session.last_error or "").lower()
+	if not failed_exists and not failure_related_to_greenbone:
+		return JsonResponse({"error": "Nenhuma execução Greenbone falha encontrada para retry."}, status=400)
+
+	previous_status = session.status
+	previous_finished_at = session.finished_at
+	previous_last_error = session.last_error
+	previous_started_at = session.started_at
+	session.status = VulnScanSession.Status.RUNNING
+	session.last_error = ""
+	session.finished_at = None
+	session.save(update_fields=["status", "last_error", "finished_at", "updated_at"])
+	if not session.started_at:
+		session.started_at = timezone.now()
+		session.save(update_fields=["started_at", "updated_at"])
+
+	try:
+		task = run_greenbone_scan(session, triggered_by=request.user, auto_finalize=True)
+	except ValidationError as exc:
+		session.refresh_from_db()
+		session.status = previous_status
+		session.finished_at = previous_finished_at
+		session.last_error = previous_last_error
+		session.started_at = previous_started_at
+		session.save(update_fields=["status", "finished_at", "last_error", "started_at", "updated_at"])
+		return JsonResponse({"error": exc.message}, status=400)
+	except VulnGreenboneExecutionError as exc:
+		session.refresh_from_db()
+		if session.status == VulnScanSession.Status.RUNNING:
+			session.status = VulnScanSession.Status.FAILED
+			session.last_error = str(exc)
+			session.finished_at = timezone.now()
+			session.started_at = previous_started_at
+			session.save(update_fields=["status", "last_error", "finished_at", "started_at", "updated_at"])
+		return JsonResponse({"error": str(exc)}, status=502)
+	except Exception as exc:  # pragma: no cover - caminho inesperado
+		session.refresh_from_db()
+		if session.status == VulnScanSession.Status.RUNNING:
+			session.status = VulnScanSession.Status.FAILED
+			session.last_error = str(exc)
+			session.finished_at = timezone.now()
+			session.started_at = previous_started_at
+			session.save(update_fields=["status", "last_error", "finished_at", "started_at", "updated_at"])
+		return JsonResponse({"error": str(exc)}, status=500)
+
+	session.refresh_from_db()
+	if task:
+		task.refresh_from_db()
+
+	response = {
+		"session": _serialize_session_for_api(session),
+		"task": _serialize_task_for_api(task) if task else None,
+	}
+	return JsonResponse(response, status=200, json_dumps_params={"ensure_ascii": False})

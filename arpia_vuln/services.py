@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import base64
+import getpass
 import html
 import json
 import os
 import re
+import shlex
+import shutil
+import socket
 import subprocess
 import tempfile
 import textwrap
@@ -71,9 +75,21 @@ FALLBACK_SCRIPTS: Dict[str, Dict[str, str]] = {
             """
             #!/bin/bash
             set -euo pipefail
+            TARGETS_WITH_PORTS=$(cat <<'EOF'
+{{SCAN_TARGETS_WITH_PORTS}}
+EOF
+)
+            AGGREGATED_PORTS="{{SCAN_OPEN_PORTS}}"
+
             echo "[ARPIA] Executando Nmap targeted ports"
-            echo "Targets e portas recebidos:" >&2
-            printf '%s\n' "$SCAN_TARGETS_WITH_PORTS" >&2
+            if [[ -n "${TARGETS_WITH_PORTS//[[:space:]]/}" ]]; then
+                echo "Targets e portas recebidos:" >&2
+                printf '%s\n' "${TARGETS_WITH_PORTS}" >&2
+            elif [[ -n "${AGGREGATED_PORTS//[[:space:]]/}" ]]; then
+                echo "Nenhum snapshot detalhado encontrado; utilizando portas agregadas: ${AGGREGATED_PORTS}" >&2
+            else
+                echo "Nenhum alvo ou porta disponível nas macros." >&2
+            fi
             exit 0
             """
         ).strip(),
@@ -383,6 +399,53 @@ def _parse_targeted_stdout(stdout: str) -> List[Dict[str, Any]]:
     return findings
 
 
+def _strip_xml_tag(tag: Optional[str]) -> str:
+    if not tag:
+        return ""
+    if "}" in tag:
+        return tag.split("}", 1)[1]
+    if ":" in tag:
+        return tag.split(":", 1)[1]
+    return tag
+
+
+def _find_first_with_tag(element: Optional[ET.Element], tag: str) -> Optional[ET.Element]:
+    if element is None:
+        return None
+    for node in element.iter():
+        if _strip_xml_tag(node.tag) == tag:
+            return node
+    return None
+
+
+def _summarize_gmp_response(payload: Any) -> str:
+    if payload is None:
+        return ""
+    if isinstance(payload, bytes):
+        payload = payload.decode(errors="ignore")
+    if isinstance(payload, str):
+        text = payload.strip()
+        return " ".join(text.split())
+    if isinstance(payload, ET.Element):
+        status = payload.get("status")
+        status_text = payload.get("status_text")
+        detail_parts = [part for part in (status, status_text) if part]
+        if not detail_parts:
+            detail_parts.append(_strip_xml_tag(payload.tag) or "response")
+        return " | ".join(detail_parts).strip()
+    detail_parts: List[str] = []
+    for attr in ("status", "status_text", "message", "detail"):
+        value = getattr(payload, attr, None)
+        if value:
+            detail_parts.append(str(value))
+    if detail_parts:
+        return " | ".join(detail_parts)
+    try:
+        return str(payload)
+    except Exception:  # pragma: no cover - conversão defensiva
+        return ""
+
+
 def _clone_macros(session: VulnScanSession, *, owner, project: Project) -> Dict[str, Any]:
     if session.macros_snapshot:
         return _deepcopy_payload(session.macros_snapshot)
@@ -461,6 +524,8 @@ def _record_log(
     log_event(
         source_app="arpia_vuln",
         event_type=event_type,
+
+
         message=message,
         severity=severity,
         component=component,
@@ -761,6 +826,9 @@ class GreenboneConfig:
     def load(cls) -> "GreenboneConfig":
         cfg = settings
         socket_path = getattr(cfg, "ARPIA_GVM_SOCKET_PATH", None) or os.getenv("ARPIA_GVM_SOCKET_PATH")
+        default_socket = Path("/run/gvmd/gvmd.sock")
+        if not socket_path and default_socket.exists():
+            socket_path = str(default_socket)
         mode = "socket" if socket_path else "tls"
         report_dir = getattr(cfg, "ARPIA_GVM_REPORT_DIR", None) or os.getenv("ARPIA_GVM_REPORT_DIR") or "./recon/greenbone"
         report_directory = Path(report_dir)
@@ -798,45 +866,83 @@ def _load_greenbone_config() -> GreenboneConfig:
     return GreenboneConfig.load()
 
 
+def _get_sudo_password() -> str:
+    return (
+        getattr(settings, "ARPIA_GVM_SUDO_PASSWORD", None)
+        or os.getenv("ARPIA_GVM_SUDO_PASSWORD")
+        or "kali"
+    )
+
+
+def _greenbone_autostart_enabled() -> bool:
+    env_value = os.getenv("ARPIA_GVM_AUTOSTART", "1").strip().lower()
+    return env_value not in {"0", "false", "no"}
+
+
 class GreenboneCliRunner:
     def __init__(self, config: GreenboneConfig, tool_path: Optional[str] = None) -> None:
         self.config = config
         self.tool_path = tool_path or config.tool_path or "gvm-cli"
 
     def run(self, xml_payload: str, *, description: str) -> str:
-        command = [self.tool_path, *self._connection_args(), "--xml", xml_payload]
-        env = os.environ.copy()
-        if self.config.username:
-            env.setdefault("GVM_CLI_USERNAME", self.config.username)
-        if self.config.password:
-            env.setdefault("GVM_CLI_PASSWORD", self.config.password)
-        completed = subprocess.run(  # noqa: S603,S607
-            command,
-            capture_output=True,
-            text=True,
-            check=False,
-            env=env,
-        )
-        if completed.returncode:
+        try:
+            from gvm.connections import TLSConnection, UnixSocketConnection
+            from gvm.errors import GvmError
+            from gvm.protocols.gmp import Gmp
+        except ImportError as exc:  # pragma: no cover - dependência externa
             raise GreenboneCliError(
-                f"Falha executando '{description}' (código {completed.returncode}): {completed.stderr.strip()}"
+                "A biblioteca python-gvm não está instalada. Execute 'pip install python-gvm' e reinicie o ARPIA."
+            ) from exc
+
+        if self.config.mode == "socket":
+            socket_path = self.config.socket_path
+            if not socket_path:
+                raise GreenboneCliError("Socket do Greenbone não configurado.")
+            connection = UnixSocketConnection(path=socket_path)
+        else:
+            connection = TLSConnection(host=self.config.hostname, port=self.config.port)
+
+        username = (self.config.username or "").strip()
+        password = (self.config.password or "").strip()
+        if not username or not password:
+            raise GreenboneCliError(
+                "Credenciais do Greenbone ausentes. Defina ARPIA_GVM_USERNAME e ARPIA_GVM_PASSWORD."
             )
-        stdout = completed.stdout or ""
+
+        try:
+            with Gmp(connection=connection) as gmp:
+                auth_response = gmp.authenticate(username, password)
+                auth_ok = True
+                if hasattr(gmp, "is_authenticated"):
+                    try:
+                        auth_ok = bool(gmp.is_authenticated())
+                    except Exception:  # pragma: no cover - comportamento defensivo
+                        auth_ok = False
+                if not auth_ok:
+                    detail = _summarize_gmp_response(auth_response)
+                    message = "Falha na autenticação com o Greenbone. Verifique ARPIA_GVM_USERNAME e ARPIA_GVM_PASSWORD."
+                    if detail:
+                        message = f"{message} Detalhes: {detail}"
+                    raise GreenboneCliError(message)
+                response = gmp.send_command(xml_payload)
+        except PermissionError as exc:
+            raise GreenboneCliError(f"Sem permissão para acessar o Greenbone: {exc}") from exc
+        except GvmError as exc:
+            raise GreenboneCliError(f"Erro ao executar '{description}' via GMP: {exc}") from exc
+        except OSError as exc:
+            raise GreenboneCliError(f"Falha de comunicação com o Greenbone ({description}): {exc}") from exc
+
+        if isinstance(response, bytes):
+            stdout = response.decode()
+        elif isinstance(response, ET.Element):
+            stdout = ET.tostring(response, encoding="unicode")
+        else:
+            stdout = str(response)
+
         if "status=" in stdout and "failed" in stdout.lower():
             raise GreenboneCliError(f"Greenbone reportou falha em '{description}'.")
-        return stdout
 
-    def _connection_args(self) -> List[str]:
-        if self.config.mode == "socket":
-            if not self.config.socket_path:
-                raise GreenboneCliError("Socket do Greenbone não configurado.")
-            return ["socket", "--socketpath", self.config.socket_path]
-        args = ["tls", "--hostname", self.config.hostname, "--port", str(self.config.port)]
-        if self.config.username:
-            args.extend(["--gmp-username", self.config.username])
-        if self.config.password:
-            args.extend(["--gmp-password", self.config.password])
-        return args
+        return stdout
 
 
 class GreenboneScanExecutor:
@@ -856,9 +962,54 @@ class GreenboneScanExecutor:
         self.config = _load_greenbone_config()
         self.report_dir = self._build_report_dir()
 
+    def _ensure_service_available(self) -> None:
+        if getattr(settings, "TESTING", False):
+            return
+        if self.config.mode == "socket":
+            socket_path = self.config.socket_path
+            if not socket_path:
+                self._attempt_autostart_greenbone()
+                socket_path = self.config.socket_path
+                if not socket_path:
+                    raise VulnGreenboneExecutionError(
+                        "Greenbone configurado para socket local, mas nenhum caminho foi informado. "
+                        "Defina ARPIA_GVM_SOCKET_PATH ou configure host/porta."
+                    )
+            path = Path(socket_path)
+            if not path.exists():
+                self._attempt_autostart_greenbone()
+                socket_path = self.config.socket_path or socket_path
+                path = Path(socket_path)
+                if not path.exists():
+                    raise VulnGreenboneExecutionError(
+                        "Socket do Greenbone Manager não encontrado em {path}. "
+                        "Execute 'sudo gvm-start' para iniciar os serviços antes de continuar.".format(path=socket_path)
+                    )
+            if not os.access(path, os.R_OK | os.W_OK):
+                if self._ensure_socket_access(path):
+                    return
+                raise VulnGreenboneExecutionError(
+                    "Sem permissão para acessar o socket {path}. Ajuste as permissões do gvmd ou use conexão TLS.".format(path=socket_path)
+                )
+            return
+
+        try:
+            with socket.create_connection((self.config.hostname, self.config.port), timeout=3):
+                return
+        except OSError as exc:
+            self._attempt_autostart_greenbone()
+            try:
+                with socket.create_connection((self.config.hostname, self.config.port), timeout=3):
+                    return
+            except OSError as second_exc:
+                raise VulnGreenboneExecutionError(
+                    (
+                        "Não foi possível conectar ao Greenbone Manager em {host}:{port} ({error}). "
+                        "Garanta que o serviço está em execução (sudo gvm-start) e que as credenciais ARPIA_GVM_* estão corretas."
+                    ).format(host=self.config.hostname, port=self.config.port, error=second_exc)
+                ) from second_exc
+
     def run(self) -> VulnTask:
-        if not self.targets_data.get("hosts"):
-            raise VulnGreenboneExecutionError("Nenhum alvo disponível para Greenbone.")
         sync_default_tools_for_user(self.user)
         tool = Tool.objects.for_user(self.user).filter(slug=self.config.tool_slug).first()
         runner = GreenboneCliRunner(self.config, tool_path=tool.path if tool and tool.path else None)
@@ -877,12 +1028,18 @@ class GreenboneScanExecutor:
         )
 
         try:
+            self._ensure_service_available()
+            if not self.targets_data.get("hosts"):
+                raise VulnGreenboneExecutionError("Nenhum alvo disponível para Greenbone.")
             target_id = self._create_target(runner)
             task_id = self._create_task(runner, target_id)
             report_id = self._start_task(runner, task_id)
             status, summary = self._wait_for_completion(runner, task_id)
             report_path, severity_counts = self._download_report(runner, report_id)
-        except Exception as exc:  # pragma: no cover - tratado como falha
+        except VulnGreenboneExecutionError as exc:
+            self._handle_failure(task, exc)
+            raise
+        except Exception as exc:  # pragma: no cover - tratado como falha inesperada
             self._handle_failure(task, exc)
             raise VulnGreenboneExecutionError(str(exc)) from exc
 
@@ -969,12 +1126,18 @@ class GreenboneScanExecutor:
         ).strip()
         stdout = runner.run(xml_payload, description="create_target")
         root = ET.fromstring(stdout)
-        if root.tag != "create_target_response":
-            raise GreenboneCliError("Resposta inesperada ao criar alvo.")
-        target_id = root.get("id")
+        response_node = root if _strip_xml_tag(root.tag) == "create_target_response" else _find_first_with_tag(root, "create_target_response")
+        if response_node is None:
+            snippet = stdout.strip().splitlines()[0:3]
+            raise GreenboneCliError(
+                "Resposta inesperada ao criar alvo. Conteúdo inicial: {snippet}".format(snippet=" | ".join(snippet))
+            )
+        target_id = response_node.get("id") or _find_first_with_tag(response_node, "id")
+        if isinstance(target_id, ET.Element):
+            target_id = (target_id.text or "").strip()
         if not target_id:
             raise GreenboneCliError("Greenbone não retornou ID do alvo.")
-        return target_id
+        return str(target_id)
 
     def _create_task(self, runner: GreenboneCliRunner, target_id: str) -> str:
         xml_payload = textwrap.dedent(
@@ -990,18 +1153,27 @@ class GreenboneScanExecutor:
         ).strip()
         stdout = runner.run(xml_payload, description="create_task")
         root = ET.fromstring(stdout)
-        if root.tag != "create_task_response":
-            raise GreenboneCliError("Resposta inesperada ao criar tarefa.")
-        task_id = root.get("id")
+        response_node = root if _strip_xml_tag(root.tag) == "create_task_response" else _find_first_with_tag(root, "create_task_response")
+        if response_node is None:
+            snippet = stdout.strip().splitlines()[0:3]
+            raise GreenboneCliError(
+                "Resposta inesperada ao criar tarefa. Conteúdo inicial: {snippet}".format(snippet=" | ".join(snippet))
+            )
+        task_id = response_node.get("id") or _find_first_with_tag(response_node, "id")
+        if isinstance(task_id, ET.Element):
+            task_id = (task_id.text or "").strip()
         if not task_id:
             raise GreenboneCliError("Greenbone não retornou ID da tarefa.")
-        return task_id
+        return str(task_id)
 
     def _start_task(self, runner: GreenboneCliRunner, task_id: str) -> str:
         xml_payload = f"<start_task task_id=\"{html.escape(task_id)}\"/>"
         stdout = runner.run(xml_payload, description="start_task")
         root = ET.fromstring(stdout)
-        report_elem = root.find("report_id")
+        response_node = root if _strip_xml_tag(root.tag) == "start_task_response" else _find_first_with_tag(root, "start_task_response")
+        if response_node is None:
+            response_node = root
+        report_elem = _find_first_with_tag(response_node, "report_id")
         if report_elem is None:
             raise GreenboneCliError("Resposta de start_task sem report_id.")
         report_id = report_elem.get("id") or (report_elem.text or "").strip()
@@ -1026,11 +1198,13 @@ class GreenboneScanExecutor:
             ).strip()
             stdout = runner.run(xml_payload, description="get_tasks")
             root = ET.fromstring(stdout)
-            task_elem = root.find("task")
+            task_elem = _find_first_with_tag(root, "task")
             if task_elem is None:
                 raise GreenboneCliError("Resposta de get_tasks não contém tarefa.")
-            status = (task_elem.findtext("status") or "").strip()
-            progress = task_elem.findtext("progress")
+            status_elem = _find_first_with_tag(task_elem, "status")
+            status = (status_elem.text if status_elem is not None else "").strip()
+            progress_elem = _find_first_with_tag(task_elem, "progress")
+            progress = progress_elem.text if progress_elem is not None else None
             if status.lower() in {"done", "finished", "completed"}:
                 summary = {"status": status, "progress": progress}
                 return status, summary
@@ -1045,7 +1219,12 @@ class GreenboneScanExecutor:
         xml_payload = f"<get_reports report_id=\"{html.escape(report_id)}\" format_id=\"{html.escape(self.config.report_format_id)}\"/>"
         stdout = runner.run(xml_payload, description="get_reports")
         root = ET.fromstring(stdout)
-        content_node = root.find(".//report/content") or root.find(".//content") or root.find(".//report")
+        report_node = _find_first_with_tag(root, "report")
+        content_node = _find_first_with_tag(report_node, "content") if report_node is not None else None
+        if content_node is None:
+            content_node = _find_first_with_tag(root, "content")
+        if content_node is None and report_node is not None:
+            content_node = report_node
         if content_node is not None:
             content_text = (content_node.text or "").strip()
             if not content_text:
@@ -1070,7 +1249,9 @@ class GreenboneScanExecutor:
         except ET.ParseError:
             return {}
         counts: Dict[str, Any] = {}
-        for node in root.findall(".//result_count"):
+        for node in root.iter():
+            if _strip_xml_tag(node.tag) != "result_count":
+                continue
             severity = node.get("severity") or node.get("type") or "unknown"
             try:
                 counts[severity] = int(node.text or 0)
@@ -1127,6 +1308,8 @@ class GreenboneScanExecutor:
             session=self.session,
             component="greenbone",
             event_type="vuln.greenbone.success",
+
+
             message="Execução Greenbone concluída.",
             severity=LogEntry.Severity.NOTICE,
             details={"report_id": report_id, "status": status},
@@ -1153,6 +1336,116 @@ class GreenboneScanExecutor:
             severity=LogEntry.Severity.ERROR,
             details={"error": message},
         )
+
+    def _attempt_autostart_greenbone(self) -> None:
+        if getattr(settings, "TESTING", False):
+            return
+        if not _greenbone_autostart_enabled():
+            return
+        if getattr(self, "_autostart_attempted", False):
+            return
+        self._autostart_attempted = True
+
+        candidate_commands: List[List[str]] = []
+        seen: set[tuple[str, ...]] = set()
+
+        custom_command = getattr(settings, "ARPIA_GVM_AUTOSTART_COMMAND", None) or os.getenv("ARPIA_GVM_AUTOSTART_COMMAND")
+        if custom_command:
+            try:
+                parsed = shlex.split(custom_command)
+            except ValueError as exc:
+                raise VulnGreenboneExecutionError(
+                    "Valor inválido em ARPIA_GVM_AUTOSTART_COMMAND. Verifique a sintaxe do comando."
+                ) from exc
+            if parsed:
+                candidate_commands.append(parsed)
+
+        sudo_path = shutil.which("sudo")
+        gvm_start_path = shutil.which("gvm-start")
+        sudo_password = _get_sudo_password()
+
+        if sudo_path and gvm_start_path:
+            candidate_commands.append([sudo_path, "-n", gvm_start_path])
+            if sudo_password:
+                candidate_commands.append([sudo_path, "-S", gvm_start_path])
+        if gvm_start_path:
+            candidate_commands.append([gvm_start_path])
+
+        if not candidate_commands:
+            raise VulnGreenboneExecutionError(
+                "Não foi possível localizar o comando 'gvm-start'. Instale e configure o GVM antes de executar o Greenbone."
+            )
+
+        last_error: Optional[str] = None
+        for command in candidate_commands:
+            key = tuple(command)
+            if key in seen:
+                continue
+            seen.add(key)
+
+            input_data: Optional[str] = None
+            if sudo_password and "-S" in command:
+                input_data = f"{sudo_password}\n"
+
+            try:
+                result = subprocess.run(  # noqa: S603,S607
+                    command,
+                    capture_output=True,
+                    text=True,
+                    input=input_data,
+                )
+            except FileNotFoundError as exc:
+                last_error = str(exc)
+                continue
+
+            if result.returncode == 0:
+                self.config = _load_greenbone_config()
+                return
+
+            stderr = (result.stderr or result.stdout or "").strip()
+            if stderr:
+                last_error = stderr
+
+        raise VulnGreenboneExecutionError(
+            "Falha ao iniciar o Greenbone automaticamente. "
+            "Verifique as permissões do comando 'gvm-start' (sudoers) ou execute-o manualmente. "
+            f"Detalhes: {last_error or 'sem saída disponível.'}"
+        )
+
+    def _ensure_socket_access(self, path: Path) -> bool:
+        if os.access(path, os.R_OK | os.W_OK):
+            return True
+
+        sudo_path = shutil.which("sudo")
+        if not sudo_path:
+            return False
+
+        password = _get_sudo_password()
+        try:
+            user = getpass.getuser()
+        except Exception:  # pragma: no cover - ambientes sem usuário associado
+            user = os.getenv("USER", "")
+        commands: List[List[str]] = []
+        setfacl_path = shutil.which("setfacl")
+        if setfacl_path and user:
+            commands.append([sudo_path, "-S", "setfacl", "-m", f"u:{user}:rw", str(path)])
+        commands.append([sudo_path, "-S", "chmod", "666", str(path)])
+
+        for command in commands:
+            try:
+                subprocess.run(  # noqa: S603,S607
+                    command,
+                    input=f"{password}\n" if password else None,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+            except FileNotFoundError:
+                continue
+            if os.access(path, os.R_OK | os.W_OK):
+                return True
+
+        return os.access(path, os.R_OK | os.W_OK)
 
 
 @transaction.atomic

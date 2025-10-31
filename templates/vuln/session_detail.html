@@ -19,6 +19,9 @@
       {% else %}
         <p class="start-feedback muted">Sessão em execução.</p>
       {% endif %}
+    {% elif can_retry_greenbone %}
+      <button class="btn-retry" type="button" data-action="retry-greenbone" data-retry-url="{{ retry_greenbone_url }}">Tentar novamente o Greenbone</button>
+      <p id="greenbone-retry-feedback" class="start-feedback" hidden></p>
     {% endif %}
     {% if report_url %}
       <a href="{{ report_url }}" class="report-link" target="_blank" rel="noopener noreferrer">Ver relatório provisório</a>
@@ -183,6 +186,9 @@
 .btn-start{margin-top:.45rem;padding:.5rem 1.1rem;border-radius:999px;background:linear-gradient(90deg,#52d2ff,#7fb5ff);color:#021223;font-weight:700;border:none;cursor:pointer;transition:opacity .18s ease,transform .18s ease;}
 .btn-start:hover{opacity:.88;transform:translateY(-1px);}
 .btn-start:disabled{opacity:.55;cursor:not-allowed;transform:none;}
+.btn-retry{margin-top:.45rem;padding:.5rem 1.1rem;border-radius:999px;background:linear-gradient(90deg,#ff8c69,#ff5f8a);color:#021223;font-weight:700;border:none;cursor:pointer;transition:opacity .18s ease,transform .18s ease;}
+.btn-retry:hover{opacity:.88;transform:translateY(-1px);}
+.btn-retry:disabled{opacity:.55;cursor:not-allowed;transform:none;}
 .start-feedback{margin:.45rem 0 0;font-size:.85rem;color:#ff8b8b;}
 .card{background:rgba(8,23,43,0.78);border-radius:16px;padding:1.4rem;border:1px solid rgba(255,255,255,0.05);box-shadow:0 18px 38px rgba(5,16,32,0.35);}
 .section-header{display:flex;flex-direction:column;gap:.4rem;margin-bottom:1.1rem;}
@@ -247,13 +253,6 @@
 
 <script>
 (function(){
-  const startBtn = document.querySelector('[data-action="start-session"]');
-  if(!startBtn){
-    return;
-  }
-
-  const feedbackEl = document.getElementById('session-start-feedback');
-
   function getCsrfToken(){
     if(typeof window.getCookie === 'function'){
       return window.getCookie('csrftoken');
@@ -262,43 +261,87 @@
     return entry ? decodeURIComponent(entry.split('=')[1]) : '';
   }
 
-  async function handleStart(){
-    const url = startBtn.dataset.startUrl;
-    const originalText = startBtn.textContent;
-    startBtn.disabled = true;
-    startBtn.textContent = 'Iniciando...';
-    if(feedbackEl){
-      feedbackEl.hidden = true;
-      feedbackEl.textContent = '';
-    }
+  const startBtn = document.querySelector('[data-action="start-session"]');
+  if(startBtn){
+    const feedbackEl = document.getElementById('session-start-feedback');
 
-    try{
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': getCsrfToken(),
-        },
-        body: '{}',
-      });
-      const data = await response.json().catch(() => ({}));
-      if(!response.ok){
-        throw new Error(data.error || 'Falha ao iniciar a sessão.');
-      }
-      window.location.reload();
-    } catch(error){
-      startBtn.disabled = false;
-      startBtn.textContent = originalText;
+    startBtn.addEventListener('click', async () => {
+      const url = startBtn.dataset.startUrl;
+      const originalText = startBtn.textContent;
+      startBtn.disabled = true;
+      startBtn.textContent = 'Iniciando...';
       if(feedbackEl){
-        feedbackEl.textContent = error.message;
-        feedbackEl.hidden = false;
-      } else {
-        alert(error.message);
+        feedbackEl.hidden = true;
+        feedbackEl.textContent = '';
       }
-    }
+
+      try{
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken(),
+          },
+          body: '{}',
+        });
+        const data = await response.json().catch(() => ({}));
+        if(!response.ok){
+          throw new Error(data.error || 'Falha ao iniciar a sessão.');
+        }
+        window.location.reload();
+      } catch(error){
+        startBtn.disabled = false;
+        startBtn.textContent = originalText;
+        if(feedbackEl){
+          feedbackEl.textContent = error.message;
+          feedbackEl.hidden = false;
+        } else {
+          alert(error.message);
+        }
+      }
+    });
   }
 
-  startBtn.addEventListener('click', handleStart);
+  const retryBtn = document.querySelector('[data-action="retry-greenbone"]');
+  if(retryBtn){
+    const feedbackEl = document.getElementById('greenbone-retry-feedback');
+
+    retryBtn.addEventListener('click', async () => {
+      const url = retryBtn.dataset.retryUrl;
+      const originalText = retryBtn.textContent;
+      retryBtn.disabled = true;
+      retryBtn.textContent = 'Reiniciando...';
+      if(feedbackEl){
+        feedbackEl.hidden = true;
+        feedbackEl.textContent = '';
+      }
+
+      try{
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken(),
+          },
+          body: JSON.stringify({step: 'greenbone'}),
+        });
+        const data = await response.json().catch(() => ({}));
+        if(!response.ok){
+          throw new Error(data.error || 'Falha ao reiniciar o Greenbone.');
+        }
+        window.location.reload();
+      } catch(error){
+        retryBtn.disabled = false;
+        retryBtn.textContent = originalText;
+        if(feedbackEl){
+          feedbackEl.textContent = error.message;
+          feedbackEl.hidden = false;
+        } else {
+          alert(error.message);
+        }
+      }
+    });
+  }
 })();
 </script>
 {% endblock %}

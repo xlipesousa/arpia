@@ -1,10 +1,13 @@
 import base64
 import json
+import os
 import shutil
 import tempfile
 from pathlib import Path
 from subprocess import CompletedProcess
-from unittest.mock import patch
+from unittest.mock import Mock, patch
+
+import xml.etree.ElementTree as ET
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -20,6 +23,8 @@ from .reporting import MAX_EVIDENCE_LENGTH, upsert_vulnerability_report_entry
 from .services import (
 	GreenboneCliError,
 	GreenboneConfig,
+	GreenboneScanExecutor,
+	GreenboneCliRunner,
 	VulnGreenboneExecutionError,
 	VulnScriptExecutionError,
 	plan_vulnerability_session,
@@ -432,6 +437,128 @@ class VulnServicesTests(TestCase):
 		self.assertEqual(self.session.status, VulnScanSession.Status.FAILED)
 		self.assertIn("falha ao conectar", self.session.last_error)
 
+	@patch("arpia_vuln.services.GreenboneScanExecutor._ensure_service_available")
+	@patch("arpia_vuln.services._load_greenbone_config")
+	def test_run_greenbone_scan_service_unavailable_creates_failed_task(self, mocked_config, mocked_ensure):
+		config = GreenboneConfig(
+			mode="tls",
+			username="admin",
+			password="secret",
+			hostname="127.0.0.1",
+			port=9390,
+			socket_path=None,
+			scanner_id="scanner-1",
+			scan_config_id="config-1",
+			report_format_id="format-1",
+			report_directory=self.temp_dir,
+			poll_interval=0.0,
+			max_attempts=1,
+			task_timeout=None,
+			tool_slug="gvm",
+			tool_path="gvm-cli",
+		)
+		mocked_config.return_value = config
+		mocked_ensure.side_effect = VulnGreenboneExecutionError("serviço indisponível")
+
+		with self.assertRaises(VulnGreenboneExecutionError):
+			run_greenbone_scan(self.session, triggered_by=self.owner)
+
+		self.session.refresh_from_db()
+		task = self.session.tasks.filter(kind=VulnTask.Kind.GREENBONE_SCAN).first()
+		self.assertIsNotNone(task)
+		self.assertEqual(task.status, VulnTask.Status.FAILED)
+		self.assertEqual(self.session.status, VulnScanSession.Status.FAILED)
+		self.assertIn("serviço indisponível", self.session.last_error)
+
+	@patch("arpia_vuln.services.os.access")
+	@patch("arpia_vuln.services.subprocess.run")
+	@patch("arpia_vuln.services.shutil.which")
+	def test_socket_permission_attempts_fix(self, mocked_which, mocked_run, mocked_access):
+		socket_file = self.temp_dir / "gvmd.sock"
+		socket_file.write_text("")
+		config = GreenboneConfig(
+			mode="socket",
+			username="admin",
+			password="secret",
+			hostname="127.0.0.1",
+			port=9390,
+			socket_path=str(socket_file),
+			scanner_id="scanner-1",
+			scan_config_id="config-1",
+			report_format_id="format-1",
+			report_directory=self.temp_dir,
+			poll_interval=0.0,
+			max_attempts=1,
+			task_timeout=None,
+			tool_slug="gvm",
+			tool_path="gvm-cli",
+		)
+		mocked_access.side_effect = [False, False, True, True]
+		mocked_which.side_effect = lambda name: f"/usr/bin/{name}" if name in {"sudo", "setfacl"} else None
+		mocked_run.return_value = CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+
+		executor = GreenboneScanExecutor(self.session, triggered_by=self.owner, targets_data={"hosts": []}, auto_finalize=False)
+		executor.config = config
+		executor._attempt_autostart_greenbone = Mock()
+
+		with self.settings(TESTING=False):
+			executor._ensure_service_available()
+		self.assertTrue(mocked_run.called)
+
+	@patch("arpia_vuln.services._load_greenbone_config")
+	@patch("arpia_vuln.services.subprocess.run")
+	@patch("arpia_vuln.services.shutil.which")
+	def test_autostart_greenbone_with_sudo_password(self, mocked_which, mocked_run, mocked_load_config):
+		mocked_which.side_effect = lambda name: f"/usr/bin/{name}" if name in {"sudo", "gvm-start"} else None
+		config = GreenboneConfig(
+			mode="tls",
+			username=None,
+			password=None,
+			hostname="127.0.0.1",
+			port=9390,
+			socket_path=None,
+			scanner_id="scanner",
+			scan_config_id="config",
+			report_format_id="format",
+			report_directory=self.temp_dir,
+			poll_interval=0.0,
+			max_attempts=1,
+			task_timeout=None,
+			tool_slug="gvm",
+			tool_path="gvm-cli",
+		)
+		mocked_load_config.side_effect = [config, config]
+		mocked_run.side_effect = [
+			CompletedProcess(
+				args=["sudo", "-n", "gvm-start"],
+				returncode=1,
+				stdout="",
+				stderr="sudo: a password is required",
+			),
+			CompletedProcess(
+				args=["sudo", "-S", "gvm-start"],
+				returncode=0,
+				stdout="Greenbone started",
+				stderr="",
+			),
+		]
+
+		session = VulnScanSession.objects.create(
+			project=self.project,
+			owner=self.owner,
+			title="Sessão retry",
+			status=VulnScanSession.Status.FAILED,
+		)
+		with patch.dict(os.environ, {"ARPIA_GVM_SUDO_PASSWORD": "secr3t", "ARPIA_GVM_AUTOSTART": "1"}, clear=False):
+			with self.settings(TESTING=False):
+				executor = GreenboneScanExecutor(session, triggered_by=self.owner, targets_data={"hosts": []}, auto_finalize=False)
+				executor.config = config
+				executor._attempt_autostart_greenbone()
+
+		self.assertEqual(mocked_run.call_count, 2)
+		self.assertEqual(mocked_run.call_args_list[1].kwargs.get("input"), "secr3t\n")
+		self.assertGreaterEqual(mocked_load_config.call_count, 2)
+
 	def test_plan_vulnerability_session_creates_default_playbook(self):
 		planned = plan_vulnerability_session(
 			owner=self.owner,
@@ -511,6 +638,66 @@ class VulnServicesTests(TestCase):
 		self.assertEqual(task.parameters.get("playbook_action"), "targeted")
 		self.assertEqual(task.parameters.get("script"), "nmap-targeted-open-ports")
 		self.assertEqual(task.kind, VulnTask.Kind.SERVICE_ENUMERATION)
+
+
+class GreenboneTests(TestCase):
+	def setUp(self):
+		self.temp_dir = Path(tempfile.mkdtemp())
+		self.addCleanup(shutil.rmtree, self.temp_dir, True)
+		self.config = GreenboneConfig(
+			mode="tls",
+			username="admin",
+			password="secret",
+			hostname="127.0.0.1",
+			port=9390,
+			socket_path=None,
+			scanner_id="scanner-1",
+			scan_config_id="config-1",
+			report_format_id="format-1",
+			report_directory=self.temp_dir,
+			poll_interval=0.0,
+			max_attempts=3,
+			task_timeout=None,
+			tool_slug="gvm",
+			tool_path="gvm-cli",
+		)
+
+	@patch("gvm.protocols.gmp.Gmp")
+	@patch("gvm.connections.TLSConnection")
+	def test_runner_auth_success(self, mocked_tls, mocked_gmp):
+		gmp_mock = Mock()
+		gmp_mock.authenticate.return_value = ET.Element("authenticate_response", status="200")
+		gmp_mock.is_authenticated.return_value = True
+		gmp_mock.send_command.return_value = "<ok/>"
+		mocked_gmp.return_value.__enter__.return_value = gmp_mock
+
+		runner = GreenboneCliRunner(self.config)
+		result = runner.run("<ping/>", description="ping")
+
+		self.assertEqual(result, "<ok/>")
+		gmp_mock.authenticate.assert_called_once_with("admin", "secret")
+		gmp_mock.send_command.assert_called_once_with("<ping/>")
+
+	@patch("gvm.protocols.gmp.Gmp")
+	@patch("gvm.connections.TLSConnection")
+	def test_runner_auth_failure_raises_error(self, mocked_tls, mocked_gmp):
+		gmp_mock = Mock()
+		gmp_mock.authenticate.return_value = ET.Element(
+			"authenticate_response",
+			status="401",
+			status_text="Invalid credential",
+		)
+		gmp_mock.is_authenticated.return_value = False
+		gmp_mock.send_command.return_value = "<should-not-run/>"
+		mocked_gmp.return_value.__enter__.return_value = gmp_mock
+
+		runner = GreenboneCliRunner(self.config)
+
+		with self.assertRaises(GreenboneCliError) as ctx:
+			runner.run("<ping/>", description="ping")
+		self.assertIn("Falha na autenticação", str(ctx.exception))
+		self.assertIn("Invalid credential", str(ctx.exception))
+		gmp_mock.send_command.assert_not_called()
 
 
 class VulnReportingIntegrationTests(TestCase):
@@ -691,6 +878,100 @@ class VulnApiTests(TestCase):
 			"last_collected_at": timezone.now().isoformat(),
 		}
 		upsert_vulnerability_report_entry(self.vuln_session, summary)
+
+
+	class VulnRetryApiTests(TestCase):
+		def setUp(self):
+			user_model = get_user_model()
+			self.owner = user_model.objects.create_user("retry", password="test1234")
+			self.project = Project.objects.create(owner=self.owner, name="Projeto Retry", slug="projeto-retry")
+			self.session = VulnScanSession.objects.create(
+				project=self.project,
+				owner=self.owner,
+				title="Sessão falha",
+				status=VulnScanSession.Status.FAILED,
+				last_error="Greenbone indisponível",
+				finished_at=timezone.now(),
+			)
+			self.task = VulnTask.objects.create(
+				session=self.session,
+				order=1,
+				kind=VulnTask.Kind.GREENBONE_SCAN,
+				status=VulnTask.Status.FAILED,
+				name="Greenbone Vulnerability Scan",
+				progress=100.0,
+			)
+
+		@patch("arpia_vuln.views.run_greenbone_scan")
+		def test_retry_greenbone_success(self, mocked_run_greenbone):
+			def fake_run(session, *, triggered_by=None, auto_finalize=True):
+				task = session.tasks.filter(kind=VulnTask.Kind.GREENBONE_SCAN).first()
+				if task:
+					task.status = VulnTask.Status.COMPLETED
+					task.progress = 100.0
+					task.finished_at = timezone.now()
+					task.save(update_fields=["status", "progress", "finished_at", "updated_at"])
+				session.status = VulnScanSession.Status.COMPLETED
+				session.last_error = ""
+				session.finished_at = timezone.now()
+				session.save(update_fields=["status", "last_error", "finished_at", "updated_at"])
+				return task
+
+			mocked_run_greenbone.side_effect = fake_run
+			self.client.force_login(self.owner)
+			url = reverse("arpia_vuln:api_session_retry", args=[self.session.pk])
+			response = self.client.post(url, data=json.dumps({"step": "greenbone"}), content_type="application/json")
+			self.assertEqual(response.status_code, 200)
+			payload = response.json()
+			self.session.refresh_from_db()
+			self.task.refresh_from_db()
+			self.assertEqual(self.session.status, VulnScanSession.Status.COMPLETED)
+			self.assertEqual(payload["task"]["status"], VulnTask.Status.COMPLETED)
+			mocked_run_greenbone.assert_called_once()
+			self.assertTrue(mocked_run_greenbone.call_args.kwargs.get("auto_finalize"))
+
+		@patch("arpia_vuln.views.run_greenbone_scan")
+		def test_retry_greenbone_allows_when_last_error_cites_greenbone(self, mocked_run_greenbone):
+			self.task.status = VulnTask.Status.PENDING
+			self.task.save(update_fields=["status", "updated_at"])
+			self.session.status = VulnScanSession.Status.FAILED
+			self.session.last_error = "Falha ao iniciar o Greenbone automaticamente."
+			self.session.save(update_fields=["status", "last_error", "updated_at"])
+
+			def fake_run(session, *, triggered_by=None, auto_finalize=True):
+				task = session.tasks.filter(kind=VulnTask.Kind.GREENBONE_SCAN).first()
+				if task:
+					task.status = VulnTask.Status.COMPLETED
+					task.progress = 100.0
+					task.finished_at = timezone.now()
+					task.save(update_fields=["status", "progress", "finished_at", "updated_at"])
+				session.status = VulnScanSession.Status.COMPLETED
+				session.last_error = ""
+				session.finished_at = timezone.now()
+				session.save(update_fields=["status", "last_error", "finished_at", "updated_at"])
+				return task
+
+			mocked_run_greenbone.side_effect = fake_run
+			self.client.force_login(self.owner)
+			url = reverse("arpia_vuln:api_session_retry", args=[self.session.pk])
+			response = self.client.post(url, data=json.dumps({}), content_type="application/json")
+			self.assertEqual(response.status_code, 200)
+			self.session.refresh_from_db()
+			self.task.refresh_from_db()
+			self.assertEqual(self.session.status, VulnScanSession.Status.COMPLETED)
+			self.assertEqual(self.task.status, VulnTask.Status.COMPLETED)
+			mocked_run_greenbone.assert_called_once()
+
+		@patch("arpia_vuln.views.run_greenbone_scan")
+		def test_retry_greenbone_failure_propagates_error(self, mocked_run_greenbone):
+			mocked_run_greenbone.side_effect = VulnGreenboneExecutionError("falha ao conectar")
+			self.client.force_login(self.owner)
+			url = reverse("arpia_vuln:api_session_retry", args=[self.session.pk])
+			response = self.client.post(url, data=json.dumps({}), content_type="application/json")
+			self.assertEqual(response.status_code, 502)
+			self.assertIn("falha ao conectar", response.json().get("error", ""))
+			self.session.refresh_from_db()
+			self.assertEqual(self.session.status, VulnScanSession.Status.FAILED)
 
 	def test_api_session_plan_creates_session(self):
 		self.client.force_login(self.owner)

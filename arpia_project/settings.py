@@ -208,3 +208,7 @@ ARPIA_GVM_TOOL_PATH = os.getenv("ARPIA_GVM_TOOL_PATH", "") or None
 ARPIA_GVM_POLL_INTERVAL = float(os.getenv("ARPIA_GVM_POLL_INTERVAL", "5"))
 ARPIA_GVM_MAX_ATTEMPTS = int(os.getenv("ARPIA_GVM_MAX_ATTEMPTS", "60"))
 ARPIA_GVM_TASK_TIMEOUT = os.getenv("ARPIA_GVM_TASK_TIMEOUT")
+
+#Configurações de sudo do arpia
+ARPIA_GVM_USERNAME = "admin"
+ARPIA_GVM_PASSWORD = "kali"

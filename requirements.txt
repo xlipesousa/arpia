@@ -4,6 +4,7 @@ djangorestframework==3.16.1
 python-dotenv>=1.0
 psycopg2-binary>=2.9
 prometheus-client>=0.16
+python-gvm>=23.0.0
 
 # Imagens, static serving and template helpers
 Pillow>=10.0
