@@ -16,6 +16,7 @@ from django.views.generic import TemplateView
 from arpia_core.models import Project
 from arpia_scan.models import ScanSession
 from arpia_core.views import build_project_macros
+from arpia_log.models import LogEntry
 
 from .models import VulnerabilityFinding, VulnScanSession, VulnTask
 from .services import (
@@ -155,6 +156,303 @@ def _serialize_session_for_api(session: VulnScanSession) -> dict:
 			for task in session.tasks.order_by("order", "id")
 		],
 	}
+
+
+TERMINAL_SESSION_STATUSES = {
+	VulnScanSession.Status.COMPLETED,
+	VulnScanSession.Status.FAILED,
+	VulnScanSession.Status.CANCELED,
+}
+
+
+def _serialize_session_overview(session: VulnScanSession) -> dict:
+	return {
+		"id": str(session.pk),
+		"reference": session.reference,
+		"title": session.title,
+		"status": session.status,
+		"status_display": session.get_status_display(),
+		"project_id": str(session.project_id),
+		"project_name": session.project.name,
+		"owner": session.owner.get_username() if session.owner else "",
+		"created_at": session.created_at.isoformat() if session.created_at else None,
+		"started_at": session.started_at.isoformat() if session.started_at else None,
+		"finished_at": session.finished_at.isoformat() if session.finished_at else None,
+		"last_error": session.last_error or "",
+		"notes": session.notes or "",
+		"detail_url": reverse("arpia_vuln:session_detail", args=[session.pk]),
+		"report_url": reverse("arpia_vuln:session_report_preview", args=[session.pk]),
+		"is_terminal": session.is_terminal,
+	}
+
+
+def _normalize_progress(value) -> float:
+	try:
+		numeric = float(value or 0.0)
+	except (TypeError, ValueError):
+		numeric = 0.0
+	if numeric < 0:
+		numeric = 0.0
+	if numeric > 1.0 and numeric <= 100.0:
+		return numeric
+	if numeric <= 1.0:
+		return numeric * 100.0
+	return min(numeric, 100.0)
+
+
+def _serialize_vuln_task(task: VulnTask) -> dict:
+	progress_percent = int(round(_normalize_progress(task.progress)))
+	progress_percent = max(0, min(100, progress_percent))
+	return {
+		"id": str(task.pk),
+		"order": task.order,
+		"name": task.name,
+		"kind": task.kind,
+		"kind_display": task.get_kind_display(),
+		"status": task.status,
+		"status_display": task.get_status_display(),
+		"progress": float(task.progress or 0.0),
+		"progress_percent": progress_percent,
+		"tool": task.tool.slug if task.tool else None,
+		"tool_name": task.tool.name if task.tool else None,
+		"script": task.script.slug if task.script else None,
+		"script_name": task.script.name if task.script else None,
+		"started_at": task.started_at.isoformat() if task.started_at else None,
+		"finished_at": task.finished_at.isoformat() if task.finished_at else None,
+		"started_at_display": timezone.localtime(task.started_at).strftime("%d/%m %H:%M") if task.started_at else "—",
+		"finished_at_display": timezone.localtime(task.finished_at).strftime("%d/%m %H:%M") if task.finished_at else "—",
+		"stdout": task.stdout,
+		"stderr": task.stderr,
+	}
+
+
+def _collect_cves(data: dict, primary: str | None) -> list[str]:
+	cves: list[str] = []
+	if primary:
+		cves.append(str(primary).strip())
+	extra = data.get("cves") if isinstance(data, dict) else []
+	if isinstance(extra, (list, tuple)):
+		for item in extra:
+			code = str(item or "").strip()
+			if code and code not in cves:
+				cves.append(code)
+	return cves
+
+
+def _format_port_display(port, protocol: str | None) -> str:
+	if port is None:
+		return ""
+	try:
+		numeric = int(port)
+	except (TypeError, ValueError):
+		numeric = port
+	proto = (protocol or "").strip()
+	return f"{numeric}/{proto}" if proto else str(numeric)
+
+
+def _serialize_finding_for_live(finding: VulnerabilityFinding) -> dict:
+	data = finding.data if isinstance(finding.data, dict) else {}
+	cves = _collect_cves(data, finding.cve)
+	port_display = _format_port_display(finding.port, finding.protocol)
+	try:
+		cvss_value = float(finding.cvss_score) if finding.cvss_score is not None else None
+	except (TypeError, ValueError):
+		cvss_value = None
+	return {
+		"id": str(finding.pk),
+		"title": finding.title,
+		"summary": finding.summary or "",
+		"severity": finding.severity,
+		"severity_display": finding.get_severity_display(),
+		"status": finding.status,
+		"status_display": finding.get_status_display(),
+		"cves": cves,
+		"primary_cve": cves[0] if cves else "",
+		"cvss": cvss_value,
+		"cvss_display": f"{cvss_value:.1f}" if cvss_value is not None else "",
+		"host": finding.host,
+		"service": finding.service,
+		"port_display": port_display,
+		"detected_at": finding.detected_at.isoformat() if finding.detected_at else None,
+		"created_at": finding.created_at.isoformat() if finding.created_at else None,
+		"detected_at_display": timezone.localtime(finding.detected_at).strftime("%d/%m/%Y %H:%M") if finding.detected_at else "",
+		"source_task": {
+			"id": str(finding.source_task_id) if finding.source_task_id else "",
+			"name": finding.source_task.name if finding.source_task else "",
+			"kind": finding.source_task.kind if finding.source_task else "",
+			"status": finding.source_task.status if finding.source_task else "",
+			"status_display": finding.source_task.get_status_display() if finding.source_task else "",
+		},
+		"references": data.get("references") if isinstance(data.get("references"), list) else [],
+		"data": data,
+	}
+
+
+def _calculate_overall_progress(session_status: str, tasks: list[dict]) -> int:
+	if not tasks:
+		return 100 if session_status in TERMINAL_SESSION_STATUSES else 0
+	total = 0
+	for task in tasks:
+		try:
+			percent = int(round(float(task.get("progress_percent", 0))))
+		except (TypeError, ValueError):
+			percent = 0
+		total += max(0, min(100, percent))
+	average = int(round(total / max(1, len(tasks))))
+	if session_status in TERMINAL_SESSION_STATUSES:
+		return 100
+	return max(0, min(100, average))
+
+
+def _format_datetime(value) -> str:
+	if not value:
+		return ""
+	if isinstance(value, str):
+		parsed = parse_datetime(value)
+		if parsed is None:
+			return value
+		value = parsed
+	if timezone.is_naive(value):
+		value = timezone.make_aware(value, timezone.get_current_timezone())
+	return timezone.localtime(value).strftime("%d/%m/%Y %H:%M:%S")
+
+
+def _build_overview_metrics(session: VulnScanSession, snapshot: dict, tasks: list[dict], findings: list[dict]) -> list[dict]:
+	metrics: list[dict] = []
+	stats = snapshot.get("stats", {}) if isinstance(snapshot, dict) else {}
+	if isinstance(stats, dict) and stats:
+		for key, value in stats.items():
+			label = str(key).replace("_", " ").title()
+			metrics.append({"label": label, "value": value})
+	if metrics:
+		return metrics
+
+	total_tasks = len(tasks)
+	completed_tasks = sum(1 for task in tasks if task.get("status") == VulnTask.Status.COMPLETED)
+	metrics.append(
+		{
+			"label": "Etapas concluídas",
+			"value": f"{completed_tasks}/{total_tasks}",
+			"note": "Execuções dentro da sessão",
+		}
+	)
+	open_findings = sum(1 for item in findings if item.get("status") == VulnerabilityFinding.Status.OPEN)
+	total_findings = len(findings)
+	metrics.append(
+		{
+			"label": "Findings abertos",
+			"value": open_findings,
+			"note": f"Total coletado: {total_findings}",
+		}
+	)
+	if session.started_at:
+		metrics.append(
+			{
+				"label": "Início",
+				"value": timezone.localtime(session.started_at).strftime("%d/%m %H:%M"),
+			}
+		)
+	if session.finished_at:
+		metrics.append(
+			{
+				"label": "Término",
+				"value": timezone.localtime(session.finished_at).strftime("%d/%m %H:%M"),
+			}
+		)
+	return metrics
+
+
+def _serialize_log_entry(entry: LogEntry) -> dict:
+	timestamp = entry.timestamp
+	localized = timezone.localtime(timestamp) if timestamp else None
+	return {
+		"id": entry.id,
+		"timestamp": timestamp.isoformat() if timestamp else None,
+		"timestamp_display": localized.strftime("%d/%m/%Y %H:%M:%S") if localized else "—",
+		"severity": entry.severity,
+		"message": entry.message,
+		"event_type": entry.event_type,
+		"component": entry.component,
+		"source_app": entry.source_app,
+		"details": entry.details or {},
+		"context": entry.context or {},
+		"tags": entry.tags or [],
+	}
+
+
+def _collect_session_state(session: VulnScanSession) -> dict:
+	tasks_qs = session.tasks.select_related("tool", "script").order_by("order", "id")
+	tasks = [_serialize_vuln_task(task) for task in tasks_qs]
+	findings_qs = session.findings.select_related("source_task").order_by("-cvss_score", "severity", "title")
+	findings = [_serialize_finding_for_live(finding) for finding in findings_qs]
+	snapshot = session.report_snapshot if isinstance(session.report_snapshot, dict) else {}
+	session_payload = _serialize_session_overview(session)
+	session_payload["total_tasks_count"] = len(tasks)
+	session_payload["completed_tasks_count"] = sum(
+		1 for task in tasks if task.get("status") == VulnTask.Status.COMPLETED
+	)
+	session_payload["overall_progress_percent"] = _calculate_overall_progress(session.status, tasks)
+	return {
+		"session": session_payload,
+		"tasks": tasks,
+		"findings": findings,
+		"overview_metrics": _build_overview_metrics(session, snapshot, tasks, findings),
+		"report_insights": snapshot.get("insights", []) if isinstance(snapshot, dict) else [],
+		"report_summary": snapshot.get("summary", {}) if isinstance(snapshot, dict) else {},
+		"report_stats": snapshot.get("stats", {}) if isinstance(snapshot, dict) else {},
+	}
+
+
+def _fetch_session_logs(session: VulnScanSession, *, limit: int = 100) -> tuple[list[dict], str | None]:
+	qs = (
+		LogEntry.objects.filter(correlation__vuln_session_id=str(session.pk))
+		.order_by("timestamp", "id")
+	)
+	entries = list(qs[: max(1, min(limit, 250))])
+	serialized = [_serialize_log_entry(entry) for entry in entries]
+	latest = serialized[-1]["timestamp"] if serialized else None
+	return serialized, latest
+
+
+def _build_session_bootstrap(session: VulnScanSession) -> dict:
+	state = _collect_session_state(session)
+	logs, cursor = _fetch_session_logs(session, limit=100)
+	state.update(
+		{
+			"logs": logs,
+			"latest_log_cursor": cursor,
+		}
+	)
+	return state
+
+
+def _describe_execution_state(session_payload: dict, tasks: list[dict]) -> str:
+	status = (session_payload or {}).get("status", "")
+	running = next((task for task in tasks if task.get("status") == VulnTask.Status.RUNNING), None)
+	failing = next((task for task in tasks if task.get("status") == VulnTask.Status.FAILED), None)
+	pending = next(
+		(
+			task
+			for task in tasks
+			if task.get("status") in {VulnTask.Status.PENDING, VulnTask.Status.QUEUED}
+		),
+		None,
+	)
+	completed = [task for task in tasks if task.get("status") == VulnTask.Status.COMPLETED]
+	if running:
+		context = running.get("script_name") or running.get("tool_name")
+		return f"Em execução: {running.get('name')}" + (f" • {context}" if context else "")
+	if status == VulnScanSession.Status.FAILED and failing:
+		return f"Falha em {failing.get('name')}"
+	if pending:
+		return f"Próxima etapa: {pending.get('name')}"
+	if status == VulnScanSession.Status.COMPLETED and completed:
+		return f"Última etapa concluída: {completed[-1].get('name')}"
+	if status == VulnScanSession.Status.CANCELED:
+		return "Sessão cancelada."
+	if not tasks and status in TERMINAL_SESSION_STATUSES:
+		return "Sessão finalizada."
+	return "Aguardando atualização…"
 
 
 def _build_dashboard_links(project: Project | None) -> dict:
@@ -313,24 +611,19 @@ class VulnSessionDetailView(LoginRequiredMixin, TemplateView):
 
 	def get_context_data(self, **kwargs):
 		context = super().get_context_data(**kwargs)
-		tasks = self.session.tasks.select_related("tool", "script").order_by("order", "id")
-		findings = self.session.findings.select_related("source_task").order_by("-cvss_score", "severity")
-		report_snapshot = self.session.report_snapshot or {}
-		report_insights = (
-			report_snapshot.get("insights")
-			if isinstance(report_snapshot, dict)
-			else []
+		state = _build_session_bootstrap(self.session)
+		session_payload = state.get("session", {})
+		tasks_payload = state.get("tasks", [])
+		findings_payload = state.get("findings", [])
+		overview_metrics = state.get("overview_metrics", [])
+		report_insights = state.get("report_insights", [])
+		logs_payload = state.get("logs", [])
+		execution_descriptor = _describe_execution_state(session_payload, tasks_payload)
+		has_greenbone_task = any(task.get("kind") == VulnTask.Kind.GREENBONE_SCAN for task in tasks_payload)
+		failed_greenbone_task = any(
+			task.get("kind") == VulnTask.Kind.GREENBONE_SCAN and task.get("status") == VulnTask.Status.FAILED
+			for task in tasks_payload
 		)
-		metrics = report_snapshot.get("stats", {}) if isinstance(report_snapshot, dict) else {}
-		failed_greenbone_task = next(
-			(
-				task
-				for task in tasks
-				if task.kind == VulnTask.Kind.GREENBONE_SCAN and task.status == VulnTask.Status.FAILED
-			),
-			None,
-		)
-		has_greenbone_task = any(task.kind == VulnTask.Kind.GREENBONE_SCAN for task in tasks)
 		failure_related_to_greenbone = (
 			self.session.status == VulnScanSession.Status.FAILED
 			and "greenbone" in (self.session.last_error or "").lower()
@@ -338,19 +631,26 @@ class VulnSessionDetailView(LoginRequiredMixin, TemplateView):
 		can_retry_greenbone = (
 			has_greenbone_task
 			and self.session.status != VulnScanSession.Status.RUNNING
-			and (failed_greenbone_task is not None or failure_related_to_greenbone)
+			and (failed_greenbone_task or failure_related_to_greenbone)
 		)
-
+		status_api_url = reverse("arpia_vuln:api_session_status", args=[self.session.pk])
+		logs_api_url = reverse("arpia_vuln:api_session_logs", args=[self.session.pk])
 		context.update(
 			{
 				"session": self.session,
 				"project": self.session.project,
 				"source_scan_session": self.session.source_scan_session,
-				"tasks": tasks,
-				"findings": findings,
+				"session_payload": session_payload,
+				"tasks_payload": tasks_payload,
+				"findings_payload": findings_payload,
+				"overview_metrics": overview_metrics,
 				"report_insights": report_insights,
-				"metrics": metrics,
-				"has_snapshot": bool(report_snapshot),
+				"logs_payload": logs_payload,
+				"session_bootstrap_json": json.dumps(state, ensure_ascii=False),
+				"status_api_url": status_api_url,
+				"logs_api_url": logs_api_url,
+				"latest_log_cursor": state.get("latest_log_cursor") or "",
+				"execution_descriptor": execution_descriptor,
 				"report_url": reverse("arpia_vuln:session_report_preview", args=[self.session.pk]),
 				"can_retry_greenbone": can_retry_greenbone,
 				"retry_greenbone_url": reverse("arpia_vuln:api_session_retry", args=[self.session.pk]),
@@ -821,3 +1121,71 @@ def api_session_retry(request, pk):
 		"task": _serialize_task_for_api(task) if task else None,
 	}
 	return JsonResponse(response, status=200, json_dumps_params={"ensure_ascii": False})
+
+
+@login_required
+@require_http_methods(["GET"])
+def api_session_status(request, pk):
+	session = get_object_or_404(
+		VulnScanSession.objects.select_related("project", "owner"),
+		pk=pk,
+	)
+	if not _user_has_access(request.user, session.project):
+		return JsonResponse({"error": "Usuário não possui acesso a este projeto."}, status=403)
+	payload = _collect_session_state(session)
+	return JsonResponse(payload, status=200, json_dumps_params={"ensure_ascii": False})
+
+
+@login_required
+@require_http_methods(["GET"])
+def api_session_logs(request, pk):
+	session = get_object_or_404(
+		VulnScanSession.objects.select_related("project", "owner"),
+		pk=pk,
+	)
+	if not _user_has_access(request.user, session.project):
+		return JsonResponse({"error": "Usuário não possui acesso a este projeto."}, status=403)
+
+	qs = LogEntry.objects.filter(correlation__vuln_session_id=str(session.pk))
+
+	def _parse_cursor(value: str | None):
+		if not value:
+			return None
+		parsed = parse_datetime(value)
+		if not parsed:
+			return None
+		if timezone.is_naive(parsed):
+			parsed = timezone.make_aware(parsed, timezone.get_current_timezone())
+		return parsed
+
+	since_param = request.GET.get("since")
+	if since_param:
+		since_dt = _parse_cursor(since_param)
+		if since_dt:
+			qs = qs.filter(timestamp__gte=since_dt)
+
+	cursor_param = request.GET.get("cursor")
+	if cursor_param:
+		cursor_dt = _parse_cursor(cursor_param)
+		if cursor_dt:
+			qs = qs.filter(timestamp__gt=cursor_dt)
+
+	try:
+		limit = int(request.GET.get("limit", "100"))
+	except (TypeError, ValueError):
+		limit = 100
+	limit = max(1, min(limit, 250))
+
+	entries = list(qs.order_by("timestamp", "id")[:limit])
+	results = [_serialize_log_entry(entry) for entry in entries]
+	latest = results[-1]["timestamp"] if results else cursor_param or since_param
+
+	return JsonResponse(
+		{
+			"results": results,
+			"count": len(results),
+			"latest": latest,
+		},
+		status=200,
+		json_dumps_params={"ensure_ascii": False},
+	)

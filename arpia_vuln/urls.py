@@ -16,4 +16,6 @@ urlpatterns = [
     path("api/sessions/plan/", views.api_session_plan, name="api_session_plan"),
     path("api/sessions/<uuid:pk>/start/", views.api_session_start, name="api_session_start"),
     path("api/sessions/<uuid:pk>/retry/", views.api_session_retry, name="api_session_retry"),
+    path("api/sessions/<uuid:pk>/status/", views.api_session_status, name="api_session_status"),
+    path("api/sessions/<uuid:pk>/logs/", views.api_session_logs, name="api_session_logs"),
 ]

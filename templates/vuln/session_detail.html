@@ -10,10 +10,10 @@
   </div>
   <div class="session-status">
     <span class="label">Status</span>
-    <span class="status-pill status-{{ session.status }}">{{ session.get_status_display }}</span>
+    <span class="status-pill status-{{ session.status }}" id="session-status-pill">{{ session.get_status_display }}</span>
+    <span class="live-indicator{% if session.is_terminal %} hidden{% endif %}" id="live-indicator">Atualizando em tempo real…</span>
     {% if not session.is_terminal %}
-      <span class="live-indicator">Monitoramento em andamento…</span>
-  {% if session.status != 'running' %}
+      {% if session.status != 'running' %}
         <button class="btn-start" type="button" data-action="start-session" data-start-url="{% url 'arpia_vuln:api_session_start' session.pk %}">Iniciar agora</button>
         <p id="session-start-feedback" class="start-feedback" hidden></p>
       {% else %}
@@ -29,26 +29,85 @@
   </div>
 </section>
 
-<section class="session-layout">
-  <article class="card session-meta">
+<section class="vuln-session" id="session-root"
+  data-session-id="{{ session.id }}"
+  data-status="{{ session.status }}"
+  data-api-status-url="{{ status_api_url }}"
+  data-api-logs-url="{{ logs_api_url }}"
+  data-latest-log-cursor="{{ latest_log_cursor }}">
+  <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+  <script type="application/json" id="session-bootstrap">{{ session_bootstrap_json|safe }}</script>
+
+  <article class="card execution-card" id="execution-card" data-total-tasks="{{ tasks_payload|length }}">
+    <header class="section-header">
+      <h2>Execução ao vivo</h2>
+      <p class="muted">Acompanhe a pipeline de vulnerabilidades em tempo real.</p>
+    </header>
+    <div class="execution-status">
+      <div class="status-beacon status-{{ session.status }}" id="execution-status-beacon">
+        <span class="beacon-dot" aria-hidden="true"></span>
+        <span class="beacon-label" id="execution-status-label">{{ session.get_status_display }}</span>
+      </div>
+      <div class="execution-meta">
+        <span id="execution-task-label">{{ execution_descriptor }}</span>
+        <small id="execution-time-indicator">
+          {% if session.finished_at %}
+            Finalizada em {{ session.finished_at|date:"d/m/Y H:i" }}
+          {% elif session.started_at %}
+            Iniciada em {{ session.started_at|date:"d/m/Y H:i" }}
+          {% else %}
+            Sessão ainda não iniciada.
+          {% endif %}
+        </small>
+      </div>
+    </div>
+    <div class="execution-progress">
+      <div class="progress-bar progress-overall" id="execution-progress-bar">
+        <span style="width: {{ session_payload.overall_progress_percent|default:0 }}%"></span>
+      </div>
+      <div class="progress-summary">
+        <span class="progress-value" id="execution-progress-value">{{ session_payload.overall_progress_percent|default:0 }}%</span>
+        <span class="progress-detail" id="execution-progress-detail">{{ session_payload.completed_tasks_count|default:0 }} de {{ session_payload.total_tasks_count|default:0 }} etapas concluídas</span>
+      </div>
+    </div>
+    <div class="execution-console">
+      <div class="console-header"><span>Saída recente</span></div>
+      <div class="console-body" id="console-body">
+        <pre id="live-console" class="console-output hidden" aria-live="polite" aria-label="Saída em tempo real"></pre>
+        <div class="empty" id="live-console-empty">Nenhuma saída registrada ainda.</div>
+      </div>
+    </div>
+  </article>
+
+  <article class="card session-overview">
     <header class="section-header">
       <h2>Resumo da sessão</h2>
     </header>
-    <dl>
-      <div><dt>Projeto</dt><dd>{{ project.name }}</dd></div>
-      <div><dt>Responsável</dt><dd>{{ session.owner.get_username }}</dd></div>
-      <div><dt>Início</dt><dd>{% if session.started_at %}{{ session.started_at|date:"d/m/Y H:i" }}{% else %}<span class="muted">—</span>{% endif %}</dd></div>
-      <div><dt>Término</dt><dd>{% if session.finished_at %}{{ session.finished_at|date:"d/m/Y H:i" }}{% else %}<span class="muted">—</span>{% endif %}</dd></div>
-      {% if source_scan_session %}
-        <div><dt>Sessão de scan</dt><dd><a class="inline-link" href="{% url 'arpia_scan:session_detail' source_scan_session.id %}" target="_blank" rel="noopener noreferrer">Abrir sessão relacionada</a></dd></div>
-      {% endif %}
-      {% if session.notes %}
-        <div class="notes"><dt>Anotações</dt><dd>{{ session.notes }}</dd></div>
-      {% endif %}
-      {% if session.last_error %}
-        <div class="notes error"><dt>Último erro</dt><dd>{{ session.last_error }}</dd></div>
-      {% endif %}
-    </dl>
+    <div class="session-meta">
+      <dl>
+        <div><dt>Projeto</dt><dd>{{ project.name }}</dd></div>
+        <div><dt>Responsável</dt><dd>{{ session.owner.get_username }}</dd></div>
+        <div>
+          <dt>Início</dt>
+          <dd id="session-started-at" data-empty-text="—">{% if session.started_at %}{{ session.started_at|date:"d/m/Y H:i" }}{% else %}—{% endif %}</dd>
+        </div>
+        <div>
+          <dt>Término</dt>
+          <dd id="session-finished-at" data-empty-text="—">{% if session.finished_at %}{{ session.finished_at|date:"d/m/Y H:i" }}{% else %}—{% endif %}</dd>
+        </div>
+        {% if source_scan_session %}
+          <div><dt>Sessão de scan</dt><dd><a class="inline-link" href="{% url 'arpia_scan:session_detail' source_scan_session.id %}" target="_blank" rel="noopener noreferrer">Abrir sessão relacionada</a></dd></div>
+        {% endif %}
+        <div class="notes">
+          <dt>Anotações</dt>
+          <dd id="session-notes" data-empty-text="Nenhuma anotação.">{{ session.notes|default:"Nenhuma anotação." }}</dd>
+        </div>
+        <div class="notes error">
+          <dt>Último erro</dt>
+          <dd id="session-last-error" data-empty-text="Sem registros.">{% if session.last_error %}{{ session.last_error }}{% else %}Sem registros.{% endif %}</dd>
+        </div>
+      </dl>
+    </div>
   </article>
 
   <article class="card metrics-card">
@@ -56,171 +115,209 @@
       <h2>Métricas consolidadas</h2>
       <p class="muted">Derivadas do snapshot atual da sessão.</p>
     </header>
-    {% if metrics %}
-      <ul class="metrics-grid">
-        {% for key, value in metrics.items %}
-          <li>
-            <span class="metric-value">{{ value }}</span>
-            <span class="metric-label">{{ key|title }}</span>
-          </li>
+    <div class="metrics-grid" id="metrics-grid" data-empty-text="Nenhuma métrica disponível.">
+      {% if overview_metrics %}
+        {% for metric in overview_metrics %}
+          <div class="metric-card">
+            <span class="metric-value">{{ metric.value }}</span>
+            <span class="metric-label">{{ metric.label }}</span>
+            {% if metric.note %}<span class="metric-note">{{ metric.note }}</span>{% endif %}
+          </div>
         {% endfor %}
-      </ul>
-    {% else %}
-      <div class="empty">Nenhuma métrica disponível até o momento.</div>
-    {% endif %}
-    <div class="insights-block">
-      <h3>Insights</h3>
-      {% if report_insights %}
-        <ul class="insights-list">
-          {% for insight in report_insights %}
-            <li class="insight insight-{{ insight.level|default:'info' }}">{{ insight.message }}</li>
-          {% endfor %}
-        </ul>
       {% else %}
-        <div class="empty">Nenhum insight registrado ainda.</div>
+        <div class="empty">Nenhuma métrica disponível.</div>
       {% endif %}
     </div>
+    <ul class="insights-list{% if not report_insights %} hidden{% endif %}" id="insights-list" data-empty-text="Nenhum insight registrado.">
+      {% for insight in report_insights %}
+        <li class="insight insight-{{ insight.level|default:'info' }}">{{ insight.message }}</li>
+      {% endfor %}
+    </ul>
+    <div class="empty{% if report_insights %} hidden{% endif %}" id="insights-empty" data-empty-text="Nenhum insight registrado.">Nenhum insight registrado.</div>
   </article>
 
-  <article class="card tasks-card">
+  <article class="card tasks-card" data-empty-text="Nenhuma etapa registrada para esta sessão.">
     <header class="section-header">
-      <h2>Etapas executadas</h2>
-      <p class="muted">Fluxo de tarefas responsáveis pela coleta de evidências.</p>
+      <h2>Fluxo de etapas</h2>
+      <p class="muted">Detalhes das execuções que compõem a sessão.</p>
     </header>
-    {% if tasks %}
-      <table class="tasks-table">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Etapa</th>
-            <th>Tipo</th>
-            <th>Ferramenta</th>
-            <th>Status</th>
-            <th>Progresso</th>
-            <th>Início</th>
-            <th>Término</th>
+    <table class="tasks-table" id="tasks-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Etapa</th>
+          <th>Ferramenta</th>
+          <th>Script</th>
+          <th>Status</th>
+          <th>Progresso</th>
+          <th>Início</th>
+          <th>Término</th>
+          <th>Saída</th>
+        </tr>
+      </thead>
+      <tbody id="tasks-body">
+        {% for task in tasks_payload %}
+          <tr data-task-id="{{ task.id }}">
+            <td>{{ forloop.counter }}</td>
+            <td>
+              <strong>{{ task.name }}</strong>
+              <span class="muted">{{ task.kind_display }}</span>
+            </td>
+            <td>{{ task.tool_name|default:"—" }}</td>
+            <td>{{ task.script_name|default:"—" }}</td>
+            <td><span class="status-pill status-{{ task.status }}">{{ task.status_display }}</span></td>
+            <td>
+              <div class="progress-bar" data-progress="{{ task.progress_percent }}"><span style="width: {{ task.progress_percent }}%"></span></div>
+              <small class="muted">{{ task.progress_percent }}%</small>
+            </td>
+            <td>{{ task.started_at_display }}</td>
+            <td>{{ task.finished_at_display }}</td>
+            <td class="task-output">
+              {% if task.stdout %}
+                <details><summary>Ver saída</summary><pre>{{ task.stdout }}</pre></details>
+              {% else %}
+                <span class="muted">Sem saída</span>
+              {% endif %}
+            </td>
           </tr>
-        </thead>
-        <tbody>
-          {% for task in tasks %}
-            <tr>
-              <td>{{ forloop.counter }}</td>
-              <td>
-                <strong>{{ task.name }}</strong>
-                {% if task.script %}<span class="muted">Script {{ task.script.slug }}</span>{% endif %}
-              </td>
-              <td>{{ task.get_kind_display }}</td>
-              <td>{{ task.tool|default:"—" }}</td>
-              <td><span class="status status-{{ task.status }}">{{ task.get_status_display }}</span></td>
-              <td>
-                <div class="progress-bar" data-progress="{{ task.progress }}"><span style="width: {{ task.progress|floatformat:0 }}%"></span></div>
-                <small class="muted">{{ task.progress|floatformat:0 }}%</small>
-              </td>
-              <td>{% if task.started_at %}{{ task.started_at|date:"d/m/Y H:i" }}{% else %}<span class="muted">—</span>{% endif %}</td>
-              <td>{% if task.finished_at %}{{ task.finished_at|date:"d/m/Y H:i" }}{% else %}<span class="muted">—</span>{% endif %}</td>
-            </tr>
-            {% if task.stdout %}
-              <tr class="task-output">
-                <td colspan="8"><details><summary>Ver saída</summary><pre>{{ task.stdout }}</pre></details></td>
-              </tr>
-            {% endif %}
-          {% endfor %}
-        </tbody>
-      </table>
-    {% else %}
-      <div class="empty">Nenhuma etapa registrada.</div>
-    {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="empty{% if tasks_payload %} hidden{% endif %}" id="tasks-empty">Nenhuma etapa registrada para esta sessão.</div>
   </article>
 
-  <article class="card findings-card">
+  <article class="card findings-card" data-empty-text="Nenhum achado documentado.">
     <header class="section-header">
       <h2>Achados documentados</h2>
-      <p class="muted">Vulnerabilidades agregadas desta sessão.</p>
+      <p class="muted">Vulnerabilidades agregadas pela execução atual.</p>
     </header>
-    {% if findings %}
-      <ul class="findings-list">
-        {% for finding in findings %}
-          <li>
-            <div class="finding-head">
-              <span class="badge severity-{{ finding.severity }}">{{ finding.get_severity_display }}</span>
-              <span class="badge status-{{ finding.status }}">{{ finding.get_status_display }}</span>
-              {% if finding.cve %}<span class="badge cve">{{ finding.cve }}</span>{% endif %}
-              {% if finding.display_score %}<span class="badge score">CVSS {{ finding.display_score }}</span>{% endif %}
+    <ul class="findings-list" id="findings-list">
+      {% for finding in findings_payload %}
+        <li>
+          <div class="finding-head">
+            <span class="badge severity-{{ finding.severity }}">{{ finding.severity_display }}</span>
+            <span class="badge status-{{ finding.status }}">{{ finding.status_display }}</span>
+            {% if finding.primary_cve %}<span class="badge cve">{{ finding.primary_cve }}</span>{% endif %}
+            {% if finding.cvss_display %}<span class="badge score">CVSS {{ finding.cvss_display }}</span>{% endif %}
+          </div>
+          <h3>{{ finding.title }}</h3>
+          <p class="muted">{{ finding.summary|default:"Sem descrição adicional." }}</p>
+          <dl class="finding-meta">
+            {% if finding.host %}<div><dt>Host</dt><dd>{{ finding.host }}</dd></div>{% endif %}
+            {% if finding.service %}<div><dt>Serviço</dt><dd>{{ finding.service }}</dd></div>{% endif %}
+            {% if finding.port_display %}<div><dt>Porta</dt><dd>{{ finding.port_display }}</dd></div>{% endif %}
+            {% if finding.detected_at_display %}<div><dt>Detectada</dt><dd>{{ finding.detected_at_display }}</dd></div>{% endif %}
+            {% if finding.source_task.name %}<div><dt>Etapa</dt><dd>{{ finding.source_task.name }}</dd></div>{% endif %}
+          </dl>
+          {% if finding.cves|length > 1 %}
+            <p class="muted cve-list">CVEs correlacionadas: {{ finding.cves|join:", " }}</p>
+          {% endif %}
+          {% if finding.references %}
+            <div class="reference-list">
+              {% for ref in finding.references %}
+                <a href="{{ ref }}" target="_blank" rel="noopener noreferrer">Referência {{ forloop.counter }}</a>
+              {% endfor %}
             </div>
-            <h3>{{ finding.title }}</h3>
-            <p class="muted">{{ finding.summary|default:"Sem descrição adicional." }}</p>
-            <dl class="finding-meta">
-              {% if finding.host %}<div><dt>Host</dt><dd>{{ finding.host }}</dd></div>{% endif %}
-              {% if finding.service %}<div><dt>Serviço</dt><dd>{{ finding.service }}</dd></div>{% endif %}
-              {% if finding.port %}<div><dt>Porta</dt><dd>{{ finding.port }} {{ finding.protocol|upper }}</dd></div>{% endif %}
-              {% if finding.source_task %}<div><dt>Etapa</dt><dd>{{ finding.source_task.name }}</dd></div>{% endif %}
-              <div><dt>Registrada</dt><dd>{{ finding.created_at|date:"d/m/Y H:i" }}</dd></div>
-            </dl>
-            {% if finding.data %}
-              <details class="raw-data">
-                <summary>Ver dados completos</summary>
-                <pre>{{ finding.data }}</pre>
-              </details>
-            {% endif %}
-          </li>
-        {% endfor %}
-      </ul>
-    {% else %}
-      <div class="empty">Nenhum achado documentado para esta sessão.</div>
-    {% endif %}
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+    <div class="empty{% if findings_payload %} hidden{% endif %}" id="findings-empty">Nenhum achado documentado.</div>
+  </article>
+
+  <article class="card logs-card" data-empty-text="Nenhum log registrado para esta sessão.">
+    <header class="section-header">
+      <h2>Eventos recentes</h2>
+      <p class="muted">Atualizações provenientes do pipeline.</p>
+    </header>
+    <ul class="logs-list" id="logs-list">
+      {% for log in logs_payload %}
+        <li class="log-entry">
+          <header>
+            <span class="severity severity-{{ log.severity|lower }}">{{ log.severity }}</span>
+            <span>{{ log.timestamp_display }}</span>
+          </header>
+          <div class="log-message">{{ log.message }}</div>
+          <footer>
+            <span>{{ log.event_type }}</span>
+            <span>{{ log.component }}</span>
+          </footer>
+        </li>
+      {% endfor %}
+    </ul>
+    <div class="empty{% if logs_payload %} hidden{% endif %}" id="logs-empty">Nenhum log registrado para esta sessão.</div>
   </article>
 </section>
 
 <style>
 .page-heading{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.6rem;gap:1rem;}
 .page-heading h1{margin:0;font-size:1.9rem;color:var(--text);}
+.page-subtitle{margin:.35rem 0 0;color:var(--muted);font-size:.95rem;}
 .back-link{text-decoration:none;color:var(--muted);font-size:.9rem;}
 .back-link:hover{color:var(--text);}
-.session-status{display:flex;flex-direction:column;gap:.3rem;align-items:flex-end;}
+.session-status{display:flex;flex-direction:column;gap:.4rem;align-items:flex-end;}
 .session-status .label{font-size:.75rem;text-transform:uppercase;color:var(--muted);letter-spacing:.08em;}
-.status-pill{display:inline-flex;align-items:center;padding:.25rem .75rem;border-radius:999px;font-weight:600;font-size:.8rem;color:var(--text);background:rgba(255,255,255,0.08);} 
-.live-indicator{font-size:.8rem;color:#8bc5ff;}
+.status-pill{display:inline-flex;align-items:center;padding:.28rem .75rem;border-radius:999px;font-weight:600;font-size:.85rem;color:var(--text);background:rgba(255,255,255,0.08);}
+.live-indicator{font-size:.82rem;color:#8bc5ff;}
+.live-indicator.hidden{display:none;}
 .report-link{color:#8bc5ff;font-weight:600;text-decoration:none;}
 .report-link:hover{color:#bfe0ff;}
-.session-layout{display:flex;flex-direction:column;gap:1.6rem;}
-.btn-start{margin-top:.45rem;padding:.5rem 1.1rem;border-radius:999px;background:linear-gradient(90deg,#52d2ff,#7fb5ff);color:#021223;font-weight:700;border:none;cursor:pointer;transition:opacity .18s ease,transform .18s ease;}
-.btn-start:hover{opacity:.88;transform:translateY(-1px);}
-.btn-start:disabled{opacity:.55;cursor:not-allowed;transform:none;}
-.btn-retry{margin-top:.45rem;padding:.5rem 1.1rem;border-radius:999px;background:linear-gradient(90deg,#ff8c69,#ff5f8a);color:#021223;font-weight:700;border:none;cursor:pointer;transition:opacity .18s ease,transform .18s ease;}
-.btn-retry:hover{opacity:.88;transform:translateY(-1px);}
-.btn-retry:disabled{opacity:.55;cursor:not-allowed;transform:none;}
+.btn-start,.btn-retry{margin-top:.45rem;padding:.5rem 1.1rem;border-radius:999px;font-weight:700;border:none;cursor:pointer;transition:opacity .18s ease,transform .18s ease;}
+.btn-start{background:linear-gradient(90deg,#52d2ff,#7fb5ff);color:#021223;}
+.btn-retry{background:linear-gradient(90deg,#ff8c69,#ff5f8a);color:#021223;}
+.btn-start:hover,.btn-retry:hover{opacity:.88;transform:translateY(-1px);}
+.btn-start:disabled,.btn-retry:disabled{opacity:.55;cursor:not-allowed;transform:none;}
 .start-feedback{margin:.45rem 0 0;font-size:.85rem;color:#ff8b8b;}
-.card{background:rgba(8,23,43,0.78);border-radius:16px;padding:1.4rem;border:1px solid rgba(255,255,255,0.05);box-shadow:0 18px 38px rgba(5,16,32,0.35);}
+.vuln-session{display:flex;flex-direction:column;gap:1.6rem;}
+.card{background:rgba(8,23,43,0.8);border-radius:16px;padding:1.4rem;border:1px solid rgba(255,255,255,0.05);box-shadow:0 18px 38px rgba(5,16,32,0.35);}
 .section-header{display:flex;flex-direction:column;gap:.4rem;margin-bottom:1.1rem;}
-.section-header h2{margin:0;color:var(--text);font-size:1.35rem;}
+.section-header h2{margin:0;color:var(--text);font-size:1.3rem;}
 .section-header p{margin:0;color:var(--muted);font-size:.9rem;}
-.session-meta dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;margin:0;}
-.session-meta div{display:flex;flex-direction:column;gap:.25rem;}
+.execution-card{display:flex;flex-direction:column;gap:1.2rem;}
+.execution-status{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:1rem;}
+.status-beacon{display:inline-flex;align-items:center;gap:.5rem;padding:.45rem 1rem;border-radius:999px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);}
+.status-beacon .beacon-dot{width:.7rem;height:.7rem;border-radius:50%;background:#7fb5ff;box-shadow:0 0 8px rgba(127,181,255,0.6);}
+.status-beacon.status-running .beacon-dot{background:#7fb5ff;}
+.status-beacon.status-completed .beacon-dot{background:#5ddb9d;box-shadow:0 0 10px rgba(93,219,157,0.65);}
+.status-beacon.status-failed .beacon-dot{background:#ff7b7b;box-shadow:0 0 10px rgba(255,123,123,0.65);}
+.status-beacon.status-canceled .beacon-dot{background:#ffc56d;}
+.beacon-label{font-weight:600;color:var(--text);}
+.execution-meta span{font-size:1.05rem;font-weight:600;color:var(--text);}
+.execution-meta small{display:block;margin-top:.25rem;font-size:.82rem;color:var(--muted);}
+.execution-progress{display:flex;flex-direction:column;gap:.6rem;}
+.progress-bar{width:100%;height:.5rem;border-radius:999px;background:rgba(255,255,255,0.08);overflow:hidden;}
+.progress-bar span{display:block;height:100%;background:linear-gradient(90deg,#7fb5ff,#52d2ff);}
+.progress-summary{display:flex;align-items:center;justify-content:space-between;font-size:.9rem;color:var(--muted);}
+.progress-value{font-size:1.4rem;font-weight:700;color:#8bc5ff;}
+.execution-console{display:flex;flex-direction:column;gap:.6rem;}
+.console-header{font-weight:600;color:var(--text);}
+.console-body{background:rgba(0,0,0,0.45);border-radius:10px;padding:1rem;max-height:240px;overflow:auto;}
+.console-output{margin:0;font-family:"Fira Code",monospace;font-size:.78rem;color:#dceeff;white-space:pre-wrap;word-break:break-word;}
+.empty{padding:1rem;background:rgba(255,255,255,0.02);border-radius:10px;color:var(--muted);}
+.session-meta dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin:0;}
 .session-meta dt{font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
 .session-meta dd{margin:0;color:var(--text);font-weight:600;}
-.session-meta .notes dd{font-weight:400;color:var(--muted);} 
+.session-meta .notes dd{font-weight:400;color:var(--muted);}
 .session-meta .notes.error dd{color:#ffb3b3;}
-.metrics-grid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;}
-.metrics-grid li{display:flex;flex-direction:column;gap:.25rem;padding:1rem;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);} 
+.metrics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;}
+.metric-card{display:flex;flex-direction:column;gap:.25rem;padding:1rem;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);}
 .metric-value{font-size:1.6rem;font-weight:700;color:#8bc5ff;}
 .metric-label{font-size:.85rem;color:var(--muted);}
-.insights-block{margin-top:1.2rem;display:flex;flex-direction:column;gap:.6rem;}
+.metric-note{font-size:.78rem;color:var(--muted);}
 .insights-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.6rem;}
 .insight{padding:.75rem 1rem;border-radius:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);}
-.insight-info{border-color:rgba(127,181,255,0.25);} 
-.insight-success{border-color:rgba(118,221,174,0.25);} 
-.insight-warning{border-color:rgba(255,214,165,0.3);} 
-.insight-error{border-color:rgba(255,132,132,0.35);} 
+.insight-info{border-color:rgba(127,181,255,0.25);}
+.insight-success{border-color:rgba(118,221,174,0.25);}
+.insight-warning{border-color:rgba(255,214,165,0.3);}
+.insight-error{border-color:rgba(255,132,132,0.35);}
 .tasks-table{width:100%;border-collapse:collapse;font-size:.92rem;}
-.tasks-table th,.tasks-table td{padding:.55rem .75rem;border-bottom:1px solid rgba(255,255,255,0.05);text-align:left;}
+.tasks-table th,.tasks-table td{padding:.6rem .8rem;border-bottom:1px solid rgba(255,255,255,0.06);text-align:left;}
 .tasks-table th{font-weight:600;color:var(--muted);text-transform:uppercase;font-size:.75rem;letter-spacing:.06em;}
-.progress-bar{width:100%;height:.5rem;border-radius:999px;background:rgba(255,255,255,0.08);overflow:hidden;}
-.progress-bar span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#7fb5ff,#52d2ff);}
-.tasks-table .muted{font-size:.8rem;color:var(--muted);} 
+.tasks-table .muted{font-size:.8rem;color:var(--muted);}
 .task-output details summary{cursor:pointer;color:#8bc5ff;font-weight:600;}
 .task-output pre{margin:.6rem 0 0;background:rgba(0,0,0,0.45);padding:.8rem;border-radius:8px;max-height:320px;overflow:auto;font-family:"Fira Code",monospace;font-size:.78rem;color:#e8f2ff;}
 .findings-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1rem;}
-.findings-list li{padding:1rem 1.2rem;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);box-shadow:0 10px 24px rgba(5,16,32,0.18);} 
+.findings-list li{padding:1rem 1.2rem;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);box-shadow:0 10px 24px rgba(5,16,32,0.18);}
 .finding-head{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;}
 .badge{display:inline-flex;align-items:center;gap:.3rem;padding:.2rem .6rem;border-radius:999px;font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;}
 .badge.severity-critical{background:rgba(255,86,86,0.15);color:#ffb3b3;}
@@ -234,114 +331,617 @@
 .badge.status-resolved{background:rgba(118,221,174,0.18);color:#daf7e7;}
 .badge.cve{background:rgba(127,181,255,0.18);color:#e0f1ff;font-weight:600;}
 .badge.score{background:rgba(255,255,255,0.1);color:#f6fbff;}
-.findings-list h3{margin:.2rem 0;font-size:1.1rem;color:var(--text);} 
-.findings-list p{margin:0 0 .6rem;font-size:.9rem;color:var(--muted);} 
+.findings-list h3{margin:.2rem 0;font-size:1.1rem;color:var(--text);}
+.findings-list p{margin:0 0 .6rem;font-size:.9rem;color:var(--muted);}
 .finding-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.6rem;}
-.finding-meta div{display:flex;flex-direction:column;gap:.15rem;font-size:.8rem;color:var(--muted);} 
-.finding-meta dt{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);} 
+.finding-meta div{display:flex;flex-direction:column;gap:.15rem;font-size:.8rem;color:var(--muted);}
+.finding-meta dt{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
 .finding-meta dd{margin:0;color:var(--text);font-weight:600;}
-.raw-data summary{cursor:pointer;color:#8bc5ff;font-weight:600;}
-.raw-data pre{margin:.6rem 0 0;background:rgba(0,0,0,0.45);padding:.8rem;border-radius:8px;max-height:360px;overflow:auto;font-family:"Fira Code",monospace;font-size:.78rem;color:#e8f2ff;}
-.empty{padding:1rem;background:rgba(255,255,255,0.02);border-radius:10px;color:var(--muted);}
+.reference-list{display:flex;flex-wrap:wrap;gap:.45rem;}
+.reference-list a{font-size:.78rem;color:#8bc5ff;text-decoration:none;background:rgba(76,148,255,0.18);padding:.28rem .6rem;border-radius:999px;border:1px solid rgba(76,148,255,0.28);}
+.reference-list a:hover{background:rgba(76,148,255,0.24);}
+.logs-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.75rem;max-height:360px;overflow:auto;}
+.log-entry{padding:.9rem 1.1rem;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);}
+.log-entry header{display:flex;justify-content:space-between;margin-bottom:.45rem;font-size:.8rem;color:var(--muted);}
+.log-entry footer{display:flex;justify-content:space-between;margin-top:.45rem;font-size:.76rem;color:var(--muted);}
+.severity{display:inline-flex;align-items:center;gap:.35rem;padding:.18rem .55rem;border-radius:999px;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;}
+.severity-info{background:rgba(127,181,255,0.18);color:#d5ecff;}
+.severity-warning{background:rgba(255,214,165,0.28);color:#ffe0b2;}
+.severity-error{background:rgba(255,132,132,0.35);color:#ffd5d5;}
+.severity-critical{background:rgba(255,86,86,0.3);color:#ffd0d0;}
+.toast-container{position:fixed;top:1.5rem;right:1.5rem;display:flex;flex-direction:column;gap:.6rem;z-index:1200;}
+.toast{background:rgba(8,23,43,0.92);border-radius:12px;padding:1rem 1.2rem;border:1px solid rgba(255,255,255,0.08);box-shadow:0 14px 36px rgba(5,16,32,0.4);min-width:240px;}
+.toast h3{margin:0 0 .4rem;font-size:1rem;color:var(--text);}
+.toast p{margin:0;font-size:.88rem;color:var(--muted);}
+.toast.tone-success{border-color:rgba(118,221,174,0.45);}
+.toast.tone-error{border-color:rgba(255,132,132,0.45);}
+.hidden{display:none !important;}
 .inline-link{color:#8bc5ff;text-decoration:none;font-weight:600;}
 .inline-link:hover{color:#bfe0ff;}
 @media (max-width:960px){
   .session-status{align-items:flex-start;}
+  .execution-status{flex-direction:column;align-items:flex-start;}
+  .progress-summary{flex-direction:column;align-items:flex-start;gap:.35rem;}
 }
-
+@media (max-width:900px){
+  .page-heading{flex-direction:column;align-items:flex-start;}
+  .logs-list{max-height:none;}
+}
+@media (max-width:720px){
+  .metrics-grid{grid-template-columns:repeat(auto-fit,minmax(160px,1fr));}
+}
 </style>
 
 <script>
-(function(){
-  function getCsrfToken(){
-    if(typeof window.getCookie === 'function'){
-      return window.getCookie('csrftoken');
+document.addEventListener("DOMContentLoaded", () => {
+  const root = document.getElementById("session-root");
+  if (!root) return;
+
+  const statusPill = document.getElementById("session-status-pill");
+  const liveIndicator = document.getElementById("live-indicator");
+  const executionCard = document.getElementById("execution-card");
+  const executionStatusBeacon = document.getElementById("execution-status-beacon");
+  const executionStatusLabel = document.getElementById("execution-status-label");
+  const executionTaskLabel = document.getElementById("execution-task-label");
+  const executionProgressBar = document.getElementById("execution-progress-bar");
+  const executionProgressValue = document.getElementById("execution-progress-value");
+  const executionProgressDetail = document.getElementById("execution-progress-detail");
+  const executionTimeIndicator = document.getElementById("execution-time-indicator");
+  const liveConsole = document.getElementById("live-console");
+  const liveConsoleEmpty = document.getElementById("live-console-empty");
+  const consoleBody = document.getElementById("console-body");
+  const sessionStartedAt = document.getElementById("session-started-at");
+  const sessionFinishedAt = document.getElementById("session-finished-at");
+  const sessionNotes = document.getElementById("session-notes");
+  const sessionLastError = document.getElementById("session-last-error");
+  const metricsGrid = document.getElementById("metrics-grid");
+  const insightsList = document.getElementById("insights-list");
+  const insightsEmpty = document.getElementById("insights-empty");
+  const tasksBody = document.getElementById("tasks-body");
+  const tasksEmpty = document.getElementById("tasks-empty");
+  const findingsList = document.getElementById("findings-list");
+  const findingsEmpty = document.getElementById("findings-empty");
+  const logsList = document.getElementById("logs-list");
+  const logsEmpty = document.getElementById("logs-empty");
+  const toastContainer = document.getElementById("toast-container");
+
+  const statusUrl = root.dataset.apiStatusUrl || "";
+  const logsUrl = root.dataset.apiLogsUrl || "";
+  let latestLogCursor = root.dataset.latestLogCursor || null;
+  let previousStatus = root.dataset.status || "";
+  let statusTimer = null;
+  let isFetchingLogs = false;
+  let consoleLines = [];
+  const terminalStatuses = new Set(["completed", "failed", "canceled"]);
+  const STATUS_CLASSES = ["status-running", "status-completed", "status-failed", "status-canceled", "status-ready", "status-planned"];
+
+  function parseBootstrap() {
+    const bootstrapEl = document.getElementById("session-bootstrap");
+    if (!bootstrapEl || !bootstrapEl.textContent) return null;
+    try {
+      return JSON.parse(bootstrapEl.textContent);
+    } catch (error) {
+      console.warn("Falha ao interpretar bootstrap da sessão", error);
+      return null;
     }
-    const entry = document.cookie.split('; ').find(part => part.startsWith('csrftoken='));
-    return entry ? decodeURIComponent(entry.split('=')[1]) : '';
   }
 
-  const startBtn = document.querySelector('[data-action="start-session"]');
-  if(startBtn){
-    const feedbackEl = document.getElementById('session-start-feedback');
+  function scheduleStatusPoll(delay = 2500) {
+    if (!statusUrl) return;
+    if (statusTimer) window.clearTimeout(statusTimer);
+    statusTimer = window.setTimeout(pollStatus, Math.max(500, delay));
+  }
 
-    startBtn.addEventListener('click', async () => {
-      const url = startBtn.dataset.startUrl;
-      const originalText = startBtn.textContent;
-      startBtn.disabled = true;
-      startBtn.textContent = 'Iniciando...';
-      if(feedbackEl){
-        feedbackEl.hidden = true;
-        feedbackEl.textContent = '';
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function formatDate(isoString) {
+    if (!isoString) return "";
+    const date = new Date(isoString);
+    if (Number.isNaN(date.getTime())) return isoString;
+    return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "medium" }).format(date);
+  }
+
+  function formatDateShort(isoString) {
+    if (!isoString) return "";
+    const date = new Date(isoString);
+    if (Number.isNaN(date.getTime())) return "";
+    return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(date);
+  }
+
+  function setElementText(element, value, fallback = "") {
+    if (!element) return;
+    const text = value && String(value).trim() ? String(value) : fallback || element.dataset.emptyText || "";
+    element.textContent = text;
+  }
+
+  function updateSessionOverview(sessionPayload) {
+    if (!sessionPayload) return;
+    const startedAt = formatDateShort(sessionPayload.started_at || sessionPayload.created_at);
+    const finishedAt = formatDateShort(sessionPayload.finished_at);
+    setElementText(sessionStartedAt, startedAt, sessionStartedAt?.dataset.emptyText || "—");
+    setElementText(sessionFinishedAt, finishedAt, sessionFinishedAt?.dataset.emptyText || "—");
+    setElementText(sessionNotes, sessionPayload.notes, sessionNotes?.dataset.emptyText || "");
+    setElementText(sessionLastError, sessionPayload.last_error, sessionLastError?.dataset.emptyText || "");
+
+    if (executionTimeIndicator) {
+      if (finishedAt) {
+        executionTimeIndicator.textContent = `Finalizada em ${finishedAt}`;
+      } else if (startedAt) {
+        executionTimeIndicator.textContent = `Iniciada em ${startedAt}`;
+      } else {
+        executionTimeIndicator.textContent = "Sessão ainda não iniciada.";
       }
+    }
+  }
 
-      try{
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCsrfToken(),
-          },
-          body: '{}',
+  function updateStatusVisual(sessionPayload) {
+    if (!sessionPayload) return;
+    const status = sessionPayload.status;
+    const statusDisplay = sessionPayload.status_display;
+
+    if (statusPill) {
+      statusPill.textContent = statusDisplay;
+      statusPill.className = `status-pill status-${status}`;
+    }
+
+    if (executionStatusBeacon) {
+      STATUS_CLASSES.forEach(cls => executionStatusBeacon.classList.remove(cls));
+      executionStatusBeacon.classList.add(`status-${status}`);
+    }
+
+    if (executionStatusLabel) {
+      executionStatusLabel.textContent = statusDisplay;
+    }
+
+    if (liveIndicator) {
+      if (terminalStatuses.has(status)) {
+        liveIndicator.textContent = status === "completed" ? "Sessão concluída." : "Sessão finalizada.";
+        liveIndicator.classList.remove("hidden");
+      } else {
+        liveIndicator.textContent = "Atualizando em tempo real…";
+        liveIndicator.classList.remove("hidden");
+      }
+    }
+  }
+
+  function updateProgress(sessionPayload, tasks) {
+    if (!executionProgressBar || !executionProgressValue || !executionProgressDetail) return;
+    const total = sessionPayload.total_tasks_count ?? tasks.length ?? 0;
+    const completed = sessionPayload.completed_tasks_count ?? tasks.filter(task => task.status === "completed").length;
+    const percent = Number(sessionPayload.overall_progress_percent ?? 0);
+    const clamped = Math.max(0, Math.min(100, Math.round(percent)));
+    executionProgressBar.querySelector("span").style.width = `${clamped}%`;
+    executionProgressValue.textContent = `${clamped}%`;
+    executionProgressDetail.textContent = `${completed} de ${total} etapas concluídas`;
+    if (executionCard) {
+      executionCard.dataset.totalTasks = String(total);
+    }
+  }
+
+  function resolveDescriptor(sessionPayload, tasks) {
+    if (!executionTaskLabel) return;
+    const status = sessionPayload?.status || "";
+    const running = tasks.find(task => task.status === "running");
+    const failing = tasks.find(task => task.status === "failed");
+    const pending = tasks.find(task => ["pending", "queued"].includes(task.status));
+    const completed = tasks.filter(task => task.status === "completed");
+    let descriptor = "Aguardando atualização…";
+
+    if (running) {
+      const context = running.script_name || running.tool_name;
+      descriptor = context ? `${running.name} • ${context}` : running.name;
+    } else if (status === "failed" && failing) {
+      descriptor = `Falha em ${failing.name}`;
+    } else if (pending) {
+      descriptor = `Próxima etapa: ${pending.name}`;
+    } else if (status === "completed" && completed.length) {
+      descriptor = `Última etapa concluída: ${completed[completed.length - 1].name}`;
+    } else if (status === "canceled") {
+      descriptor = "Sessão cancelada.";
+    } else if (!tasks.length && terminalStatuses.has(status)) {
+      descriptor = "Sessão finalizada.";
+    }
+
+    executionTaskLabel.textContent = descriptor;
+  }
+
+  function resetConsole() {
+    consoleLines = [];
+    if (liveConsole) {
+      liveConsole.textContent = "";
+    }
+    updateConsoleEmpty();
+  }
+
+  function updateConsoleEmpty() {
+    if (!liveConsole || !liveConsoleEmpty) return;
+    const hasLines = consoleLines.length > 0;
+    liveConsole.classList.toggle("hidden", !hasLines);
+    liveConsoleEmpty.classList.toggle("hidden", hasLines);
+  }
+
+  function appendConsoleLine(logEntry) {
+    if (!liveConsole) return;
+    const parts = [];
+    if (logEntry.timestamp_display) parts.push(`[${logEntry.timestamp_display}]`);
+    if (logEntry.severity) parts.push(`[${logEntry.severity}]`);
+    if (logEntry.component) parts.push(`[${logEntry.component}]`);
+    if (logEntry.message) parts.push(logEntry.message);
+    if (!parts.length) return;
+    consoleLines.push(parts.join(" "));
+    if (consoleLines.length > 400) {
+      consoleLines = consoleLines.slice(-400);
+    }
+    liveConsole.textContent = consoleLines.join("\n");
+    updateConsoleEmpty();
+    if (consoleBody) {
+      consoleBody.scrollTop = consoleBody.scrollHeight;
+    }
+  }
+
+  function renderMetrics(metrics = [], insights = []) {
+    if (metricsGrid) {
+      metricsGrid.innerHTML = "";
+      if (Array.isArray(metrics) && metrics.length) {
+        metrics.forEach(metric => {
+          const card = document.createElement("div");
+          card.className = "metric-card";
+          const value = metric.value ?? "—";
+          const label = metric.label ?? "Métrica";
+          const note = metric.note ?? "";
+          card.innerHTML = `
+            <span class="metric-value">${escapeHtml(value)}</span>
+            <span class="metric-label">${escapeHtml(label)}</span>
+            ${note ? `<span class="metric-note">${escapeHtml(note)}</span>` : ""}
+          `;
+          metricsGrid.appendChild(card);
         });
-        const data = await response.json().catch(() => ({}));
-        if(!response.ok){
-          throw new Error(data.error || 'Falha ao iniciar a sessão.');
-        }
-        window.location.reload();
-      } catch(error){
-        startBtn.disabled = false;
-        startBtn.textContent = originalText;
-        if(feedbackEl){
-          feedbackEl.textContent = error.message;
-          feedbackEl.hidden = false;
-        } else {
-          alert(error.message);
-        }
+      } else {
+        const placeholder = document.createElement("div");
+        placeholder.className = "empty";
+        placeholder.textContent = metricsGrid.dataset.emptyText || "Nenhuma métrica disponível.";
+        metricsGrid.appendChild(placeholder);
       }
-    });
-  }
+    }
 
-  const retryBtn = document.querySelector('[data-action="retry-greenbone"]');
-  if(retryBtn){
-    const feedbackEl = document.getElementById('greenbone-retry-feedback');
-
-    retryBtn.addEventListener('click', async () => {
-      const url = retryBtn.dataset.retryUrl;
-      const originalText = retryBtn.textContent;
-      retryBtn.disabled = true;
-      retryBtn.textContent = 'Reiniciando...';
-      if(feedbackEl){
-        feedbackEl.hidden = true;
-        feedbackEl.textContent = '';
-      }
-
-      try{
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCsrfToken(),
-          },
-          body: JSON.stringify({step: 'greenbone'}),
+    if (insightsList && insightsEmpty) {
+      insightsList.innerHTML = "";
+      const hasInsights = Array.isArray(insights) && insights.length > 0;
+      insightsList.classList.toggle("hidden", !hasInsights);
+      insightsEmpty.classList.toggle("hidden", hasInsights);
+      if (hasInsights) {
+        insights.forEach(insight => {
+          const li = document.createElement("li");
+          const tone = insight.level || "info";
+          li.className = `insight insight-${escapeHtml(tone)}`;
+          li.textContent = insight.message || "Insight registrado.";
+          insightsList.appendChild(li);
         });
-        const data = await response.json().catch(() => ({}));
-        if(!response.ok){
-          throw new Error(data.error || 'Falha ao reiniciar o Greenbone.');
-        }
-        window.location.reload();
-      } catch(error){
-        retryBtn.disabled = false;
-        retryBtn.textContent = originalText;
-        if(feedbackEl){
-          feedbackEl.textContent = error.message;
-          feedbackEl.hidden = false;
-        } else {
-          alert(error.message);
+      } else {
+        insightsEmpty.textContent = insightsEmpty.dataset.emptyText || "Nenhum insight registrado.";
+      }
+    }
+  }
+
+  function renderTasks(tasks = []) {
+    if (!tasksBody || !tasksEmpty) return;
+    tasksBody.innerHTML = "";
+    if (Array.isArray(tasks) && tasks.length) {
+      tasks.forEach((task, index) => {
+        const tr = document.createElement("tr");
+        tr.dataset.taskId = task.id;
+        tr.innerHTML = `
+          <td>${index + 1}</td>
+          <td>
+            <strong>${escapeHtml(task.name)}</strong>
+            <span class="muted">${escapeHtml(task.kind_display || "")}</span>
+          </td>
+          <td>${escapeHtml(task.tool_name || "—")}</td>
+          <td>${escapeHtml(task.script_name || "—")}</td>
+          <td><span class="status-pill status-${escapeHtml(task.status)}">${escapeHtml(task.status_display || task.status)}</span></td>
+          <td>
+            <div class="progress-bar" data-progress="${escapeHtml(task.progress_percent ?? 0)}"><span style="width:${task.progress_percent ?? 0}%"></span></div>
+            <small class="muted">${escapeHtml(task.progress_percent ?? 0)}%</small>
+          </td>
+          <td>${escapeHtml(task.started_at_display || "—")}</td>
+          <td>${escapeHtml(task.finished_at_display || "—")}</td>
+          <td class="task-output">
+            ${task.stdout ? `<details><summary>Ver saída</summary><pre>${escapeHtml(task.stdout)}</pre></details>` : '<span class="muted">Sem saída</span>'}
+          </td>
+        `;
+        tasksBody.appendChild(tr);
+      });
+    }
+    tasksEmpty.classList.toggle("hidden", Array.isArray(tasks) && tasks.length > 0);
+  }
+
+  function renderFindings(findings = []) {
+    if (!findingsList || !findingsEmpty) return;
+    findingsList.innerHTML = "";
+    if (Array.isArray(findings) && findings.length) {
+      findings.forEach(finding => {
+        const references = Array.isArray(finding.references) ? finding.references : [];
+        const cveBadge = finding.primary_cve ? `<span class="badge cve">${escapeHtml(finding.primary_cve)}</span>` : "";
+        const cvssBadge = finding.cvss_display ? `<span class="badge score">CVSS ${escapeHtml(finding.cvss_display)}</span>` : "";
+        const hostBlock = finding.host ? `<div><dt>Host</dt><dd>${escapeHtml(finding.host)}</dd></div>` : "";
+        const serviceBlock = finding.service ? `<div><dt>Serviço</dt><dd>${escapeHtml(finding.service)}</dd></div>` : "";
+        const portBlock = finding.port_display ? `<div><dt>Porta</dt><dd>${escapeHtml(finding.port_display)}</dd></div>` : "";
+        const detectedBlock = finding.detected_at_display ? `<div><dt>Detectada</dt><dd>${escapeHtml(finding.detected_at_display)}</dd></div>` : "";
+        const taskBlock = finding.source_task && finding.source_task.name ? `<div><dt>Etapa</dt><dd>${escapeHtml(finding.source_task.name)}</dd></div>` : "";
+        const referencesBlock = references.length
+          ? `<div class="reference-list">${references.map((ref, idx) => `<a href="${escapeHtml(ref)}" target="_blank" rel="noopener noreferrer">Referência ${idx + 1}</a>`).join("")}</div>`
+          : "";
+        const cvesExtra = Array.isArray(finding.cves) && finding.cves.length > 1
+          ? `<p class="muted cve-list">CVEs correlacionadas: ${finding.cves.map(escapeHtml).join(", ")}</p>`
+          : "";
+        const li = document.createElement("li");
+        li.innerHTML = `
+          <div class="finding-head">
+            <span class="badge severity-${escapeHtml(finding.severity)}">${escapeHtml(finding.severity_display || finding.severity)}</span>
+            <span class="badge status-${escapeHtml(finding.status)}">${escapeHtml(finding.status_display || finding.status)}</span>
+            ${cveBadge}
+            ${cvssBadge}
+          </div>
+          <h3>${escapeHtml(finding.title || "Achado")}</h3>
+          <p class="muted">${escapeHtml(finding.summary || "Sem descrição adicional.")}</p>
+          <dl class="finding-meta">
+            ${hostBlock}${serviceBlock}${portBlock}${detectedBlock}${taskBlock}
+          </dl>
+          ${cvesExtra}
+          ${referencesBlock}
+        `;
+        findingsList.appendChild(li);
+      });
+    }
+    findingsEmpty.classList.toggle("hidden", Array.isArray(findings) && findings.length > 0);
+  }
+
+  function renderLogs(logs = [], reset = false) {
+    if (!logsList || !logsEmpty) return;
+    if (reset) {
+      logsList.innerHTML = "";
+      resetConsole();
+    }
+    if (Array.isArray(logs) && logs.length) {
+      const fragment = document.createDocumentFragment();
+      logs.forEach(log => {
+        const li = document.createElement("li");
+        li.className = "log-entry";
+        li.innerHTML = `
+          <header>
+            <span class="severity severity-${escapeHtml((log.severity || "info").toLowerCase())}">${escapeHtml(log.severity || "INFO")}</span>
+            <span>${escapeHtml(log.timestamp_display || "")}</span>
+          </header>
+          <div class="log-message">${escapeHtml(log.message || "")}</div>
+          <footer>
+            <span>${escapeHtml(log.event_type || "")}</span>
+            <span>${escapeHtml(log.component || "")}</span>
+          </footer>
+        `;
+        fragment.appendChild(li);
+        appendConsoleLine(log);
+      });
+      logsList.appendChild(fragment);
+      if (logsList.children.length > 200) {
+        while (logsList.children.length > 200) {
+          logsList.removeChild(logsList.firstChild);
         }
       }
-    });
+      logsList.scrollTop = logsList.scrollHeight;
+    }
+    logsEmpty.classList.toggle("hidden", logsList.children.length > 0);
   }
-})();
+
+  function applyState(state) {
+    if (!state) return;
+    updateSessionOverview(state.session);
+    updateStatusVisual(state.session);
+    updateProgress(state.session, state.tasks || []);
+    resolveDescriptor(state.session, state.tasks || []);
+    renderMetrics(state.overview_metrics || [], state.report_insights || []);
+    renderTasks(state.tasks || []);
+    renderFindings(state.findings || []);
+  }
+
+  function showToast({ title, message, tone = "info", timeout = 5000 }) {
+    if (!toastContainer) return;
+    const toast = document.createElement("div");
+    toast.className = `toast tone-${tone}`;
+    toast.innerHTML = `
+      <h3>${escapeHtml(title)}</h3>
+      <p>${escapeHtml(message)}</p>
+    `;
+    toastContainer.appendChild(toast);
+    window.setTimeout(() => {
+      toast.classList.add("fade-out");
+      window.setTimeout(() => toast.remove(), 400);
+    }, timeout);
+  }
+
+  function handleStatusTransition(currentStatus, statusDisplay) {
+    if (previousStatus !== currentStatus && terminalStatuses.has(currentStatus)) {
+      const tone = currentStatus === "completed" ? "success" : "error";
+      showToast({
+        title: currentStatus === "completed" ? "Sessão concluída" : "Sessão encerrada",
+        message: statusDisplay || "A execução foi finalizada.",
+        tone,
+      });
+    }
+    previousStatus = currentStatus;
+  }
+
+  async function pollStatus() {
+    if (!statusUrl) return;
+    try {
+      const response = await fetch(statusUrl, { headers: { "X-Requested-With": "XMLHttpRequest", "Cache-Control": "no-cache" } });
+      if (!response.ok) throw new Error("Falha ao consultar status da sessão.");
+      const payload = await response.json();
+      applyState(payload);
+      handleStatusTransition(payload.session?.status, payload.session?.status_display);
+      if (!terminalStatuses.has(payload.session?.status)) {
+        scheduleStatusPoll(2500);
+      }
+      if (logsUrl) fetchLogs();
+    } catch (error) {
+      console.error("Erro ao atualizar sessão", error);
+      if (liveIndicator) {
+        liveIndicator.textContent = "Falha ao atualizar automaticamente.";
+        liveIndicator.classList.remove("hidden");
+      }
+      scheduleStatusPoll(5000);
+    }
+  }
+
+  async function fetchLogs(initial = false) {
+    if (!logsUrl || isFetchingLogs) return;
+    isFetchingLogs = true;
+    try {
+      const url = new URL(logsUrl, window.location.origin);
+      if (initial && latestLogCursor) {
+        url.searchParams.set("since", latestLogCursor);
+      } else if (!initial && latestLogCursor) {
+        url.searchParams.set("cursor", latestLogCursor);
+      }
+      url.searchParams.set("limit", initial ? "100" : "50");
+      const response = await fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" } });
+      if (!response.ok) throw new Error("Falha ao buscar logs.");
+      const payload = await response.json();
+      const logs = payload.results || [];
+      if (logs.length) {
+        renderLogs(logs, initial && !consoleLines.length);
+        latestLogCursor = logs[logs.length - 1].timestamp || latestLogCursor;
+      } else if (initial && !consoleLines.length) {
+        updateConsoleEmpty();
+      }
+      logsEmpty?.classList.toggle("hidden", logsList?.children.length > 0);
+    } catch (error) {
+      console.error("Erro ao buscar logs", error);
+    } finally {
+      isFetchingLogs = false;
+    }
+  }
+
+  function setupActionButtons() {
+    function getCsrfToken() {
+      if (typeof window.getCookie === "function") {
+        return window.getCookie("csrftoken");
+      }
+      const entry = document.cookie.split("; ").find(part => part.startsWith("csrftoken="));
+      return entry ? decodeURIComponent(entry.split("=")[1]) : "";
+    }
+
+    const startBtn = document.querySelector('[data-action="start-session"]');
+    if (startBtn) {
+      const feedbackEl = document.getElementById("session-start-feedback");
+      startBtn.addEventListener("click", async () => {
+        const url = startBtn.dataset.startUrl;
+        if (!url) return;
+        const originalText = startBtn.textContent;
+        startBtn.disabled = true;
+        startBtn.textContent = "Iniciando...";
+        if (feedbackEl) {
+          feedbackEl.hidden = true;
+          feedbackEl.textContent = "";
+        }
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRFToken": getCsrfToken(),
+              "X-Requested-With": "XMLHttpRequest",
+            },
+            body: "{}",
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(data.error || "Falha ao iniciar a sessão.");
+          }
+          window.location.reload();
+        } catch (error) {
+          startBtn.disabled = false;
+          startBtn.textContent = originalText;
+          if (feedbackEl) {
+            feedbackEl.textContent = error.message;
+            feedbackEl.hidden = false;
+          } else {
+            alert(error.message);
+          }
+        }
+      });
+    }
+
+    const retryBtn = document.querySelector('[data-action="retry-greenbone"]');
+    if (retryBtn) {
+      const feedbackEl = document.getElementById("greenbone-retry-feedback");
+      retryBtn.addEventListener("click", async () => {
+        const url = retryBtn.dataset.retryUrl;
+        if (!url) return;
+        const originalText = retryBtn.textContent;
+        retryBtn.disabled = true;
+        retryBtn.textContent = "Reiniciando...";
+        if (feedbackEl) {
+          feedbackEl.hidden = true;
+          feedbackEl.textContent = "";
+        }
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRFToken": getCsrfToken(),
+              "X-Requested-With": "XMLHttpRequest",
+            },
+            body: JSON.stringify({ step: "greenbone" }),
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(data.error || "Falha ao reiniciar o Greenbone.");
+          }
+          window.location.reload();
+        } catch (error) {
+          retryBtn.disabled = false;
+          retryBtn.textContent = originalText;
+          if (feedbackEl) {
+            feedbackEl.textContent = error.message;
+            feedbackEl.hidden = false;
+          } else {
+            alert(error.message);
+          }
+        }
+      });
+    }
+  }
+
+  const bootstrapData = parseBootstrap();
+  if (bootstrapData) {
+    applyState(bootstrapData);
+    renderLogs(bootstrapData.logs || [], true);
+    if (bootstrapData.latest_log_cursor) {
+      latestLogCursor = bootstrapData.latest_log_cursor;
+    } else if (bootstrapData.logs && bootstrapData.logs.length) {
+      latestLogCursor = bootstrapData.logs[bootstrapData.logs.length - 1].timestamp;
+    }
+    handleStatusTransition(bootstrapData.session?.status, bootstrapData.session?.status_display);
+  }
+
+  const shouldPoll = statusUrl && !(bootstrapData?.session && terminalStatuses.has(bootstrapData.session.status));
+  if (shouldPoll) {
+    scheduleStatusPoll(2500);
+  }
+
+  if (logsUrl) {
+    fetchLogs(true);
+  }
+
+  setupActionButtons();
+});
 </script>
 {% endblock %}
