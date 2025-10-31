@@ -1,4 +1,5 @@
 import json
+import re
 
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -77,9 +78,112 @@ def _finding_queryset(project, project_ids: list[str]):
 	return qs
 
 
+VULNERS_TOKEN_SPLIT = re.compile(r"\s{2,}|\t")
+VULNERS_URL_PATTERN = re.compile(r"https?://[^\s]+", re.IGNORECASE)
+SUMMARY_COLLAPSE_THRESHOLD = 220
+
+
 def _load_dashboard_findings(project, project_ids: list[str], *, limit: int = 6):
 	qs = _finding_queryset(project, project_ids)
-	return list(qs.order_by("-detected_at", "-created_at")[:limit])
+	findings = list(qs.order_by("-detected_at", "-created_at")[:limit])
+	for finding in findings:
+		setattr(finding, "vulners_entries", _extract_vulners_entries(getattr(finding, "data", {})))
+		summary_info = _prepare_dashboard_summary(getattr(finding, "summary", "") or "")
+		setattr(finding, "summary_preview", summary_info["preview"])
+		setattr(finding, "summary_full", summary_info["full"])
+		setattr(finding, "summary_collapsible", summary_info["collapsible"])
+	return findings
+
+
+def _prepare_dashboard_summary(summary: str) -> dict:
+	text = (summary or "").strip()
+	if not text:
+		return {"preview": "Sem descrição adicional.", "full": "", "collapsible": False}
+
+	collapse = False
+	if len(text) > SUMMARY_COLLAPSE_THRESHOLD or "http" in text or "\n" in text:
+		collapse = True
+
+	preview = text
+	if collapse:
+		preview = _truncate_summary(text)
+
+	return {
+		"preview": preview,
+		"full": text,
+		"collapsible": collapse,
+	}
+
+
+def _truncate_summary(text: str) -> str:
+	if len(text) <= SUMMARY_COLLAPSE_THRESHOLD:
+		return text
+	cutoff = SUMMARY_COLLAPSE_THRESHOLD
+	newline_pos = text.find("\n")
+	if newline_pos != -1 and newline_pos < cutoff:
+		return text[:newline_pos].strip()
+	for delimiter in (". ", "; ", " "):
+		pos = text.find(delimiter, 160, cutoff)
+		if pos != -1:
+			return (text[: pos + len(delimiter.strip())].strip()) + "…"
+	return text[:cutoff].rstrip() + "…"
+
+
+def _extract_vulners_entries(data) -> list[dict]:
+	if not isinstance(data, dict):
+		return []
+
+	values = data.get("values")
+	if not isinstance(values, dict):
+		return []
+
+	raw_entries = values.get("vulners")
+	if not raw_entries:
+		return []
+
+	if not isinstance(raw_entries, (list, tuple)):
+		raw_entries = [raw_entries]
+
+	entries: list[dict] = []
+
+	for raw in raw_entries:
+		text = str(raw or "").strip()
+		if not text:
+			continue
+
+		tokens = [token.strip() for token in VULNERS_TOKEN_SPLIT.split(text) if token and token.strip()]
+		url_match = VULNERS_URL_PATTERN.search(text)
+		url = url_match.group(0).rstrip(")]") if url_match else ""
+
+		score = None
+		tags: list[str] = []
+
+		for token in tokens[1:]:
+			normalized = token.replace(",", ".")
+			if score is None:
+				try:
+					score = float(normalized)
+					continue
+				except ValueError:
+					pass
+			if token.startswith("http") and not url:
+				url = token
+				continue
+			cleaned_tag = token.strip("*")
+			if cleaned_tag:
+				tags.append(cleaned_tag)
+
+		entry = {
+			"label": tokens[0] if tokens else text,
+			"raw": text,
+			"url": url,
+			"score": score,
+			"tags": tags,
+			"is_context": bool(tokens and tokens[0].lower().startswith("cpe:")),
+		}
+		entries.append(entry)
+
+	return entries
 
 
 def _serialize_session_for_dashboard(session: VulnScanSession) -> dict:
@@ -103,10 +207,15 @@ def _serialize_finding_for_dashboard(finding: VulnerabilityFinding) -> dict:
 	detected_at = finding.detected_at
 	detected_iso = detected_at.isoformat() if detected_at else None
 	detected_display = detected_at.strftime("%d/%m/%Y %H:%M") if detected_at else ""
+	vulners_entries = _extract_vulners_entries(getattr(finding, "data", {}))
+	summary_info = _prepare_dashboard_summary(getattr(finding, "summary", "") or "")
 	return {
 		"id": str(finding.pk),
 		"title": finding.title,
 		"summary": finding.summary,
+		"summary_preview": summary_info["preview"],
+		"summary_collapsible": summary_info["collapsible"],
+		"summary_full": summary_info["full"],
 		"severity": finding.severity,
 		"severity_display": finding.get_severity_display(),
 		"status": finding.status,
@@ -120,6 +229,7 @@ def _serialize_finding_for_dashboard(finding: VulnerabilityFinding) -> dict:
 		"session_detail_url": reverse("arpia_vuln:session_detail", args=[finding.session_id]),
 		"detected_at": detected_iso,
 		"detected_display": detected_display,
+		"vulners": vulners_entries,
 	}
 
 

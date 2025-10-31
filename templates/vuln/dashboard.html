@@ -193,7 +193,7 @@
             {% for session in recent_sessions %}
               <tr>
                 <td>
-                  <a href="{% url 'arpia_vuln:session_detail' session.id %}">{{ session.title }}</a>
+                  <a class="session-link-button" href="{% url 'arpia_vuln:session_detail' session.id %}">{{ session.title }}</a>
                   <span class="ref">#{{ session.reference }}</span>
                 </td>
                 <td><span class="status status-{{ session.status }}">{{ session.get_status_display }}</span></td>
@@ -228,13 +228,54 @@
               {% endif %}
             </div>
             <h3>{{ finding.title }}</h3>
-            <p class="muted">{{ finding.summary|default:"Sem descrição adicional." }}</p>
+            {% if finding.summary_collapsible %}
+              <details class="summary-collapse">
+                <summary>{{ finding.summary_preview }}</summary>
+                <div class="summary-body">
+                  <p class="muted">{{ finding.summary_full|default:finding.summary|linebreaksbr }}</p>
+                </div>
+              </details>
+            {% else %}
+              <p class="muted">{{ finding.summary|default:"Sem descrição adicional." }}</p>
+            {% endif %}
             <dl class="finding-meta">
               {% if finding.host %}<div><dt>Host</dt><dd>{{ finding.host }}</dd></div>{% endif %}
               {% if finding.service %}<div><dt>Serviço</dt><dd>{{ finding.service }}</dd></div>{% endif %}
               {% if finding.port %}<div><dt>Porta</dt><dd>{{ finding.port }} {{ finding.protocol|upper }}</dd></div>{% endif %}
               <div><dt>Registrada</dt><dd>{{ finding.detected_at|date:"d/m/Y H:i" }}</dd></div>
             </dl>
+            {% with vulners=finding.vulners_entries %}
+              {% if vulners %}
+                <details class="vulners-collapse">
+                  <summary>Inteligência Vulners{% if vulners|length > 1 %} ({{ vulners|length }}){% endif %}</summary>
+                  <ul class="vulners-list">
+                    {% for entry in vulners %}
+                      <li class="vulners-item{% if entry.is_context %} is-context{% endif %}">
+                        <div class="vulners-item-head">
+                          <span class="vulners-label">{{ entry.label }}</span>
+                          {% if entry.score is not None %}
+                            <span class="vulners-score">CVSS {{ entry.score|floatformat:1 }}</span>
+                          {% endif %}
+                        </div>
+                        {% if entry.url %}
+                          <a class="vulners-link" href="{{ entry.url }}" target="_blank" rel="noopener noreferrer">{{ entry.url }}</a>
+                        {% endif %}
+                        {% if entry.tags %}
+                          <div class="vulners-tags">
+                            {% for tag in entry.tags %}
+                              <span class="vulners-tag">{{ tag }}</span>
+                            {% endfor %}
+                          </div>
+                        {% endif %}
+                        {% if entry.raw and entry.raw != entry.label %}
+                          <p class="vulners-raw muted">{{ entry.raw }}</p>
+                        {% endif %}
+                      </li>
+                    {% endfor %}
+                  </ul>
+                </details>
+              {% endif %}
+            {% endwith %}
             <a class="inline-link" href="{% url 'arpia_vuln:session_detail' finding.session_id %}">Abrir sessão</a>
           </li>
         {% endfor %}
@@ -388,6 +429,7 @@
       link.href = session.detail_url;
       link.textContent = session.title;
       link.rel = 'noopener';
+      link.className = 'session-link-button';
       titleCell.appendChild(link);
       if (session.reference) {
         const ref = document.createElement('span');
@@ -470,10 +512,7 @@
       title.textContent = finding.title;
       item.appendChild(title);
 
-      const summary = document.createElement('p');
-      summary.className = 'muted';
-      summary.textContent = finding.summary || 'Sem descrição adicional.';
-      item.appendChild(summary);
+      item.appendChild(buildSummaryBlock(finding));
 
       const meta = document.createElement('dl');
       meta.className = 'finding-meta';
@@ -493,6 +532,10 @@
       }
       item.appendChild(meta);
 
+      if (Array.isArray(finding.vulners) && finding.vulners.length) {
+        item.appendChild(buildVulnersDetails(finding.vulners));
+      }
+
       const link = document.createElement('a');
       link.className = 'inline-link';
       link.href = finding.session_detail_url;
@@ -509,6 +552,44 @@
     }
   }
 
+  function buildSummaryBlock(finding) {
+    const hasSummary = typeof finding.summary === 'string' && finding.summary.trim().length;
+    const collapsible = !!finding.summary_collapsible;
+    const preview = finding.summary_preview || finding.summary;
+    const full = hasSummary ? finding.summary : '';
+
+    if (collapsible && full) {
+      const details = document.createElement('details');
+      details.className = 'summary-collapse';
+      const summaryTitle = document.createElement('summary');
+      summaryTitle.textContent = preview || 'Detalhes';
+      details.appendChild(summaryTitle);
+
+      const body = document.createElement('div');
+      body.className = 'summary-body';
+      const paragraph = document.createElement('p');
+      paragraph.className = 'muted';
+      paragraph.innerHTML = escapeHtml(full).replace(/\n/g, '<br>');
+      body.appendChild(paragraph);
+      details.appendChild(body);
+      return details;
+    }
+
+    const paragraph = document.createElement('p');
+    paragraph.className = 'muted';
+    paragraph.textContent = hasSummary ? full : 'Sem descrição adicional.';
+    return paragraph;
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   function buildMetaEntry(label, value) {
     const wrapper = document.createElement('div');
     const dt = document.createElement('dt');
@@ -518,6 +599,87 @@
     wrapper.appendChild(dt);
     wrapper.appendChild(dd);
     return wrapper;
+  }
+
+  function buildVulnersDetails(entries) {
+    const details = document.createElement('details');
+    details.className = 'vulners-collapse';
+    const summary = document.createElement('summary');
+    const label = entries.length > 1 ? `Inteligência Vulners (${entries.length})` : 'Inteligência Vulners';
+    summary.textContent = label;
+    details.appendChild(summary);
+
+    const list = document.createElement('ul');
+    list.className = 'vulners-list';
+
+    entries.forEach((entry) => {
+      if (!entry || (!entry.raw && !entry.label)) {
+        return;
+      }
+      const item = document.createElement('li');
+      item.className = 'vulners-item';
+      if (entry.is_context) {
+        item.classList.add('is-context');
+      }
+
+      const head = document.createElement('div');
+      head.className = 'vulners-item-head';
+      const name = document.createElement('span');
+      name.className = 'vulners-label';
+      name.textContent = entry.label || entry.raw;
+      head.appendChild(name);
+
+      if (entry.score !== null && entry.score !== undefined && !Number.isNaN(entry.score)) {
+        const score = document.createElement('span');
+        score.className = 'vulners-score';
+        score.textContent = `CVSS ${Number(entry.score).toFixed(1)}`;
+        head.appendChild(score);
+      }
+
+      item.appendChild(head);
+
+      if (entry.url) {
+        const anchor = document.createElement('a');
+        anchor.className = 'vulners-link';
+        anchor.href = entry.url;
+        anchor.textContent = entry.url;
+        anchor.target = '_blank';
+        anchor.rel = 'noopener noreferrer';
+        item.appendChild(anchor);
+      }
+
+      if (Array.isArray(entry.tags) && entry.tags.length) {
+        const tagsWrapper = document.createElement('div');
+        tagsWrapper.className = 'vulners-tags';
+        entry.tags.forEach((tag) => {
+          const badge = document.createElement('span');
+          badge.className = 'vulners-tag';
+          badge.textContent = tag;
+          tagsWrapper.appendChild(badge);
+        });
+        item.appendChild(tagsWrapper);
+      }
+
+      if (entry.raw && entry.raw !== entry.label) {
+        const raw = document.createElement('p');
+        raw.className = 'vulners-raw muted';
+        raw.textContent = entry.raw;
+        item.appendChild(raw);
+      }
+
+      list.appendChild(item);
+    });
+
+    if (!list.children.length) {
+      const fallback = document.createElement('p');
+      fallback.className = 'muted vulners-empty';
+      fallback.textContent = 'Nenhum detalhe adicional.';
+      details.appendChild(fallback);
+    } else {
+      details.appendChild(list);
+    }
+
+    return details;
   }
 
   function updateLinks(links) {
@@ -729,6 +891,8 @@
 .sessions-table th,.sessions-table td{padding:.55rem .75rem;border-bottom:1px solid rgba(255,255,255,0.05);text-align:left;}
 .sessions-table th{font-weight:600;color:var(--muted);text-transform:uppercase;font-size:.75rem;letter-spacing:.06em;}
 .sessions-table td .ref{display:block;font-size:.75rem;color:var(--muted);}
+.session-link-button{display:inline-flex;align-items:center;gap:.4rem;padding:.45rem .9rem;border-radius:999px;background:rgba(76,148,255,0.16);color:#d8ecff;font-weight:600;text-decoration:none;transition:.2s ease;box-shadow:0 6px 16px rgba(76,148,255,0.18);}
+.session-link-button:hover{background:rgba(76,148,255,0.26);color:#fff;box-shadow:0 8px 20px rgba(76,148,255,0.28);}
 .status{display:inline-flex;align-items:center;gap:.4rem;padding:.2rem .6rem;border-radius:999px;font-size:.75rem;font-weight:600;color:var(--text);background:rgba(255,255,255,0.08);}
 .status-running{background:rgba(123,195,255,0.15);}
 .status-completed{background:rgba(118,221,174,0.2);}
@@ -750,10 +914,29 @@
 .badge.cve{background:rgba(127,181,255,0.18);color:#e0f1ff;font-weight:600;}
 .findings-list h3{margin:.2rem 0;font-size:1.1rem;color:var(--text);}
 .findings-list p{margin:0 0 .6rem;font-size:.9rem;color:var(--muted);}
+.summary-collapse{margin:.6rem 0;padding:.7rem .9rem;border-radius:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);}
+.summary-collapse summary{cursor:pointer;font-weight:600;color:#dbe9ff;list-style:none;display:flex;align-items:center;gap:.4rem;}
+.summary-collapse summary::-webkit-details-marker{display:none;}
+.summary-body{margin-top:.55rem;}
 .finding-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.6rem;}
 .finding-meta div{display:flex;flex-direction:column;gap:.15rem;font-size:.8rem;color:var(--muted);}
 .finding-meta dt{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
 .finding-meta dd{margin:0;color:var(--text);font-weight:600;}
+.vulners-collapse{margin-top:.8rem;padding:.8rem 1rem;border-radius:12px;background:rgba(76,148,255,0.08);border:1px solid rgba(76,148,255,0.22);}
+.vulners-collapse summary{cursor:pointer;font-weight:600;color:#dcefff;display:flex;align-items:center;gap:.4rem;list-style:none;}
+.vulners-collapse summary::-webkit-details-marker{display:none;}
+.vulners-list{list-style:none;margin:.6rem 0 0;padding:0;display:flex;flex-direction:column;gap:.6rem;}
+.vulners-item{display:flex;flex-direction:column;gap:.4rem;padding:.6rem .75rem;border-radius:8px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);}
+.vulners-item.is-context{background:rgba(118,187,255,0.1);border-color:rgba(118,187,255,0.22);}
+.vulners-item-head{display:flex;align-items:center;justify-content:space-between;gap:.6rem;}
+.vulners-label{font-weight:600;color:var(--text);}
+.vulners-score{font-size:.82rem;color:#8bc5ff;font-weight:600;}
+.vulners-link{color:#8bc5ff;font-size:.82rem;text-decoration:none;word-break:break-all;}
+.vulners-link:hover{color:#b9dcff;}
+.vulners-tags{display:flex;flex-wrap:wrap;gap:.35rem;}
+.vulners-tag{display:inline-flex;align-items:center;padding:.18rem .5rem;border-radius:999px;background:rgba(118,187,255,0.2);color:#d5ecff;font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;}
+.vulners-raw{font-size:.78rem;line-height:1.4;}
+.vulners-empty{margin:.6rem 0 0;}
 .inline-link{display:inline-flex;align-items:center;gap:.4rem;margin-top:.8rem;color:#8bc5ff;text-decoration:none;font-weight:600;}
 .inline-link:hover{color:#b9dcff;}
 .plan-form{display:flex;flex-direction:column;gap:1rem;}

@@ -227,8 +227,8 @@
 .scan-feedback .icon{font-size:1.4rem;}
 .scan-feedback.tone-success{background:rgba(118,221,174,0.18);border-color:rgba(118,221,174,0.35);color:#d8f6e9;}
 .scan-feedback.tone-error{background:rgba(255,132,132,0.16);border-color:rgba(255,132,132,0.35);color:#ffd9d9;}
-.flow-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1.2rem;}
-.flow-card{display:flex;flex-direction:column;gap:1rem;padding:1.1rem 1.2rem;border-radius:14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);box-shadow:0 10px 24px rgba(5,16,32,0.22);transition:.2s ease;}
+.flow-list{display:flex;flex-direction:column;gap:1.1rem;}
+.flow-card{display:flex;flex-direction:column;gap:1rem;padding:1.1rem 1.2rem;border-radius:14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);box-shadow:0 10px 24px rgba(5,16,32,0.22);transition:.2s ease;width:100%;}
 .flow-card header{display:flex;align-items:flex-start;justify-content:space-between;gap:.9rem;}
 .flow-card h3{margin:0;font-size:1.15rem;color:var(--text);} 
 .flow-card p{margin:.45rem 0 0;color:var(--muted);font-size:.9rem;}
@@ -236,9 +236,17 @@
 .flow-card .flow-meta code{background:rgba(0,0,0,0.35);padding:.05rem .35rem;border-radius:6px;color:inherit;}
 .flow-card .badge{align-self:flex-start;padding:.3rem .6rem;border-radius:999px;background:rgba(127,181,255,0.18);color:#bedeff;font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;}
 .flow-card .flow-steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.75rem;}
-.flow-card .flow-steps li{padding:.75rem .85rem;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.03);display:flex;flex-direction:column;gap:.55rem;}
-.flow-step-head{display:flex;align-items:center;justify-content:space-between;gap:.8rem;font-weight:600;color:var(--text);} 
+.flow-card .flow-step{display:flex;align-items:stretch;gap:.75rem;padding:.75rem .9rem;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);transition:.2s ease;}
+.flow-card .flow-step-connectivity{background:rgba(118,221,174,0.12);border-color:rgba(118,221,174,0.32);}
+.flow-card .flow-step-connectivity:hover{border-color:rgba(118,221,174,0.45);box-shadow:0 4px 16px rgba(118,221,174,0.18);} 
+.flow-card .flow-step:hover{border-color:rgba(127,181,255,0.38);box-shadow:0 4px 16px rgba(127,181,255,0.16);} 
+.flow-step-index{display:flex;align-items:center;justify-content:center;width:2rem;height:2rem;border-radius:50%;background:rgba(127,181,255,0.22);color:#dceeff;font-weight:700;font-size:.95rem;flex:0 0 auto;}
+.flow-step-connectivity .flow-step-index{background:rgba(118,221,174,0.38);color:#06241a;}
+.flow-step-body{display:flex;flex-direction:column;gap:.55rem;width:100%;}
+.flow-step-head{display:flex;align-items:flex-start;justify-content:space-between;gap:.8rem;}
+.flow-step-name{font-weight:600;color:var(--text);} 
 .step-tag{display:inline-flex;align-items:center;gap:.35rem;padding:.15rem .6rem;border-radius:999px;background:rgba(127,181,255,0.18);color:#cfe4ff;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;}
+.flow-step-connectivity .step-tag{background:rgba(118,221,174,0.28);color:#06241a;}
 .flow-warnings{background:rgba(255,204,128,0.12);border:1px solid rgba(255,204,128,0.25);color:#f6d3a0;border-radius:12px;padding:.6rem .8rem;display:flex;flex-direction:column;gap:.3rem;font-size:.82rem;margin-top:.6rem;}
 .flow-warnings code{background:rgba(0,0,0,0.3);padding:.1rem .35rem;border-radius:6px;color:inherit;}
 .flow-card .flow-trigger,
@@ -277,6 +285,9 @@
   .page-heading{flex-direction:column;align-items:flex-start;}
   .active-project{width:100%;}
   .scan-shell{grid-template-columns:1fr;}
+}
+@media (max-width:720px){
+  .flow-step-index{width:1.8rem;height:1.8rem;font-size:.9rem;}
 }
 </style>
 <script>
@@ -360,16 +371,23 @@ document.addEventListener("DOMContentLoaded", () => {
     contentSubtitle.textContent = "Escolha um fluxo para executar e acompanhar as etapas.";
 
     const cardsMarkup = actionCardsData.map(card => {
-      const tasks = (card.tasks || []).map(task => {
+      const tasks = (card.tasks || []).map((task, index) => {
         const kindKey = task.kind?.startsWith("script") ? "script" : task.kind;
         const kindLabel = KIND_LABELS[kindKey] || "Etapa";
+        const stepClasses = ["flow-step"];
+        if (task.kind === "connectivity") {
+          stepClasses.push("flow-step-connectivity");
+        }
         return `
-          <li>
-            <div class="flow-step-head">
-              <span>${task.name}</span>
-              <span class="step-tag">${kindLabel}</span>
+          <li class="${stepClasses.join(" ")}" data-step-index="${index + 1}">
+            <div class="flow-step-index">${index + 1}</div>
+            <div class="flow-step-body">
+              <div class="flow-step-head">
+                <span class="flow-step-name">${task.name}</span>
+                <span class="step-tag">${kindLabel}</span>
+              </div>
+              <div class="progress-track"><span class="progress-bar" style="width:0%"></span></div>
             </div>
-            <div class="progress-track"><span class="progress-bar" style="width:0%"></span></div>
           </li>
         `;
       }).join("\n");
@@ -410,7 +428,7 @@ document.addEventListener("DOMContentLoaded", () => {
       `;
     }).join("\n");
 
-    actionView.innerHTML = `<div class="flow-grid">${cardsMarkup}</div>`;
+    actionView.innerHTML = `<div class="flow-list">${cardsMarkup}</div>`;
 
     actionView.querySelectorAll(".flow-trigger").forEach(button => {
       button.addEventListener("click", () => {
