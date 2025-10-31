@@ -82,77 +82,70 @@
     </header>
 
     {% if has_findings %}
-      <table class="findings-table">
-        <thead>
-          <tr>
-            <th>Severidade</th>
-            <th>Vulnerabilidade</th>
-            <th>Alvo</th>
-            <th>Porta</th>
-            <th>CVSS</th>
-            <th>CVEs</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for finding in display_findings %}
-            <tr>
-              <td>
-                <span class="severity-pill severity-{{ finding.severity }}">{{ finding.severity_display }}</span>
-              </td>
-              <td class="finding-info">
+      <div class="findings-accordion">
+        {% for finding in display_findings %}
+          <details class="finding-item" data-testid="finding-item">
+            <summary class="finding-summary-row">
+              <span class="severity-pill severity-{{ finding.severity }}">{{ finding.severity_display }}</span>
+              <span class="finding-headline">
                 <strong>{{ finding.title }}</strong>
-                {% if finding.summary %}
-                  <p class="finding-summary">{{ finding.summary|linebreaksbr }}</p>
-                {% endif %}
-                {% if finding.references %}
-                  <div class="reference-list">
-                    {% for ref in finding.references|slice:":3" %}
-                      <a href="{{ ref }}" target="_blank" rel="noopener noreferrer">Ref {{ forloop.counter }}</a>
-                    {% endfor %}
-                    {% if finding.references_total > 3 %}
-                      <span class="muted">+{{ finding.references_total|add:"-3" }} mais</span>
-                    {% endif %}
-                  </div>
-                {% endif %}
-              </td>
-              <td>
                 {% if finding.host %}
-                  <span>{{ finding.host }}</span>
-                {% else %}
-                  <span class="muted">—</span>
+                  <span class="muted">• {{ finding.host }}</span>
                 {% endif %}
-                {% if finding.service %}
-                  <div class="muted">{{ finding.service }}</div>
-                {% endif %}
-              </td>
-              <td>
-                {% if finding.port %}
-                  {{ finding.port }}{% if finding.protocol %}/{{ finding.protocol }}{% endif %}
-                {% else %}
-                  <span class="muted">—</span>
-                {% endif %}
-              </td>
-              <td>
+              </span>
+              <span class="finding-meta">
                 {% if finding.cvss_display %}
-                  {{ finding.cvss_display|floatformat:1 }}
-                {% else %}
-                  <span class="muted">—</span>
+                  <span class="meta-chip">CVSS {{ finding.cvss_display|floatformat:1 }}</span>
                 {% endif %}
-              </td>
-              <td>
                 {% if finding.primary_cve %}
-                  {{ finding.primary_cve }}
-                  {% if finding.extra_cves_count > 0 %}
-                    <span class="muted">+{{ finding.extra_cves_count }}</span>
-                  {% endif %}
-                {% else %}
-                  <span class="muted">—</span>
+                  <span class="meta-chip">{{ finding.primary_cve }}{% if finding.extra_cves_count > 0 %} +{{ finding.extra_cves_count }}{% endif %}</span>
                 {% endif %}
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+                {% if finding.port_display %}
+                  <span class="meta-chip">{{ finding.port_display }}</span>
+                {% endif %}
+              </span>
+            </summary>
+            <div class="finding-body">
+              {% if finding.summary %}
+                <p class="finding-description">{{ finding.summary|linebreaksbr }}</p>
+              {% endif %}
+              <dl class="finding-details">
+                <div>
+                  <dt>Status</dt>
+                  <dd>{{ finding.status_display }}</dd>
+                </div>
+                <div>
+                  <dt>Fonte</dt>
+                  <dd>{% if finding.source_label %}{{ finding.source_label }}{% else %}<span class="muted">—</span>{% endif %}</dd>
+                </div>
+                <div>
+                  <dt>Serviço</dt>
+                  <dd>{% if finding.service %}{{ finding.service }}{% else %}<span class="muted">—</span>{% endif %}</dd>
+                </div>
+              </dl>
+              {% if finding.references %}
+                <div class="reference-list">
+                  {% for ref in finding.references %}
+                    <a href="{{ ref }}" target="_blank" rel="noopener noreferrer">{{ ref }}</a>
+                  {% endfor %}
+                </div>
+              {% endif %}
+              {% if finding.task %}
+                <div class="finding-task">
+                  <span class="muted">Tarefa:</span>
+                  <span>{{ finding.task.name }} ({{ finding.task.status_display }})</span>
+                </div>
+              {% endif %}
+              {% if finding.artifact_path %}
+                <div class="finding-artifact">
+                  <span class="muted">Arquivo:</span>
+                  <code>{{ finding.artifact_path }}</code>
+                </div>
+              {% endif %}
+            </div>
+          </details>
+        {% endfor %}
+      </div>
     {% else %}
       <p class="empty">Nenhum achado consolidado para esta sessão.</p>
     {% endif %}
@@ -236,14 +229,26 @@
 .card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.1rem;}
 .card-header h2{margin:0;font-size:1.2rem;color:var(--text);}
 .card-header .muted{font-size:.85rem;}
-.findings-table{width:100%;border-collapse:collapse;font-size:.92rem;}
-.findings-table th{padding:.75rem;text-align:left;font-size:.76rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);border-bottom:1px solid rgba(255,255,255,0.08);}
-.findings-table td{padding:.75rem;vertical-align:top;border-bottom:1px solid rgba(255,255,255,0.04);}
-.finding-info strong{display:block;margin-bottom:.4rem;color:var(--text);}
-.finding-summary{margin:0;color:var(--muted);font-size:.9rem;}
-.reference-list{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.6rem;}
-.reference-list a{font-size:.75rem;color:#8bc5ff;text-decoration:none;background:rgba(76,148,255,0.18);padding:.25rem .55rem;border-radius:999px;border:1px solid rgba(76,148,255,0.3);}
-.reference-list a:hover{background:rgba(76,148,255,0.26);}
+.findings-accordion{display:flex;flex-direction:column;gap:.8rem;}
+.finding-item{border:1px solid rgba(255,255,255,0.08);border-radius:12px;background:rgba(0,10,24,0.45);overflow:hidden;transition:box-shadow .2s ease;}
+.finding-item[open]{box-shadow:0 12px 32px rgba(5,16,32,0.28);}
+.finding-summary-row{cursor:pointer;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:.9rem;align-items:center;padding:.85rem 1rem;background:rgba(255,255,255,0.03);}
+.finding-summary-row::-webkit-details-marker{display:none;}
+.finding-headline{display:flex;flex-wrap:wrap;gap:.45rem;color:var(--text);font-size:.95rem;}
+.finding-headline strong{font-weight:600;}
+.finding-meta{display:flex;flex-wrap:wrap;gap:.4rem;justify-content:flex-end;font-size:.8rem;color:var(--muted);}
+.meta-chip{display:inline-flex;align-items:center;justify-content:center;padding:.25rem .55rem;border-radius:999px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);}
+.finding-body{padding:1rem;border-top:1px solid rgba(255,255,255,0.05);display:flex;flex-direction:column;gap:1rem;font-size:.92rem;color:var(--text);}
+.finding-description{margin:0;color:var(--muted);font-size:.9rem;}
+.finding-details{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.8rem;}
+.finding-details div{display:flex;flex-direction:column;gap:.25rem;}
+.finding-details dt{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
+.finding-details dd{margin:0;font-weight:600;}
+.reference-list{display:flex;flex-wrap:wrap;gap:.45rem;}
+.reference-list a{font-size:.78rem;color:#8bc5ff;text-decoration:none;background:rgba(76,148,255,0.16);padding:.28rem .6rem;border-radius:999px;border:1px solid rgba(76,148,255,0.28);}
+.reference-list a:hover{background:rgba(76,148,255,0.24);}
+.finding-task,.finding-artifact{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;font-size:.85rem;}
+.finding-artifact code{background:rgba(255,255,255,0.07);padding:.25rem .5rem;border-radius:6px;font-size:.8rem;}
 .severity-pill{display:inline-flex;align-items:center;justify-content:center;padding:.28rem .7rem;border-radius:999px;font-weight:600;font-size:.8rem;color:#fff;}
 .severity-pill.severity-critical{background:#d83b4a;}
 .severity-pill.severity-high{background:#f28b3c;}
@@ -262,7 +267,7 @@
 .snapshot-details summary{cursor:pointer;font-weight:600;color:var(--text);}
 .snapshot-details pre{margin-top:.7rem;background:rgba(0,0,0,0.35);padding:1rem;border-radius:10px;max-height:320px;overflow:auto;font-family:"Fira Code",monospace;font-size:.8rem;color:#dceeff;white-space:pre-wrap;word-break:break-word;}
 .empty{color:var(--muted);margin:0;}
-@media (max-width:960px){.page-heading{flex-direction:column;align-items:flex-start;}.session-status{align-items:flex-start;text-align:left;}.report-body{grid-template-columns:1fr;}}
+@media (max-width:960px){.page-heading{flex-direction:column;align-items:flex-start;}.session-status{align-items:flex-start;text-align:left;}.report-body{grid-template-columns:1fr;}.finding-summary-row{grid-template-columns:minmax(0,1fr);gap:.6rem;justify-items:flex-start;}.finding-meta{justify-content:flex-start;}}
 @media (max-width:720px){.report-metrics{grid-template-columns:repeat(auto-fit,minmax(160px,1fr));}.severity-grid{grid-template-columns:repeat(auto-fit,minmax(130px,1fr));}}
 </style>
 {% endblock %}
