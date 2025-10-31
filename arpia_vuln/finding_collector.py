@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from collections import Counter
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
@@ -34,7 +35,11 @@ def _decimal_score(score: Optional[float]) -> Optional[Decimal]:
     if score is None:
         return None
     try:
-        return Decimal(str(score)).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+        numeric = float(score)
+        if not math.isfinite(numeric):
+            return None
+        rounded = round(numeric, 1)
+        return Decimal(str(rounded))
     except Exception:  # pragma: no cover - defensivo
         return None
 

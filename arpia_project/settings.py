@@ -196,7 +196,7 @@ ARPIA_LOG_INGEST_TOKEN = os.getenv("ARPIA_LOG_INGEST_TOKEN", "") or None
 # Configurações padrão do wrapper Greenbone/GVM
 ARPIA_GVM_HOST = os.getenv("ARPIA_GVM_HOST", "127.0.0.1")
 ARPIA_GVM_PORT = int(os.getenv("ARPIA_GVM_PORT", "9390"))
-ARPIA_GVM_SOCKET_PATH = os.getenv("ARPIA_GVM_SOCKET_PATH", "") or None
+ARPIA_GVM_SOCKET_PATH = os.getenv("ARPIA_GVM_SOCKET_PATH", "/run/gvmd/gvmd.sock") or None
 ARPIA_GVM_USERNAME = os.getenv("ARPIA_GVM_USERNAME")
 ARPIA_GVM_PASSWORD = os.getenv("ARPIA_GVM_PASSWORD")
 ARPIA_GVM_SCANNER_ID = os.getenv("ARPIA_GVM_SCANNER_ID", "08b69003-5fc2-4037-a479-93b440211c73")
@@ -209,6 +209,9 @@ ARPIA_GVM_POLL_INTERVAL = float(os.getenv("ARPIA_GVM_POLL_INTERVAL", "5"))
 ARPIA_GVM_MAX_ATTEMPTS = int(os.getenv("ARPIA_GVM_MAX_ATTEMPTS", "60"))
 ARPIA_GVM_TASK_TIMEOUT = os.getenv("ARPIA_GVM_TASK_TIMEOUT")
 
-#Configurações de sudo do arpia
+# Credenciais do Greenbone (sobrescrevem variáveis de ambiente em dev)
 ARPIA_GVM_USERNAME = "admin"
-ARPIA_GVM_PASSWORD = "kali"
+ARPIA_GVM_PASSWORD = "c43d1baf-f86e-49eb-991d-a020edad40fa"
+
+# Credenciais de sudo para automação local do gvm-start
+ARPIA_GVM_SUDO_PASSWORD = os.getenv("ARPIA_GVM_SUDO_PASSWORD", "kali")

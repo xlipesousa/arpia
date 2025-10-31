@@ -117,7 +117,10 @@ class VulnViewsSmokeTests(TestCase):
 		self.client.force_login(self.owner)
 		response = self.client.get(url)
 		self.assertEqual(response.status_code, 200)
-		self.assertContains(response, "Relatório em preparação")
+		self.assertContains(response, "Relatório da sessão")
+		self.assertContains(response, "Achados consolidados")
+		self.assertContains(response, self.finding.title)
+		self.assertContains(response, self.finding.cve)
 
 	def test_dashboard_api_returns_snapshot(self):
 		self.client.force_login(self.owner)
@@ -549,8 +552,8 @@ class VulnServicesTests(TestCase):
 			title="Sessão retry",
 			status=VulnScanSession.Status.FAILED,
 		)
-		with patch.dict(os.environ, {"ARPIA_GVM_SUDO_PASSWORD": "secr3t", "ARPIA_GVM_AUTOSTART": "1"}, clear=False):
-			with self.settings(TESTING=False):
+		with patch.dict(os.environ, {"ARPIA_GVM_AUTOSTART": "1"}, clear=False):
+			with self.settings(TESTING=False, ARPIA_GVM_SUDO_PASSWORD="secr3t"):
 				executor = GreenboneScanExecutor(session, triggered_by=self.owner, targets_data={"hosts": []}, auto_finalize=False)
 				executor.config = config
 				executor._attempt_autostart_greenbone()

@@ -5,63 +5,264 @@
 <section class="page-heading">
   <div>
     <a href="{% url 'arpia_vuln:session_detail' session.id %}" class="back-link">← Voltar para a sessão</a>
-    <h1>Relatório em preparação</h1>
-    <p class="page-subtitle">Estamos estruturando uma visualização dedicada para consolidar achados da sessão <strong>{{ session.title }}</strong>.</p>
+    <h1>Relatório da sessão</h1>
+    <p class="page-subtitle">Resumo consolidado da sessão <strong>{{ session.title }}</strong>.</p>
   </div>
   <div class="session-status">
     <span class="label">Status</span>
     <span class="status-pill status-{{ session.status }}">{{ session.get_status_display }}</span>
+    <span class="meta-line">
+      Última coleta:
+      {% if last_collected %}
+        {{ last_collected|date:"d/m/Y H:i" }}
+      {% elif last_collected_raw %}
+        {{ last_collected_raw }}
+      {% else %}
+        {{ session.updated_at|date:"d/m/Y H:i" }}
+      {% endif %}
+    </span>
   </div>
 </section>
 
-<section class="report-placeholder">
-  <article class="card highlight">
-    <h2>Resumo rápido</h2>
-    <p class="muted">Acompanhe estatísticas gerais enquanto o relatório final não fica pronto.</p>
-    <dl class="quick-metrics">
-      <div><dt>Projeto</dt><dd>{{ project.name }}</dd></div>
-      <div><dt>Sessão</dt><dd>#{{ session.reference }}</dd></div>
-      <div><dt>Status</dt><dd>{{ session.get_status_display }}</dd></div>
-      <div><dt>Iniciada</dt><dd>{% if session.started_at %}{{ session.started_at|date:"d/m/Y H:i" }}{% else %}<span class="muted">—</span>{% endif %}</dd></div>
-      <div><dt>Finalizada</dt><dd>{% if session.finished_at %}{{ session.finished_at|date:"d/m/Y H:i" }}{% else %}<span class="muted">—</span>{% endif %}</dd></div>
-    </dl>
+<section class="report-metrics">
+  <article class="card metric">
+    <h2>Total de achados</h2>
+    <p class="metric-value">{{ total_findings }}</p>
+    <p class="metric-caption">Itens consolidados nesta sessão.</p>
   </article>
+  <article class="card metric">
+    <h2>Abertos</h2>
+    <p class="metric-value">{{ open_findings }}</p>
+    <p class="metric-caption">Findings com status em aberto.</p>
+  </article>
+  <article class="card metric">
+    <h2>Hosts impactados</h2>
+    <p class="metric-value">{{ hosts_impacted }}</p>
+    <p class="metric-caption">Alvos com vulnerabilidades registradas.</p>
+  </article>
+  <article class="card metric">
+    <h2>Maior CVSS</h2>
+    <p class="metric-value">
+      {% if summary.max_cvss %}
+        {{ summary.max_cvss|floatformat:1 }}
+      {% else %}
+        —
+      {% endif %}
+    </p>
+    <p class="metric-caption">Pontuação mais alta observada.</p>
+  </article>
+</section>
 
-  <article class="card insights">
-    <h2>Snapshot bruto</h2>
-    <p class="muted">Conteúdo atual do snapshot de relatório (formato JSON).</p>
-    {% if report_json %}
-      <pre class="snapshot-json">{{ report_json }}</pre>
+<section class="severity-overview card">
+  <h2>Distribuição por severidade</h2>
+  <div class="severity-grid">
+    {% for item in severity_breakdown %}
+      <div class="severity-chip severity-{{ item.key }}">
+        <span class="chip-label">{{ item.label }}</span>
+        <span class="chip-value">{{ item.count }}</span>
+        <span class="chip-extra">
+          {% if item.percentage %}
+            {{ item.percentage }}%
+          {% else %}
+            0%
+          {% endif %}
+        </span>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="report-body">
+  <article class="card findings-card">
+    <header class="card-header">
+      <h2>Achados consolidados</h2>
+      <span class="muted">
+        {{ display_findings|length }} {% if display_findings|length == 1 %}registro{% else %}registros{% endif %}
+      </span>
+    </header>
+
+    {% if has_findings %}
+      <table class="findings-table">
+        <thead>
+          <tr>
+            <th>Severidade</th>
+            <th>Vulnerabilidade</th>
+            <th>Alvo</th>
+            <th>Porta</th>
+            <th>CVSS</th>
+            <th>CVEs</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for finding in display_findings %}
+            <tr>
+              <td>
+                <span class="severity-pill severity-{{ finding.severity }}">{{ finding.severity_display }}</span>
+              </td>
+              <td class="finding-info">
+                <strong>{{ finding.title }}</strong>
+                {% if finding.summary %}
+                  <p class="finding-summary">{{ finding.summary|linebreaksbr }}</p>
+                {% endif %}
+                {% if finding.references %}
+                  <div class="reference-list">
+                    {% for ref in finding.references|slice:":3" %}
+                      <a href="{{ ref }}" target="_blank" rel="noopener noreferrer">Ref {{ forloop.counter }}</a>
+                    {% endfor %}
+                    {% if finding.references_total > 3 %}
+                      <span class="muted">+{{ finding.references_total|add:"-3" }} mais</span>
+                    {% endif %}
+                  </div>
+                {% endif %}
+              </td>
+              <td>
+                {% if finding.host %}
+                  <span>{{ finding.host }}</span>
+                {% else %}
+                  <span class="muted">—</span>
+                {% endif %}
+                {% if finding.service %}
+                  <div class="muted">{{ finding.service }}</div>
+                {% endif %}
+              </td>
+              <td>
+                {% if finding.port %}
+                  {{ finding.port }}{% if finding.protocol %}/{{ finding.protocol }}{% endif %}
+                {% else %}
+                  <span class="muted">—</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if finding.cvss_display %}
+                  {{ finding.cvss_display|floatformat:1 }}
+                {% else %}
+                  <span class="muted">—</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if finding.primary_cve %}
+                  {{ finding.primary_cve }}
+                  {% if finding.extra_cves_count > 0 %}
+                    <span class="muted">+{{ finding.extra_cves_count }}</span>
+                  {% endif %}
+                {% else %}
+                  <span class="muted">—</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     {% else %}
-      <p class="empty">Nenhum dado disponível ainda.</p>
+      <p class="empty">Nenhum achado consolidado para esta sessão.</p>
     {% endif %}
   </article>
 
-  <article class="card next-steps">
-    <h2>O que vem a seguir?</h2>
-    <p>Este espaço evoluirá para uma visualização rica com severidades agregadas, gráficos CVSS e recomendações automatizadas. Enquanto isso, utilize a página da sessão para navegar pelos achados.</p>
-    <a href="{% url 'arpia_vuln:session_detail' session.id %}" class="btn-primary">Abrir detalhes da sessão</a>
-  </article>
+  <aside class="card side-panel">
+    <h3>CVEs observadas</h3>
+    {% if top_cves %}
+      <ul class="tag-list">
+        {% for cve in top_cves %}
+          <li>
+            <a href="https://nvd.nist.gov/vuln/detail/{{ cve }}" target="_blank" rel="noopener noreferrer">{{ cve }}</a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">Nenhuma CVE mapeada até o momento.</p>
+    {% endif %}
+
+    <h3>Fontes</h3>
+    {% if sources %}
+      <ul class="simple-list">
+        {% for source in sources %}
+          <li>{{ source }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">Nenhuma origem registrada.</p>
+    {% endif %}
+
+    <h3>Artefatos</h3>
+    {% if artifact_entries %}
+      <ul class="simple-list artifacts">
+        {% for item in artifact_entries %}
+          <li>
+            <span class="path">{{ item.path }}</span>
+            {% if item.source %}
+              <span class="muted source">{{ item.source }}</span>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">Nenhum artefato indexado.</p>
+    {% endif %}
+
+    <details class="snapshot-details">
+      <summary>Snapshot bruto</summary>
+      {% if report_json %}
+        <pre class="snapshot-json">{{ report_json }}</pre>
+      {% else %}
+        <p class="muted">Nenhum snapshot disponível.</p>
+      {% endif %}
+    </details>
+  </aside>
 </section>
 
 <style>
 .page-heading{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.6rem;gap:1rem;}
 .page-heading h1{margin:.3rem 0;font-size:1.9rem;color:var(--text);}
+.page-subtitle{margin:.3rem 0 0;color:var(--muted);font-size:.95rem;}
 .back-link{text-decoration:none;color:var(--muted);font-size:.9rem;}
 .back-link:hover{color:var(--text);}
-.session-status{display:flex;flex-direction:column;gap:.3rem;align-items:flex-end;}
+.session-status{display:flex;flex-direction:column;align-items:flex-end;gap:.35rem;text-align:right;}
 .session-status .label{font-size:.75rem;text-transform:uppercase;color:var(--muted);letter-spacing:.08em;}
-.status-pill{display:inline-flex;align-items:center;padding:.25rem .75rem;border-radius:999px;font-weight:600;font-size:.8rem;color:var(--text);background:rgba(255,255,255,0.08);} 
-.report-placeholder{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.4rem;align-items:start;}
-.card{background:rgba(8,23,43,0.8);border-radius:14px;padding:1.4rem;border:1px solid rgba(255,255,255,0.05);box-shadow:0 18px 38px rgba(5,16,32,0.35);}
-.quick-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:0;padding:0;}
-.quick-metrics div{display:flex;flex-direction:column;gap:.2rem;}
-.quick-metrics dt{font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
-.quick-metrics dd{margin:0;color:var(--text);font-weight:600;}
-.snapshot-json{margin:0;background:rgba(0,0,0,0.42);padding:1rem;border-radius:10px;max-height:420px;overflow:auto;font-family:"Fira Code",monospace;font-size:.82rem;color:#dceeff;white-space:pre-wrap;word-break:break-word;}
-.empty{color:var(--muted);}
-.btn-primary{display:inline-flex;align-items:center;justify-content:center;padding:.6rem 1.2rem;border-radius:999px;font-weight:600;background:rgba(76,148,255,0.2);border:1px solid rgba(76,148,255,0.25);color:#8bc5ff;text-decoration:none;transition:.2s ease;}
-.btn-primary:hover{background:rgba(117,187,255,0.28);}
-@media (max-width:900px){.page-heading{flex-direction:column;align-items:flex-start;}.session-status{align-items:flex-start;}.report-placeholder{grid-template-columns:1fr;}}
+.session-status .meta-line{font-size:.82rem;color:var(--muted);}
+.status-pill{display:inline-flex;align-items:center;padding:.3rem .9rem;border-radius:999px;font-weight:600;font-size:.85rem;color:var(--text);background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);}
+.report-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:1rem;margin-bottom:1.6rem;}
+.card{background:rgba(8,23,43,0.82);border-radius:14px;padding:1.3rem;border:1px solid rgba(255,255,255,0.05);box-shadow:0 18px 34px rgba(5,16,32,0.33);}
+.card.metric h2{margin:0 0 .4rem;font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
+.card.metric .metric-value{margin:0;font-size:2rem;font-weight:700;color:var(--text);}
+.card.metric .metric-caption{margin:.35rem 0 0;color:var(--muted);font-size:.85rem;}
+.severity-overview{margin-bottom:1.6rem;}
+.severity-overview h2{margin:0;color:var(--text);}
+.severity-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.9rem;margin-top:1.1rem;}
+.severity-chip{display:flex;flex-direction:column;gap:.35rem;padding:.85rem;border-radius:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.06);}
+.severity-chip .chip-label{font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
+.severity-chip .chip-value{font-size:1.4rem;font-weight:700;color:var(--text);}
+.severity-chip .chip-extra{font-size:.8rem;color:var(--muted);}
+.report-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(240px,320px);gap:1.6rem;align-items:start;margin-bottom:2rem;}
+.card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.1rem;}
+.card-header h2{margin:0;font-size:1.2rem;color:var(--text);}
+.card-header .muted{font-size:.85rem;}
+.findings-table{width:100%;border-collapse:collapse;font-size:.92rem;}
+.findings-table th{padding:.75rem;text-align:left;font-size:.76rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);border-bottom:1px solid rgba(255,255,255,0.08);}
+.findings-table td{padding:.75rem;vertical-align:top;border-bottom:1px solid rgba(255,255,255,0.04);}
+.finding-info strong{display:block;margin-bottom:.4rem;color:var(--text);}
+.finding-summary{margin:0;color:var(--muted);font-size:.9rem;}
+.reference-list{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.6rem;}
+.reference-list a{font-size:.75rem;color:#8bc5ff;text-decoration:none;background:rgba(76,148,255,0.18);padding:.25rem .55rem;border-radius:999px;border:1px solid rgba(76,148,255,0.3);}
+.reference-list a:hover{background:rgba(76,148,255,0.26);}
+.severity-pill{display:inline-flex;align-items:center;justify-content:center;padding:.28rem .7rem;border-radius:999px;font-weight:600;font-size:.8rem;color:#fff;}
+.severity-pill.severity-critical{background:#d83b4a;}
+.severity-pill.severity-high{background:#f28b3c;}
+.severity-pill.severity-medium{background:#f2c94c;color:#1d1f2b;}
+.severity-pill.severity-low{background:#2d9cdb;}
+.severity-pill.severity-info{background:#6c6cff;}
+.severity-pill.severity-unknown{background:#6f7a89;}
+.side-panel{display:flex;flex-direction:column;gap:1.3rem;}
+.side-panel h3{margin:0;color:var(--text);font-size:1rem;}
+.tag-list{list-style:none;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:.45rem;}
+.tag-list li a{display:inline-flex;align-items:center;padding:.25rem .55rem;background:rgba(255,255,255,0.08);border-radius:999px;color:#f2f6ff;font-size:.8rem;text-decoration:none;border:1px solid rgba(255,255,255,0.12);}
+.tag-list li a:hover{background:rgba(255,255,255,0.14);}
+.simple-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:.45rem;font-size:.9rem;color:var(--text);}
+.simple-list.artifacts .path{display:block;}
+.simple-list.artifacts .source{font-size:.8rem;}
+.snapshot-details summary{cursor:pointer;font-weight:600;color:var(--text);}
+.snapshot-details pre{margin-top:.7rem;background:rgba(0,0,0,0.35);padding:1rem;border-radius:10px;max-height:320px;overflow:auto;font-family:"Fira Code",monospace;font-size:.8rem;color:#dceeff;white-space:pre-wrap;word-break:break-word;}
+.empty{color:var(--muted);margin:0;}
+@media (max-width:960px){.page-heading{flex-direction:column;align-items:flex-start;}.session-status{align-items:flex-start;text-align:left;}.report-body{grid-template-columns:1fr;}}
+@media (max-width:720px){.report-metrics{grid-template-columns:repeat(auto-fit,minmax(160px,1fr));}.severity-grid{grid-template-columns:repeat(auto-fit,minmax(130px,1fr));}}
 </style>
 {% endblock %}

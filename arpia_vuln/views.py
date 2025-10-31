@@ -8,6 +8,7 @@ from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from django.utils.http import urlencode
 from django.views.decorators.http import require_http_methods
 from django.views.generic import TemplateView
@@ -372,15 +373,245 @@ class VulnSessionReportPreviewView(LoginRequiredMixin, TemplateView):
 
 	def get_context_data(self, **kwargs):
 		context = super().get_context_data(**kwargs)
-		report_json = json.dumps(self.session.report_snapshot or {}, indent=2, ensure_ascii=False)
+		findings_qs = self.session.findings.select_related("source_task").order_by("-cvss_score", "severity", "title")
+		findings = list(findings_qs)
+		snapshot = self.session.report_snapshot if isinstance(self.session.report_snapshot, dict) else {}
+		display_findings = [self._serialize_finding_for_template(finding) for finding in findings]
+		findings_summary = {}
+		if isinstance(snapshot, dict):
+			candidate = snapshot.get("findings")
+			if isinstance(candidate, dict):
+				findings_summary = candidate
+		if not findings_summary:
+			findings_summary = self._build_fallback_summary(findings)
+
+		severity_breakdown = self._build_severity_breakdown(findings_summary, findings)
+		total_findings = int(findings_summary.get("total") or len(findings))
+		open_findings = int(findings_summary.get("open_total") or self._count_open_findings(findings))
+		hosts_impacted = int(findings_summary.get("hosts_impacted") or self._count_hosts(findings))
+		top_cves = findings_summary.get("cves") or self._collect_cves_from_findings(findings)
+		sources = findings_summary.get("sources") or []
+		artifact_entries = findings_summary.get("artifacts") or []
+		last_collected_iso = findings_summary.get("last_collected_at")
+		last_collected_dt = self._parse_summary_datetime(last_collected_iso)
+		report_json = json.dumps(snapshot or {}, indent=2, ensure_ascii=False)
+
 		context.update(
 			{
 				"session": self.session,
 				"project": self.session.project,
+				"findings": findings,
+				"display_findings": display_findings,
+				"has_findings": bool(display_findings),
+				"summary": findings_summary,
+				"severity_breakdown": severity_breakdown,
+				"total_findings": total_findings,
+				"open_findings": open_findings,
+				"hosts_impacted": hosts_impacted,
+				"top_cves": top_cves[:30],
+				"sources": sources,
+				"artifact_entries": artifact_entries,
+				"last_collected": last_collected_dt,
+				"last_collected_raw": last_collected_iso,
 				"report_json": report_json,
 			}
 		)
 		return context
+
+	def _build_fallback_summary(self, findings):
+		severity_counts = {key: 0 for key in VulnerabilityFinding.Severity.values}
+		cves: set[str] = set()
+		sources: set[str] = set()
+		hosts: set[str] = set()
+		tasks: set[str] = set()
+		max_score = None
+		open_total = 0
+		for finding in findings:
+			severity_counts[finding.severity] = severity_counts.get(finding.severity, 0) + 1
+			if finding.status == VulnerabilityFinding.Status.OPEN:
+				open_total += 1
+			if finding.cve:
+				cves.add(str(finding.cve).upper())
+			data = finding.data or {}
+			for extra in data.get("cves", []):
+				if extra:
+					cves.add(str(extra).upper())
+			source_kind = data.get("source_kind") or data.get("source")
+			if source_kind:
+				sources.add(str(source_kind))
+			if finding.host:
+				hosts.add(str(finding.host))
+			if finding.source_task_id:
+				tasks.add(str(finding.source_task_id))
+			if finding.cvss_score is not None:
+				score = float(finding.cvss_score)
+				if max_score is None or score > max_score:
+					max_score = score
+		return {
+			"total": len(findings),
+			"open_total": open_total,
+			"by_severity": severity_counts,
+			"cves": sorted(cves),
+			"sources": sorted(sources),
+			"hosts_impacted": len(hosts),
+			"tasks": sorted(tasks),
+			"max_cvss": max_score,
+			"artifacts": [],
+			"last_collected_at": None,
+		}
+
+	def _build_severity_breakdown(self, summary, findings):
+		base = summary.get("by_severity") if isinstance(summary.get("by_severity"), dict) else {}
+		total = int(summary.get("total") or len(findings)) or 0
+		breakdown = []
+		for key, label in VulnerabilityFinding.Severity.choices:
+			count = int(base.get(key, 0))
+			percentage = (count / total * 100) if total else 0
+			breakdown.append(
+				{
+					"key": key,
+					"label": label,
+					"count": count,
+					"percentage": round(percentage, 1) if percentage else 0,
+				}
+			)
+		return breakdown
+
+	def _count_open_findings(self, findings):
+		return sum(1 for finding in findings if finding.status == VulnerabilityFinding.Status.OPEN)
+
+	def _count_hosts(self, findings):
+		return len({str(finding.host) for finding in findings if finding.host})
+
+	def _collect_cves_from_findings(self, findings, limit: int = 60):
+		ordered: list[str] = []
+		seen: set[str] = set()
+		for finding in findings:
+			candidates: list[str] = []
+			if finding.cve:
+				candidates.append(str(finding.cve))
+			data = finding.data or {}
+			for extra in data.get("cves", []):
+				candidates.append(str(extra))
+			for raw in candidates:
+				cve = raw.strip().upper()
+				if not cve or not cve.startswith("CVE-"):
+					continue
+				if cve in seen:
+					continue
+				seen.add(cve)
+				ordered.append(cve)
+				if len(ordered) >= limit:
+					return ordered
+		return ordered
+
+	def _parse_summary_datetime(self, value):
+		if not value or not isinstance(value, str):
+			return None
+		dt = parse_datetime(value)
+		if dt is None:
+			return None
+		if timezone.is_naive(dt):
+			dt = timezone.make_aware(dt, timezone.get_current_timezone())
+		return dt
+
+	def _serialize_finding_for_template(self, finding: VulnerabilityFinding) -> dict:
+		data = finding.data if isinstance(finding.data, dict) else {}
+		references_raw = data.get("references")
+		if isinstance(references_raw, (list, tuple, set)):
+			references_iterable = references_raw
+		elif references_raw:
+			references_iterable = [references_raw]
+		else:
+			references_iterable = []
+		references: list[str] = []
+		for entry in references_iterable:
+			text = str(entry).strip()
+			if text and text not in references:
+				references.append(text)
+
+		cves_raw = []
+		if finding.cve:
+			cves_raw.append(finding.cve)
+		data_cves = data.get("cves")
+		if isinstance(data_cves, (list, tuple, set)):
+			cves_raw.extend(data_cves)
+		elif data_cves:
+			cves_raw.append(data_cves)
+		cves: list[str] = []
+		for entry in cves_raw:
+			code = str(entry).strip().upper()
+			if not code:
+				continue
+			if code not in cves:
+				cves.append(code)
+		primary_cve = cves[0] if cves else ""
+		extra_cves_count = max(len(cves) - (1 if primary_cve else 0), 0)
+
+		cvss_samples_raw = data.get("cvss_samples")
+		if isinstance(cvss_samples_raw, (list, tuple, set)):
+			sample_iterable = cvss_samples_raw
+		elif cvss_samples_raw in (None, ""):
+			sample_iterable = []
+		else:
+			sample_iterable = [cvss_samples_raw]
+		cvss_samples: list[float] = []
+		for sample in sample_iterable:
+			try:
+				value = float(sample)
+			except (TypeError, ValueError):
+				continue
+			cvss_samples.append(value)
+		cvss_samples = cvss_samples[:5]
+		cvss_score = float(finding.cvss_score) if finding.cvss_score is not None else None
+		cvss_display = cvss_score if cvss_score is not None else (cvss_samples[0] if cvss_samples else None)
+
+		port_display = ""
+		if finding.port:
+			port_display = str(finding.port)
+			if finding.protocol:
+				port_display += f"/{finding.protocol}"
+
+		source_label = data.get("source_kind") or data.get("source") or ""
+		artifact_path = data.get("file_path") or ""
+
+		task_payload = None
+		if finding.source_task:
+			task_payload = {
+				"id": str(finding.source_task.pk),
+				"name": finding.source_task.name,
+				"kind": finding.source_task.kind,
+				"status": finding.source_task.status,
+				"status_display": finding.source_task.get_status_display(),
+			}
+
+		return {
+			"id": str(finding.pk),
+			"title": finding.title,
+			"summary": finding.summary,
+			"severity": finding.severity,
+			"severity_display": finding.get_severity_display(),
+			"status": finding.status,
+			"status_display": finding.get_status_display(),
+			"is_open": finding.status == VulnerabilityFinding.Status.OPEN,
+			"host": finding.host,
+			"service": finding.service,
+			"port": finding.port,
+			"protocol": finding.protocol,
+			"port_display": port_display,
+			"cvss_score": cvss_score,
+			"cvss_samples": cvss_samples,
+			"cvss_display": cvss_display,
+			"primary_cve": primary_cve,
+			"extra_cves_count": extra_cves_count,
+			"all_cves": cves,
+			"references": references,
+			"references_total": len(references),
+			"artifact_path": artifact_path,
+			"source_label": source_label,
+			"data": data,
+			"task": task_payload,
+		}
 
 
 @login_required

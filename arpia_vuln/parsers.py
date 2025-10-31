@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import math
 import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence
 
 CVE_PATTERN = re.compile(r"CVE-\d{4}-\d{4,7}", re.IGNORECASE)
 FLOAT_PATTERN = re.compile(r"\d+(?:\.\d+)?")
+URL_PATTERN = re.compile(r"https?://[^\s\"'<>]+", re.IGNORECASE)
 
 
 @dataclass(slots=True)
@@ -229,7 +231,7 @@ def _parse_nmap_script(
 			if key:
 				values_by_key.setdefault(key, []).append(text)
 
-	cves = _collect_cves(texts)
+	raw_cves = _collect_cves(texts)
 	cvss_candidates = _collect_cvss_candidates(values_by_key.get("cvss", []))
 	if not cvss_candidates and "cvss" in values_by_key:
 		cvss_candidates = _collect_cvss_candidates(values_by_key["cvss"])
@@ -247,44 +249,72 @@ def _parse_nmap_script(
 	)
 	severity = _combine_severity(state_text, cvss_score)
 
-	if not cves and (state_text or "").lower().find("vulnerable") == -1:
+	references_candidates: List[str] = []
+	references_candidates.extend(values_by_key.get("refs", []))
+	references_candidates.extend(values_by_key.get("references", []))
+	references_candidates.extend(_collect_urls(texts))
+	references = _unique_preserve_order(references_candidates)
+	references = references[:20]
+
+	id_candidates: List[str] = []
+	for key in ("ids", "id"):
+		id_candidates.extend(values_by_key.get(key, []))
+	for entry in id_candidates:
+		value = entry
+		if ":" in entry:
+			_, value = entry.split(":", 1)
+		raw_cves.extend(_collect_cves([value]))
+
+	ordered_cves = _unique_preserve_order(raw_cves, normalize=str.upper)
+	normalized_cves = [item.upper() for item in ordered_cves]
+
+	if not normalized_cves and (state_text or "").lower().find("vulnerable") == -1:
 		return None
 
 	title = _first_non_empty(
 		values_by_key.get("title", [None])[0] if values_by_key.get("title") else None,
 		script_id.replace("_", " ").title(),
 	)
+	summary_hint = _build_nmap_summary(
+		title,
+		script_id,
+		state_text,
+		cvss_score,
+		normalized_cves,
+		raw_output,
+	)
 	description_parts = values_by_key.get("description") or []
-	if not description_parts:
-		description_parts = [raw_output]
+	summary_value = summary_hint
+	if not summary_value and description_parts:
+		summary_value = "\n".join(part for part in description_parts if part).strip()
+	if not summary_value:
+		summary_value = _shorten_text(raw_output)
+	if not summary_value:
+		summary_value = raw_output.strip()
 
-	references = values_by_key.get("refs", []) or values_by_key.get("references", [])
-	ids = values_by_key.get("ids", [])
-	for entry in ids:
-		if ":" in entry:
-			_, value = entry.split(":", 1)
-			cves.extend(_collect_cves([value]))
-
-	cves = sorted({cve.upper() for cve in cves})
 	data = {
 		"source": "nmap",
 		"script_id": script_id,
 		"file_path": file_path,
 		"raw_output": raw_output.strip(),
 		"values": values_by_key,
+		"state": state_text,
+		"top_cves": normalized_cves[:10],
+		"cvss_samples": sorted({round(score, 1) for score in cvss_candidates if score is not None}, reverse=True)[:5],
+		"summary_hint": summary_hint,
 	}
 
 	return ParsedFinding(
 		source=source,
 		scanner="nmap",
 		title=title.strip(),
-		summary="\n".join(part for part in description_parts if part).strip(),
+		summary=summary_value.strip(),
 		severity=severity,
 		host=host,
 		service=service_name or script_id,
 		port=port,
 		protocol=protocol,
-		cves=cves,
+		cves=normalized_cves,
 		cvss_score=cvss_score,
 		cvss_vector=cvss_vector or "",
 		data=data,
@@ -310,9 +340,95 @@ def _collect_cvss_candidates(entries: Iterable[str]) -> List[float]:
 			continue
 		for match in FLOAT_PATTERN.findall(str(entry)):
 			value = _safe_float(match)
-			if value is not None:
+			if value is not None and 0 <= value <= 10:
 				candidates.append(value)
 	return candidates
+
+
+def _unique_preserve_order(
+	entries: Iterable[Any],
+	*,
+	normalize: Optional[Callable[[str], str]] = None,
+) -> List[str]:
+	seen: set[str] = set()
+	result: List[str] = []
+	for entry in entries or []:
+		if entry is None:
+			continue
+		text = str(entry).strip()
+		if not text:
+			continue
+		key = normalize(text) if normalize else text
+		if key in seen:
+			continue
+		seen.add(str(key))
+		result.append(text)
+	return result
+
+
+def _collect_urls(entries: Iterable[Any]) -> List[str]:
+	urls: List[str] = []
+	for entry in entries or []:
+		if entry is None:
+			continue
+		for match in URL_PATTERN.findall(str(entry)):
+			cleaned = match.rstrip(".,);]\"")
+			if cleaned:
+				urls.append(cleaned)
+	return urls
+
+
+def _build_nmap_summary(
+	title: str,
+	script_id: str,
+	state_text: Optional[str],
+	cvss_score: Optional[float],
+	cves: Sequence[str],
+	raw_output: str,
+) -> str:
+	summary_lines: List[str] = []
+	title_label = (title or script_id.replace("_", " ").title()).strip()
+	state_clean = (state_text or "").strip()
+	if state_clean and state_clean.lower() != title_label.lower():
+		summary_lines.append(state_clean)
+	if cvss_score is not None:
+		summary_lines.append(f"Maior CVSS observado: {cvss_score:.1f}")
+	if cves:
+		total = len(cves)
+		preview = ", ".join(cves[:5])
+		if total == 1:
+			summary_lines.append(f"{title_label} correlacionou 1 CVE: {preview}")
+		else:
+			extra = total - min(total, 5)
+			line = f"{title_label} correlacionou {total} CVEs."
+			summary_lines.append(line)
+			if preview:
+				suffix = f" (+{extra} adicionais)" if extra > 0 else ""
+				summary_lines.append(f"Amostra: {preview}{suffix}")
+	if not summary_lines:
+		excerpt = _shorten_text(raw_output)
+		if excerpt:
+			summary_lines.append(excerpt)
+	return "\n".join(line for line in summary_lines if line).strip()
+
+
+def _shorten_text(raw_output: str, *, max_lines: int = 3, max_length: int = 220) -> str:
+	if not raw_output:
+		return ""
+	lines: List[str] = []
+	for line in raw_output.splitlines():
+		clean = line.strip()
+		if not clean:
+			continue
+		lines.append(clean)
+		if len(lines) >= max_lines:
+			break
+	if not lines:
+		return ""
+	excerpt = " / ".join(lines)
+	if len(excerpt) > max_length:
+		excerpt = excerpt[: max_length - 3].rstrip() + "..."
+	return excerpt
 
 
 def _combine_severity(label: Optional[str], score: Optional[float]) -> str:
@@ -373,7 +489,10 @@ def _safe_int(value: Any) -> Optional[int]:
 
 def _safe_float(value: Any) -> Optional[float]:
 	try:
-		return float(str(value))
+		result = float(str(value))
+		if not math.isfinite(result):
+			return None
+		return result
 	except (TypeError, ValueError):
 		return None
 
