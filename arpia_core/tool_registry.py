@@ -34,6 +34,13 @@ DEFAULT_TOOLS: List[ToolDefinition] = [
         description="Cliente GMP para controle do Greenbone/OpenVAS via linha de comando.",
         category="vulnerability",
     ),
+    ToolDefinition(
+        slug="searchsploit",
+        name="Searchsploit",
+        path="/usr/bin/searchsploit",
+        description="Cliente Exploit-DB offline para consulta de exploits e PoCs.",
+        category="research",
+    ),
 ]
 
 

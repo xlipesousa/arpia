@@ -27,6 +27,7 @@ urlpatterns = [
     path("", include("arpia_core.urls")),
     path("scan/", include(("arpia_scan.urls", "arpia_scan"), namespace="arpia_scan")),
     path("vuln/", include(("arpia_vuln.urls", "arpia_vuln"), namespace="arpia_vuln")),
+    path("hunt/", include(("arpia_hunt.urls", "arpia_hunt"), namespace="arpia_hunt")),
     path("reports/", include(("arpia_report.urls", "arpia_report"), namespace="arpia_report")),
     path("api/", include("api.urls")),
 ]

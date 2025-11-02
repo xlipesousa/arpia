@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}Hunt — ARPIA{% endblock %}
+
+{% block content %}
+<section class="page-heading">
+  <div>
+    <h1>Modulo Hunt</h1>
+    <p class="page-subtitle">Fase atual: {{ phase }} · Snapshot base: {{ snapshot_label }}</p>
+  </div>
+</section>
+
+<section class="hunt-grid">
+  <article class="panel">
+    <header class="panel-header">
+      <div>
+        <h2>Objetivo da fase</h2>
+        <p class="muted">Preparar o terreno para perfis Blue-Team e Red-Team baseados em dados do Scan e Vuln.</p>
+      </div>
+    </header>
+    <ul class="bullet-list">
+      {% for item in phase_objectives %}
+        <li>{{ item }}</li>
+      {% endfor %}
+    </ul>
+  </article>
+
+  <article class="panel">
+    <header class="panel-header">
+      <div>
+        <h2>Fontes de dados</h2>
+        <p class="muted">Mapeamento inicial do que será correlacionado pelo Hunt.</p>
+      </div>
+    </header>
+    <ul class="data-sources">
+      {% for source in data_sources %}
+        <li>
+          <strong>{{ source.label }}</strong>
+          <p>{{ source.description }}</p>
+        </li>
+      {% endfor %}
+    </ul>
+  </article>
+
+  <article class="panel">
+    <header class="panel-header">
+      <div>
+        <h2>Entregáveis Fase 0</h2>
+        <p class="muted">Itens mínimos para concluir a fase de descoberta.</p>
+      </div>
+    </header>
+    <ul class="deliverables">
+      {% for deliverable in deliverables %}
+        <li>{{ deliverable }}</li>
+      {% endfor %}
+    </ul>
+  </article>
+
+  <article class="panel">
+    <header class="panel-header">
+      <div>
+        <h2>Próximos passos</h2>
+        <p class="muted">Sequência planejada para avançar ao enriquecimento.</p>
+      </div>
+    </header>
+    <ul class="next-steps">
+      {% for step in next_steps %}
+        <li>{{ step }}</li>
+      {% endfor %}
+    </ul>
+  </article>
+</section>
+
+<section class="panel roles-panel">
+  <header class="panel-header">
+    <div>
+      <h2>Visão orientada a perfis</h2>
+      <p class="muted">Como os dados serão apresentados para Blue-Team (protetores) e Red-Team (atacantes).</p>
+    </div>
+  </header>
+  <div class="role-columns">
+    <div class="role-card blue">
+      <h3>Blue-Team · Protetores</h3>
+      <p>Consolidar evidências priorizando mitigação, redução de superfície e recomendações defensivas.</p>
+      <ul>
+        <li>Mapa de vulnerabilidades com criticidade, contexto do ativo e impacto operacional.</li>
+        <li>Integração com MITRE ATT&amp;CK para orientar detecções e controles.</li>
+        <li>Sugestões de correção, compensação e melhoria de monitoramento.</li>
+      </ul>
+    </div>
+    <div class="role-card red">
+      <h3>Red-Team · Atacantes</h3>
+      <p>Organizar TTPs, exploits e caminhos de escalada com base nos achados do Scan e do Vuln.</p>
+      <ul>
+        <li>Correlação com exploits públicos (Vulners, searchsploit, Metasploit).</li>
+        <li>Linhas de ataque por fase (reconhecimento, acesso inicial, movimento lateral).</li>
+        <li>Exportação de dados para alimentar o módulo Pentest.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="panel notes-panel">
+  <header class="panel-header">
+    <div>
+      <h2>Notas rápidas</h2>
+      <p class="muted">Pontos de atenção levantados durante o planejamento.</p>
+    </div>
+  </header>
+  <ul class="notes-list">
+    <li>Respeitar limites de rate das APIs NVD e Vulners usando cache local incremental.</li>
+    <li>Definir formato canônico para armazenar resultados do searchsploit sem exigir parsing manual a cada consulta.</li>
+    <li>Garantir que dados sensíveis (creds, PoCs) sejam tratados com controles de acesso adequados.</li>
+  </ul>
+</section>
+
+<style>
+.page-heading{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.6rem;gap:1rem;}
+.page-heading h1{margin:0;font-size:1.9rem;color:var(--text);}
+.page-subtitle{margin:.25rem 0 0;font-size:.95rem;color:var(--muted);}
+.hunt-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1.4rem;margin-bottom:1.6rem;}
+.panel{background:rgba(8,23,43,0.78);border-radius:16px;padding:1.4rem;border:1px solid rgba(255,255,255,0.05);box-shadow:0 18px 38px rgba(5,16,32,0.35);position:relative;overflow:hidden;}
+.panel-header{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:1.2rem;}
+.panel-header h2{margin:0;color:var(--text);font-size:1.35rem;}
+.panel-header p{margin:0;color:var(--muted);font-size:.9rem;}
+.bullet-list,.deliverables,.next-steps,.notes-list{list-style:disc;margin:0;padding-left:1.2rem;display:flex;flex-direction:column;gap:.6rem;color:var(--muted);}
+.data-sources{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.9rem;}
+.data-sources li{padding:.85rem 1rem;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);}
+.data-sources strong{display:block;color:var(--text);margin-bottom:.35rem;font-size:1rem;}
+.data-sources p{margin:0;color:var(--muted);font-size:.9rem;}
+.roles-panel{margin-bottom:1.6rem;}
+.role-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.2rem;}
+.role-card{padding:1.2rem;border-radius:14px;border:1px solid rgba(255,255,255,0.05);background:rgba(255,255,255,0.02);display:flex;flex-direction:column;gap:.8rem;}
+.role-card h3{margin:0;color:var(--text);font-size:1.1rem;}
+.role-card p{margin:0;color:var(--muted);}
+.role-card ul{margin:0;padding-left:1.1rem;display:flex;flex-direction:column;gap:.45rem;color:var(--muted);}
+.role-card.blue{background:rgba(118,187,255,0.08);border-color:rgba(118,187,255,0.18);}
+.role-card.red{background:rgba(255,138,138,0.08);border-color:rgba(255,138,138,0.18);}
+.notes-panel{margin-bottom:2rem;}
+.notes-list li{line-height:1.4;}
+@media (max-width:960px){
+  .page-heading{flex-direction:column;align-items:flex-start;}
+}
+</style>
+{% endblock %}
