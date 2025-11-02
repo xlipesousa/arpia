@@ -26,8 +26,15 @@ from arpia_hunt.models import (
     HuntRecommendation,
     HuntSyncLog,
 )
-from arpia_hunt.services import sync_recommendations_for_finding, synchronize_findings
+from arpia_hunt.services import (
+    sync_attack_catalog,
+    sync_heuristic_mappings,
+    sync_recommendations_for_finding,
+    synchronize_findings,
+)
+from arpia_hunt.services.attack_catalog import _FALLBACK_CACHE
 from arpia_hunt.enrichment import enrich_cve, enrich_finding
+from arpia_hunt.integrations import IntegrationError, fetch_nvd_cve, fetch_vulners_cve, search_exploitdb
 from arpia_vuln.models import VulnerabilityFinding, VulnScanSession
 from arpia_log.models import LogEntry
 from django.db import IntegrityError
@@ -215,7 +222,7 @@ class FindingProfilesTests(TestCase):
         CveAttackTechnique.objects.create(
             cve="CVE-2024-9999",
             technique=attack_technique,
-            source=CveAttackTechnique.Source.HEURISTIC,
+            source=CveAttackTechnique.Source.DATASET,
             confidence=CveAttackTechnique.Confidence.HIGH,
             rationale="Exploit público conhecido.",
         )
@@ -405,6 +412,7 @@ class AttackMappingTests(TestCase):
                 rationale="duplicated",
             )
 
+
     def test_hunt_recommendation_links_finding_and_enrichment(self):
         fixture = load_json_fixture("attack_mapping.json")
         tactic = AttackTactic.objects.create(
@@ -466,3 +474,259 @@ class AttackMappingTests(TestCase):
         self.assertEqual(recommendation.technique, technique)
         self.assertEqual(recommendation.source_enrichment, enrichment)
         self.assertIn("cve", recommendation.evidence)
+
+
+class IntegrationContractTests(TestCase):
+    @mock.patch("arpia_hunt.integrations.nvd_service.load_requests")
+    def test_fetch_nvd_cve_uses_custom_endpoint_and_headers(self, mock_load):
+        requests_mock = mock.Mock()
+        response_mock = mock.Mock()
+        response_mock.json.return_value = {"ok": True}
+        response_mock.raise_for_status.return_value = None
+        requests_mock.get.return_value = response_mock
+        mock_load.return_value = requests_mock
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "ARPIA_HUNT_NVD_URL": "https://nvd.test/api",
+                "ARPIA_HUNT_NVD_API_KEY": "key-123",
+                "ARPIA_HUNT_NVD_TIMEOUT": "5",
+            },
+            clear=False,
+        ):
+            result = fetch_nvd_cve("CVE-2025-0001")
+
+        self.assertEqual(result, {"ok": True})
+        requests_mock.get.assert_called_once_with(
+            "https://nvd.test/api",
+            params={"cveId": "CVE-2025-0001"},
+            headers={"apiKey": "key-123"},
+            timeout=5.0,
+        )
+
+    @mock.patch("arpia_hunt.integrations.vulners_service.load_requests")
+    def test_fetch_vulners_cve_adds_api_key_header(self, mock_load):
+        requests_mock = mock.Mock()
+        response_mock = mock.Mock()
+        response_mock.json.return_value = {"result": "ok"}
+        response_mock.raise_for_status.return_value = None
+        requests_mock.get.return_value = response_mock
+        mock_load.return_value = requests_mock
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "ARPIA_HUNT_VULNERS_URL": "https://vulners.test/api",
+                "ARPIA_HUNT_VULNERS_API_KEY": "token-456",
+                "ARPIA_HUNT_VULNERS_TIMEOUT": "7",
+            },
+            clear=False,
+        ):
+            result = fetch_vulners_cve("CVE-2025-0002")
+
+        self.assertEqual(result, {"result": "ok"})
+        requests_mock.get.assert_called_once_with(
+            "https://vulners.test/api",
+            params={"id": "CVE-2025-0002"},
+            headers={"Content-Type": "application/json", "X-ApiKey": "token-456"},
+            timeout=7.0,
+        )
+
+    @mock.patch("subprocess.run")
+    def test_search_exploitdb_parses_json_response(self, mock_run):
+        process_mock = mock.Mock()
+        process_mock.stdout = '{"RESULTS_EXPLOIT": []}'
+        mock_run.return_value = process_mock
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "ARPIA_HUNT_SEARCHSPLOIT_PATH": "/usr/local/bin/searchsploit",
+                "ARPIA_HUNT_SEARCHSPLOIT_TIMEOUT": "20",
+            },
+            clear=False,
+        ):
+            result = search_exploitdb("CVE-2025-0003")
+
+        self.assertEqual(result, {"RESULTS_EXPLOIT": []})
+        mock_run.assert_called_once_with(
+            ["/usr/local/bin/searchsploit", "-j", "CVE-2025-0003"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+
+    @mock.patch("subprocess.run")
+    def test_search_exploitdb_raises_for_invalid_json(self, mock_run):
+        process_mock = mock.Mock()
+        process_mock.stdout = "not-json"
+        mock_run.return_value = process_mock
+
+        with self.assertRaises(IntegrationError):
+            search_exploitdb("CVE-2025-0004")
+
+
+class AttackHeuristicsTests(TestCase):
+    def setUp(self):
+        _FALLBACK_CACHE.clear()
+        self.cases = load_json_fixture("heuristic_cases.json")
+        self.tactic = AttackTactic.objects.create(
+            id="TA0001",
+            name="Initial Access",
+            matrix=AttackTactic.Matrix.ENTERPRISE,
+            order=1,
+        )
+        self.tech_exploit = AttackTechnique.objects.create(
+            id="T1190",
+            name="Exploit Public-Facing Application",
+            tactic=self.tactic,
+        )
+        self.tech_interpreter = AttackTechnique.objects.create(
+            id="T1059",
+            name="Command and Scripting Interpreter",
+            tactic=self.tactic,
+        )
+        self.tech_priv = AttackTechnique.objects.create(
+            id="T1548",
+            name="Abuse Elevation Control Mechanism",
+            tactic=self.tactic,
+        )
+        self.tech_client = AttackTechnique.objects.create(
+            id="T1203",
+            name="Exploitation for Client Execution",
+            tactic=self.tactic,
+        )
+
+    def _create_enrichment(self, cve: str, payload: dict) -> HuntEnrichment:
+        return HuntEnrichment.objects.create(
+            cve=cve,
+            source=HuntEnrichment.Source.NVD,
+            status=HuntEnrichment.Status.FRESH,
+            payload=payload,
+        )
+
+    def test_keyword_rule_generates_high_confidence(self):
+        case = self.cases[0]
+        enrichment = self._create_enrichment(case["cve"], case["payload"])
+
+        result = sync_heuristic_mappings(
+            cve=case["cve"],
+            records={HuntEnrichment.Source.NVD: enrichment},
+        )
+
+        self.assertTrue(result.created)
+        mapping = CveAttackTechnique.objects.get(cve=case["cve"], technique=self.tech_exploit, source=CveAttackTechnique.Source.HEURISTIC)
+        self.assertEqual(mapping.confidence, CveAttackTechnique.Confidence.HIGH)
+        self.assertIn("Remote Code Execution", mapping.rationale)
+
+    def test_cwe_rule_adds_additional_mappings(self):
+        case = self.cases[1]
+        enrichment = self._create_enrichment(case["cve"], case["payload"])
+
+        sync_heuristic_mappings(
+            cve=case["cve"],
+            records={HuntEnrichment.Source.NVD: enrichment},
+        )
+
+        techniques = set(
+            CveAttackTechnique.objects.filter(cve=case["cve"], source=CveAttackTechnique.Source.HEURISTIC).values_list("technique_id", flat=True)
+        )
+        self.assertSetEqual(techniques, {"T1548", "T1203"})
+
+    def test_obsolete_mappings_are_removed(self):
+        case = self.cases[0]
+        enrichment = self._create_enrichment(case["cve"], case["payload"])
+
+        sync_heuristic_mappings(
+            cve=case["cve"],
+            records={HuntEnrichment.Source.NVD: enrichment},
+        )
+        self.assertTrue(
+            CveAttackTechnique.objects.filter(cve=case["cve"], source=CveAttackTechnique.Source.HEURISTIC).exists()
+        )
+
+        result = sync_heuristic_mappings(
+            cve=case["cve"],
+            records={},
+        )
+        self.assertTrue(result.deleted)
+        self.assertFalse(
+            CveAttackTechnique.objects.filter(cve=case["cve"], source=CveAttackTechnique.Source.HEURISTIC).exists()
+        )
+
+    @mock.patch("arpia_hunt.enrichment.fetch_nvd_cve")
+    @mock.patch("arpia_hunt.enrichment.fetch_vulners_cve")
+    @mock.patch("arpia_hunt.enrichment.search_exploitdb")
+    def test_enrich_finding_triggers_heuristics(self, mock_search, mock_vulners, mock_nvd):
+        case = self.cases[0]
+        mock_nvd.return_value = case["payload"]
+        mock_vulners.return_value = {"data": {"documents": []}}
+        mock_search.return_value = {"RESULTS_EXPLOIT": []}
+
+        user_model = get_user_model()
+        user = user_model.objects.create_user("heuristic", "heuristic@example.com", "hunter")
+        project = Project.objects.create(owner=user, name="Projeto Heurístico", slug="projeto-heuristico")
+        session = VulnScanSession.objects.create(project=project, owner=user, title="Sessão Heurística")
+        vuln = VulnerabilityFinding.objects.create(
+            session=session,
+            title="Vuln",
+            severity=VulnerabilityFinding.Severity.HIGH,
+            status=VulnerabilityFinding.Status.OPEN,
+            host="10.0.0.1",
+            service="http",
+            port=80,
+            protocol="tcp",
+            cve=case["cve"],
+            summary="Remote code execution on public app",
+        )
+        finding = HuntFinding.objects.create(
+            project=project,
+            vulnerability=vuln,
+            vuln_session=session,
+            cve=case["cve"],
+            summary=vuln.summary,
+            severity=vuln.severity,
+        )
+
+        enrich_finding(finding, enable_remote=True, force_refresh=True)
+
+        self.assertTrue(
+            CveAttackTechnique.objects.filter(
+                cve=case["cve"],
+                technique=self.tech_exploit,
+                source=CveAttackTechnique.Source.HEURISTIC,
+            ).exists()
+        )
+
+
+class AttackCatalogFallbackTests(TestCase):
+    def setUp(self):
+        _FALLBACK_CACHE.clear()
+
+    def test_sync_assigns_mobile_techniques_to_synthetic_tactic(self):
+        dataset = {
+            "tactics": [],
+            "techniques": [
+                {
+                    "id": "T1425",
+                    "name": "Insecure Third-Party Libraries",
+                    "matrix": AttackTactic.Matrix.MOBILE,
+                },
+                {
+                    "id": "T1999",
+                    "name": "Mobile Placeholder",
+                    "matrix": AttackTactic.Matrix.MOBILE,
+                },
+            ],
+        }
+
+        result = sync_attack_catalog(**dataset)
+
+        fallback_tactic = AttackTactic.objects.get(pk="MOB-UNASSIGNED")
+        self.assertEqual(fallback_tactic.matrix, AttackTactic.Matrix.MOBILE)
+        self.assertEqual(result.techniques, 2)
+
+        assigned_ids = set(AttackTechnique.objects.filter(tactic=fallback_tactic).values_list("id", flat=True))
+        self.assertSetEqual(assigned_ids, {"T1425", "T1999"})

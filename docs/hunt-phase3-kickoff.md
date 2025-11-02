@@ -93,7 +93,40 @@ Snapshot de referência: `antes Kickoff da Fase 3` (registrado em 2025-11-02).
 ### Heurísticas iniciais implementadas
 
 - `python manage.py import_attack_catalog` + `sync_recommendations_for_finding` sincronizam táticas/técnicas e criam recomendações automáticas (Blue: mitigar, Red: simular) para cada `CveAttackTechnique` do CVE associado ao finding.
+- `sync_heuristic_mappings` executa heurísticas (keywords + CWE) antes de gerar recomendações, garantindo que o pivô `CveAttackTechnique` esteja sempre alinhado ao conteúdo mais recente de enriquecimento.
 - Recomendações automáticas são atualizadas/excluídas a cada nova execução de `enrich_finding`, garantindo aderência ao catálogo vigente.
+
+### Cobertura de heurísticas (atualizado em 2025-11-02)
+
+- **Regras por keywords**: combinações como `"remote code execution" + "public"` (→ `T1190` com confiança alta), menções a "command execution" e "privilege escalation" (→ `T1059`, `T1548` com confiança média).
+- **Regras por CWE**: mapeamentos de `CWE-79/89/352` (injeções web) para `T1190` com confiança média; `CWE-94/119` (execução arbitrária/estouro) para `T1203`.
+- **Fixtures de validação**: `arpia_hunt/tests/fixtures/heuristic_cases.json` mantém exemplos canônicos de CVEs e respectivas expectativas para testes automatizados.
+- **Resultados**: logs via `logger` registram vínculos criados e limpezas; testes (`AttackHeuristicsTests`) cobrem criação, atualização e remoção de vínculos heurísticos.
+
+### Fluxo de sincronização ATT&CK
+
+1. `import_attack_catalog --pyattck --matrix <...>` importa matrizes enterprise/mobile/ics. Técnicas mobile sem tática oficial são vinculadas à tática sintética `MOB-UNASSIGNED`.
+2. `enrich_finding` baixa/atualiza NVD, Vulners e searchsploit; na sequência executa `sync_heuristic_mappings`, atualiza perfis (`derive_profiles`) e consolida recomendações automatizadas.
+3. `sync_recommendations_for_finding` reaproveita enriquecimentos recentes (NVD → Blue, Vulners/searchsploit → Red) e mantém `HuntRecommendation` consistente com o catálogo e heurísticas.
+
+### Integrações externas — contratos e configuração
+
+- Serviços foram modularizados em `arpia_hunt/integrations/{nvd_service,vulners_service,exploitdb_service}.py` com testes (`IntegrationContractTests`) que validam cabeçalhos, parâmetros, timeouts e tratamento de erros.
+- Variáveis de ambiente suportadas:
+   - `ARPIA_HUNT_NVD_URL`, `ARPIA_HUNT_NVD_API_KEY`, `ARPIA_HUNT_NVD_TIMEOUT` (fallback em `NVD_API_KEY`).
+   - `ARPIA_HUNT_VULNERS_URL`, `ARPIA_HUNT_VULNERS_API_KEY`, `ARPIA_HUNT_VULNERS_TIMEOUT` (fallback em `VULNERS_API_KEY`).
+   - `ARPIA_HUNT_SEARCHSPLOIT_PATH`, `ARPIA_HUNT_SEARCHSPLOIT_TIMEOUT` para execução local do searchsploit.
+- Em ambientes de testes os contratos utilizam `mock.patch.dict` e stubs (`requests`, `subprocess`) evitando chamadas externas.
+
+### Planejamento inicial da Fase 4 (APIs/UI)
+
+- **Endpoints REST** (draft):
+   - `GET /api/hunt/findings/<uuid>/profiles` → retorna perfis Blue/Red, enriquecimentos vinculados e heurísticas aplicadas.
+   - `GET /api/hunt/recommendations` com filtros por `project`, `technique`, `confidence`.
+   - `GET /api/hunt/catalog/techniques` com suporte a busca textual e facetas por tática/matriz.
+- **Views/Templates**: criar páginas `templates/hunt/findings/detail.html` (abas Blue/Red) e `templates/hunt/recommendations/list.html` com componentes reutilizáveis para listas de técnicas e recomendações.
+- **Índices e busca**: planejar índice GIN com `SearchVector` para `AttackTechnique.name/description` e índice composto (`cve`, `source`) em `CveAttackTechnique` para acelerar filtros na API.
+- **Extensões futuras**: considerar endpoint de export (`/reports/hunt/<project>.pdf`) e dashboards combinando métricas de severidade × técnicas ATT&CK.
 
 ## Riscos e pontos de atenção
 

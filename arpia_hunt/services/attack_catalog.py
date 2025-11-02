@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import json
+import logging
+from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List, Mapping, MutableMapping, Sequence
+from typing import Any, Iterable, List, Mapping, MutableMapping, Sequence
 
 from django.db import transaction
 
 from ..models import AttackTactic, AttackTechnique
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -34,6 +39,7 @@ def _normalize_technique(record: Mapping[str, object]) -> MutableMapping[str, ob
     payload.setdefault("datasources", [])
     payload.setdefault("external_references", [])
     payload.setdefault("version", "")
+    payload.setdefault("matrix", AttackTactic.Matrix.ENTERPRISE)
     return payload
 
 
@@ -80,12 +86,23 @@ def sync_attack_catalog(
         tactic_count += 1
 
     technique_count = 0
+    fallback_assignments: defaultdict[str, dict[str, object]] = defaultdict(
+        lambda: {"matrix": None, "techniques": []}
+    )
     pending_parent_links: list[tuple[str, str]] = []
     for technique_data in techniques:
         payload = _normalize_technique(technique_data)
+        matrix = str(payload.get("matrix") or AttackTactic.Matrix.ENTERPRISE)
         tactic_id = payload.get("tactic") or payload.get("tactic_id")
         if tactic_id is None:
-            raise CatalogImportError(f"Técnica {payload.get('id')} sem tática associada.")
+            technique_id = str(payload.get("id"))
+            fallback_tactic_id, matrix_choice = _ensure_fallback_tactic(matrix)
+            tactic_id = fallback_tactic_id
+            payload["tactic"] = tactic_id
+            info = fallback_assignments[tactic_id]
+            if info["matrix"] is None:
+                info["matrix"] = matrix_choice
+            info["techniques"].append(technique_id)
 
         defaults = {
             "name": payload.get("name", ""),
@@ -116,7 +133,66 @@ def sync_attack_catalog(
         else:
             raise CatalogImportError(f"Técnica {technique_id} referencia parent inexistente {parent_id}.")
 
+    if fallback_assignments:
+        for tactic_id, info in fallback_assignments.items():
+            matrix_choice = info["matrix"]
+            matrix_label = getattr(matrix_choice, "label", str(matrix_choice))
+            matrix_value = getattr(matrix_choice, "value", str(matrix_choice))
+            logger.warning(
+                "Atribuí %s técnicas à tática sintética %s (%s/%s): %s",
+                len(info["techniques"]),
+                tactic_id,
+                matrix_value,
+                matrix_label,
+                ", ".join(sorted(info["techniques"])),
+            )
+
     return CatalogSyncResult(tactics=tactic_count, techniques=technique_count)
+
+
+_FALLBACK_TACTIC_MAP: dict[AttackTactic.Matrix, dict[str, object]] = {
+    AttackTactic.Matrix.ENTERPRISE: {
+        "id": "ENT-UNASSIGNED",
+        "name": "Sem tática definida (Enterprise)",
+        "order": 999,
+    },
+    AttackTactic.Matrix.MOBILE: {
+        "id": "MOB-UNASSIGNED",
+        "name": "Sem tática definida (Mobile)",
+        "order": 999,
+    },
+    AttackTactic.Matrix.ICS: {
+        "id": "ICS-UNASSIGNED",
+        "name": "Sem tática definida (ICS)",
+        "order": 999,
+    },
+}
+
+_FALLBACK_CACHE: set[str] = set()
+
+
+def _ensure_fallback_tactic(matrix: str) -> tuple[str, AttackTactic.Matrix]:
+    try:
+        matrix_choice = AttackTactic.Matrix(matrix)
+    except ValueError:
+        matrix_choice = AttackTactic.Matrix.ENTERPRISE
+
+    definition = _FALLBACK_TACTIC_MAP.get(matrix_choice, _FALLBACK_TACTIC_MAP[AttackTactic.Matrix.ENTERPRISE])
+    tactic_id = str(definition["id"])
+
+    if tactic_id not in _FALLBACK_CACHE:
+        AttackTactic.objects.update_or_create(
+            id=tactic_id,
+            defaults={
+                "name": str(definition["name"]),
+                "short_description": "Gerada automaticamente para técnicas sem tática oficial.",
+                "matrix": matrix_choice,
+                "order": int(definition["order"]),
+            },
+        )
+        _FALLBACK_CACHE.add(tactic_id)
+
+    return tactic_id, matrix_choice
 
 
 def load_from_pyattck(matrix: str = AttackTactic.Matrix.ENTERPRISE) -> dict[str, List[MutableMapping[str, object]]]:
@@ -125,7 +201,11 @@ def load_from_pyattck(matrix: str = AttackTactic.Matrix.ENTERPRISE) -> dict[str,
     except ImportError as exc:  # pragma: no cover - dependência opcional
         raise CatalogImportError("pyattck não está instalado. Adicione-o às dependências.") from exc
 
-    attack = Attck(load_only=matrix)
+    try:
+        attack = Attck()
+    except TypeError:
+        attack = Attck(load_remote=True)
+
     if matrix == AttackTactic.Matrix.ENTERPRISE:
         attack_matrix = attack.enterprise
     elif matrix == AttackTactic.Matrix.ICS:
@@ -137,7 +217,8 @@ def load_from_pyattck(matrix: str = AttackTactic.Matrix.ENTERPRISE) -> dict[str,
 
     tactics: list[MutableMapping[str, object]] = []
     for tactic in attack_matrix.tactics:
-        external_id = _extract_external_id(tactic.external_references)
+        tactic_refs = _normalize_external_references(getattr(tactic, "external_references", []))
+        external_id = _extract_external_id(tactic_refs)
         tactics.append(
             _normalize_tactic(
                 {
@@ -152,17 +233,20 @@ def load_from_pyattck(matrix: str = AttackTactic.Matrix.ENTERPRISE) -> dict[str,
 
     techniques: list[MutableMapping[str, object]] = []
     for technique in attack_matrix.techniques:
-        external_id = _extract_external_id(technique.external_references)
-        tactic_ids = [
-            _extract_external_id(t.external_references)
-            for t in getattr(technique, "tactics", [])
-            if _extract_external_id(t.external_references)
-        ]
+        technique_refs = _normalize_external_references(getattr(technique, "external_references", []))
+        external_id = _extract_external_id(technique_refs)
+        tactic_ids = []
+        for tactic in getattr(technique, "tactics", []):
+            tactic_refs = _normalize_external_references(getattr(tactic, "external_references", []))
+            tactic_external_id = _extract_external_id(tactic_refs)
+            if tactic_external_id:
+                tactic_ids.append(tactic_external_id)
         tactic_id = tactic_ids[0] if tactic_ids else None
         parent_external = None
         parent = getattr(technique, "parent", None)
         if parent is not None:
-            parent_external = _extract_external_id(parent.external_references)
+            parent_refs = _normalize_external_references(getattr(parent, "external_references", []))
+            parent_external = _extract_external_id(parent_refs)
 
         techniques.append(
             _normalize_technique(
@@ -175,13 +259,44 @@ def load_from_pyattck(matrix: str = AttackTactic.Matrix.ENTERPRISE) -> dict[str,
                     "tactic": tactic_id,
                     "platforms": list(getattr(technique, "platforms", [])),
                     "datasources": list(getattr(technique, "datasources", [])),
-                    "external_references": list(getattr(technique, "external_references", [])),
+                    "external_references": technique_refs,
                     "version": str(getattr(technique, "version", "")),
+                    "matrix": matrix,
                 }
             )
         )
 
     return {"tactics": tactics, "techniques": techniques}
+
+
+def _normalize_external_references(references: Iterable[Any]) -> list[MutableMapping[str, object]]:
+    normalized: list[MutableMapping[str, object]] = []
+    for reference in references or []:
+        if isinstance(reference, Mapping):
+            normalized.append(dict(reference))
+            continue
+
+        data: dict[str, object] = {}
+        external_id = getattr(reference, "external_id", None) or getattr(reference, "externalId", None)
+        if external_id:
+            data["external_id"] = external_id
+
+        for attr in ("source_name", "url", "description"):
+            value = getattr(reference, attr, None)
+            if value:
+                data[attr] = value
+
+        if not data and hasattr(reference, "__dict__"):
+            for key, value in reference.__dict__.items():
+                if key in {"external_id", "source_name", "url", "description"} and value is not None:
+                    data[key] = value
+
+        if not data:
+            data["value"] = str(reference)
+
+        normalized.append(data)
+
+    return normalized
 
 
 def _extract_external_id(references: Iterable[Mapping[str, object]]) -> str | None:

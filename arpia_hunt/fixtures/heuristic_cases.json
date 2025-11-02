@@ -1,0 +1,51 @@
+[
+  {
+    "cve": "CVE-2025-0001",
+    "payload": {
+      "vulnerabilities": [
+        {
+          "cve": {
+            "descriptions": [
+              {"value": "Remote code execution on a public web application allows command execution"}
+            ],
+            "weaknesses": [
+              {
+                "description": [
+                  {"value": "CWE-79"}
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "expected": [
+      {"technique": "T1190", "confidence": "high"}
+    ]
+  },
+  {
+    "cve": "CVE-2025-0002",
+    "payload": {
+      "vulnerabilities": [
+        {
+          "cve": {
+            "descriptions": [
+              {"value": "Privilege escalation vulnerability in local component"}
+            ],
+            "weaknesses": [
+              {
+                "description": [
+                  {"value": "CWE-94"}
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "expected": [
+      {"technique": "T1548", "confidence": "medium"},
+      {"technique": "T1203", "confidence": "medium"}
+    ]
+  }
+]
