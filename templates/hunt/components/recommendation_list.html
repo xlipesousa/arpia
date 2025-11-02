@@ -1,0 +1,13 @@
+{% if recommendations %}
+  <ul class="recommendation-list{% if tone == 'red' %} red{% endif %}">
+    {% for rec in recommendations %}
+      <li>
+        <strong>{{ rec.title }}</strong>
+        <span class="muted">{{ rec.summary|default:"Sem resumo detalhado." }}</span>
+        <small class="tagged">Confiança: {{ rec.get_confidence_display }}</small>
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p class="muted">{{ empty_message|default:"Nenhuma recomendação disponível." }}</p>
+{% endif %}

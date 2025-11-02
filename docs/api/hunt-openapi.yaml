@@ -1,0 +1,407 @@
+openapi: 3.0.3
+info:
+  title: Arpia Hunt API (Beta)
+  version: 0.4.0
+  description: |
+    Endpoints públicos (beta) para consumo dos dados do módulo Hunt. Os parâmetros
+    de filtro aceitam valores separados por vírgula (CSV) quando indicado.
+servers:
+  - url: https://arpia.example/api
+paths:
+  /hunt/findings/:
+    get:
+      summary: Lista findings correlacionados ao módulo Hunt
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: query
+          name: project
+          schema:
+            type: string
+            description: UUID único ou lista CSV de UUIDs
+          description: Filtra findings por projeto.
+        - in: query
+          name: technique
+          schema:
+            type: string
+            description: ID ATT&CK (ex. T1190) ou lista CSV
+          description: Filtra findings que possuem recomendações correlacionadas à técnica.
+        - in: query
+          name: confidence
+          schema:
+            type: string
+            enum: [low, medium, high]
+          description: Filtra findings pela confiança das recomendações associadas (aceita CSV).
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum: [blue, red]
+          description: Limita a findings que possuam recomendações do tipo informado (CSV).
+        - in: query
+          name: search
+          schema:
+            type: string
+          description: Busca em título do finding, resumo e CVE.
+        - in: query
+          name: page
+          schema:
+            type: integer
+        - in: query
+          name: page_size
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Lista paginada de findings.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedFindings'
+  /hunt/findings/{finding_id}/profiles/:
+    get:
+      summary: Retorna os perfis Blue/Red de um finding
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: path
+          name: finding_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Perfil consolidado do finding.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FindingProfile'
+  /hunt/recommendations/:
+    get:
+      summary: Lista recomendações geradas para findings Hunt
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: query
+          name: project
+          schema:
+            type: string
+            description: UUID ou lista CSV.
+        - in: query
+          name: finding
+          schema:
+            type: string
+            description: UUID ou lista CSV.
+        - in: query
+          name: technique
+          schema:
+            type: string
+            description: ID ATT&CK (CSV opcional).
+        - in: query
+          name: confidence
+          schema:
+            type: string
+            enum: [low, medium, high]
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum: [blue, red]
+        - in: query
+          name: generated_by
+          schema:
+            type: string
+            enum: [automation, analyst, import]
+            description: Aceita múltiplos valores separados por vírgula.
+        - in: query
+          name: search
+          schema:
+            type: string
+            description: Busca em título e resumo.
+        - in: query
+          name: page
+          schema:
+            type: integer
+        - in: query
+          name: page_size
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Lista paginada de recomendações.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedRecommendations'
+  /hunt/recommendations/{recommendation_id}/:
+    get:
+      summary: Detalhe de uma recomendação Hunt
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: path
+          name: recommendation_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Recomendação detalhada, com finding e heurísticas relacionadas.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HuntRecommendationDetail'
+  /hunt/catalog/techniques/:
+    get:
+      summary: Lista técnicas ATT&CK disponíveis
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: query
+          name: matrix
+          schema:
+            type: string
+            enum: [enterprise, mobile, ics]
+        - in: query
+          name: tactic
+          schema:
+            type: string
+            description: ID da tática (TAxxxx)
+        - in: query
+          name: search
+          schema:
+            type: string
+            description: Busca em id, nome ou descrição.
+        - in: query
+          name: page
+          schema:
+            type: integer
+        - in: query
+          name: page_size
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Técnicas filtradas.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTechniques'
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sessionid
+  schemas:
+    Pagination:
+      type: object
+      properties:
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+    HuntRecommendation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        finding_id:
+          type: string
+          format: uuid
+          nullable: true
+        project_id:
+          type: string
+          format: uuid
+          nullable: true
+        project_name:
+          type: string
+          nullable: true
+        project_slug:
+          type: string
+          nullable: true
+        technique_id:
+          type: string
+          nullable: true
+        recommendation_type:
+          type: string
+          enum: [blue, red]
+        title:
+          type: string
+        summary:
+          type: string
+          nullable: true
+        confidence:
+          type: string
+          enum: [low, medium, high]
+        confidence_note:
+          type: string
+          nullable: true
+        evidence:
+          type: object
+        tags:
+          type: array
+          items:
+            type: string
+        generated_by:
+          type: string
+          enum: [automation, analyst, import]
+        playbook_slug:
+          type: string
+          nullable: true
+        source_enrichment_id:
+          type: string
+          format: uuid
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    HuntRecommendationDetail:
+      allOf:
+        - $ref: '#/components/schemas/HuntRecommendation'
+        - type: object
+          properties:
+            finding:
+              type: object
+              nullable: true
+            heuristics:
+              type: array
+              items:
+                type: object
+    HuntFinding:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        project:
+          type: string
+          format: uuid
+        project_name:
+          type: string
+        project_slug:
+          type: string
+        vulnerability:
+          type: string
+          format: uuid
+        vulnerability_title:
+          type: string
+        cve:
+          type: string
+          nullable: true
+        severity:
+          type: string
+        cvss_score:
+          type: number
+          format: float
+          nullable: true
+        summary:
+          type: string
+          nullable: true
+        blue_profile:
+          type: object
+        red_profile:
+          type: object
+        profile_version:
+          type: integer
+        last_profiled_at:
+          type: string
+          format: date-time
+          nullable: true
+        recommendation_counts:
+          type: object
+        applied_heuristics:
+          type: array
+          items:
+            type: object
+    PaginatedFindings:
+      allOf:
+        - $ref: '#/components/schemas/Pagination'
+        - type: object
+          properties:
+            results:
+              type: array
+              items:
+                $ref: '#/components/schemas/HuntFinding'
+    PaginatedRecommendations:
+      allOf:
+        - $ref: '#/components/schemas/Pagination'
+        - type: object
+          properties:
+            results:
+              type: array
+              items:
+                $ref: '#/components/schemas/HuntRecommendation'
+    PaginatedTechniques:
+      allOf:
+        - $ref: '#/components/schemas/Pagination'
+        - type: object
+          properties:
+            results:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  description:
+                    type: string
+                    nullable: true
+                  is_subtechnique:
+                    type: boolean
+                  parent_id:
+                    type: string
+                    nullable: true
+                  tactic_id:
+                    type: string
+                  tactic_name:
+                    type: string
+                  matrix:
+                    type: string
+                    enum: [enterprise, mobile, ics]
+                  updated_at:
+                    type: string
+                    format: date-time
+    FindingProfile:
+      type: object
+      properties:
+        finding_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        project_name:
+          type: string
+        project_slug:
+          type: string
+        profile_version:
+          type: integer
+        last_profiled_at:
+          type: string
+          format: date-time
+          nullable: true
+        blue_profile:
+          type: object
+        red_profile:
+          type: object
+        applied_heuristics:
+          type: array
+          items:
+            type: object
+        recommendation_counts:
+          type: object
+        recommendations:
+          type: array
+          items:
+            $ref: '#/components/schemas/HuntRecommendation'

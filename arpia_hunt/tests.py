@@ -9,7 +9,8 @@ from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import TestCase, override_settings
+from django.urls import reverse
 
 from arpia_core.models import Project
 from django.utils import timezone
@@ -38,6 +39,7 @@ from arpia_hunt.integrations import IntegrationError, fetch_nvd_cve, fetch_vulne
 from arpia_vuln.models import VulnerabilityFinding, VulnScanSession
 from arpia_log.models import LogEntry
 from django.db import IntegrityError
+from rest_framework.test import APITestCase
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
 
@@ -283,6 +285,115 @@ class FindingProfilesTests(TestCase):
         self.assertTrue(LogEntry.objects.filter(event_type="hunt.enrichment.batch").exists())
 
 
+class HuntApiViewTests(APITestCase):
+    maxDiff = None
+
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user("apiuser", "api@example.com", "hunter")
+        self.client.force_authenticate(user=self.user)
+        self.project = Project.objects.create(owner=self.user, name="Projeto API", slug="projeto-api")
+        self.session = VulnScanSession.objects.create(project=self.project, owner=self.user, title="Sessão API")
+
+        self.vuln = VulnerabilityFinding.objects.create(
+            session=self.session,
+            title="Apache Remote Execution",
+            summary="Execução remota crítica em Apache HTTPD",
+            severity=VulnerabilityFinding.Severity.CRITICAL,
+            status=VulnerabilityFinding.Status.OPEN,
+            host="10.0.0.5",
+            service="http",
+            port=80,
+            protocol="tcp",
+            cve="CVE-2024-4242",
+            cvss_score=Decimal("9.8"),
+        )
+
+        self.finding = HuntFinding.objects.create(
+            project=self.project,
+            vulnerability=self.vuln,
+            vuln_session=self.session,
+            cve=self.vuln.cve,
+            summary=self.vuln.summary,
+            severity=self.vuln.severity,
+            detected_at=timezone.now(),
+            blue_profile={"summary": "Aplicar correções oficiais e reforçar WAF."},
+            red_profile={"exploits": [{"title": "PoC pública", "source": "ExploitDB"}]},
+            profile_version=1,
+            last_profiled_at=timezone.now(),
+        )
+
+        self.tactic = AttackTactic.objects.create(id="TA0001", name="Initial Access", order=1)
+        self.technique = AttackTechnique.objects.create(
+            id="T1190",
+            name="Exploit Public-Facing Application",
+            tactic=self.tactic,
+        )
+
+        self.mapping = CveAttackTechnique.objects.create(
+            cve=self.finding.cve,
+            technique=self.technique,
+            source=CveAttackTechnique.Source.HEURISTIC,
+            confidence=CveAttackTechnique.Confidence.HIGH,
+            rationale="Resumo menciona RCE público.",
+        )
+
+        self.blue_rec = HuntRecommendation.objects.create(
+            finding=self.finding,
+            technique=self.technique,
+            recommendation_type=HuntRecommendation.Type.BLUE,
+            title="Aplicar atualizações críticas",
+            summary="Aplique o patch oficial e ajuste regras de firewall.",
+            confidence=CveAttackTechnique.Confidence.HIGH,
+            tags=[f"technique:{self.technique.id}", "strategy:mitigate"],
+        )
+        self.red_rec = HuntRecommendation.objects.create(
+            finding=self.finding,
+            technique=self.technique,
+            recommendation_type=HuntRecommendation.Type.RED,
+            title="Simular exploração externa",
+            summary="Reproduza o exploit para validar monitoramento.",
+            confidence=CveAttackTechnique.Confidence.MEDIUM,
+            tags=["strategy:simulate"],
+        )
+
+    @override_settings(ARPIA_HUNT_API_BETA=True)
+    def test_findings_endpoint_returns_heuristics_and_counts(self):
+        url = reverse("hunt-finding-list")
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("results", payload)
+        self.assertGreater(len(payload["results"]), 0)
+        item = payload["results"][0]
+        self.assertEqual(item["id"], str(self.finding.id))
+        self.assertEqual(item["recommendation_counts"], {"total": 2, "blue": 1, "red": 1})
+        heuristic_ids = {mapping["technique_id"] for mapping in item["applied_heuristics"]}
+        self.assertIn(self.technique.id, heuristic_ids)
+
+    @override_settings(ARPIA_HUNT_API_BETA=False)
+    def test_findings_endpoint_respects_feature_flag(self):
+        url = reverse("hunt-finding-list")
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 404)
+
+    @override_settings(ARPIA_HUNT_API_BETA=True)
+    def test_profile_action_returns_recommendations(self):
+        url = reverse("hunt-finding-profiles", args=[self.finding.id])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["finding_id"], str(self.finding.id))
+        self.assertEqual(payload["recommendation_counts"], {"total": 2, "blue": 1, "red": 1})
+        self.assertEqual(len(payload["recommendations"]), 2)
+
+    @override_settings(ARPIA_HUNT_API_BETA=True)
+    def test_recommendations_endpoint_filters_by_project(self):
+        url = reverse("hunt-recommendation-list")
+        response = self.client.get(url, {"project": str(self.project.id)})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["results"][0]["project_id"], str(self.project.id))
 class SchedulerCommandTests(TestCase):
     def test_hunt_schedule_preview_logs_event(self):
         out = StringIO()

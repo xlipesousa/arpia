@@ -9,6 +9,110 @@
   </div>
 </section>
 
+<section class="panel prototype-panel" data-tab-group="hunt-profiles">
+  <header class="panel-header prototype-header">
+    <div>
+      <h2>Protótipo · Abas Blue/Red</h2>
+      <p class="muted">Pré-visualização das interações previstas para a Fase 4, combinando heurísticas ATT&amp;CK e recomendações.</p>
+    </div>
+    <div class="tab-controls">
+      <button type="button" class="tab-control active" data-tab-target="blue">Blue Team</button>
+      <button type="button" class="tab-control" data-tab-target="red">Red Team</button>
+    </div>
+  </header>
+  <div class="tab-panels">
+    <div class="tab-panel active" data-tab-panel="blue">
+      {% if blue_tabs %}
+        <ul class="profile-tab-list">
+          {% for card in blue_tabs %}
+            <li>
+              <header>
+                <span class="badge severity-{{ card.finding.severity }}">{{ card.finding.get_severity_display }}</span>
+                <strong>{{ card.finding.vulnerability.title }}</strong>
+                <small>{{ card.finding.project.name }}</small>
+              </header>
+              <p class="profile-summary">{{ card.profile.summary|default:card.finding.summary|default:"Sem resumo." }}</p>
+              {% if card.heuristics %}
+                <ul class="heuristic-chips">
+                  {% for mapping in card.heuristics %}
+                    <li title="{{ mapping.rationale }}">{{ mapping.technique_id }} · {{ mapping.get_confidence_display }}</li>
+                  {% endfor %}
+                </ul>
+              {% endif %}
+              {% if card.recommendations %}
+                <ul class="recommendation-list">
+                  {% for rec in card.recommendations %}
+                    <li>
+                      <strong>{{ rec.title }}</strong>
+                      <span class="muted">{{ rec.summary|default:"Sem resumo detalhado." }}</span>
+                      <small class="tagged">Confiança: {{ rec.get_confidence_display }}</small>
+                    </li>
+                  {% endfor %}
+                </ul>
+              {% else %}
+                <p class="muted">Nenhuma recomendação automatizada ainda.</p>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="muted">Gere perfis Blue executando <code>python manage.py hunt_enrich</code>.</p>
+      {% endif %}
+    </div>
+    <div class="tab-panel" data-tab-panel="red">
+      {% if red_tabs %}
+        <ul class="profile-tab-list">
+          {% for card in red_tabs %}
+            <li>
+              <header>
+                <span class="badge severity-{{ card.finding.severity }}">{{ card.finding.get_severity_display }}</span>
+                <strong>{{ card.finding.vulnerability.title }}</strong>
+                <small>{{ card.finding.project.name }}</small>
+              </header>
+              {% if card.profile.exploits %}
+                <ul class="exploit-list">
+                  {% for exploit in card.profile.exploits|slice:":3" %}
+                    <li>
+                      <strong>{{ exploit.title|default:"Exploit" }}</strong>
+                      <span class="muted">Fonte: {{ exploit.source|default:"?" }}</span>
+                      {% if exploit.url %}<a href="{{ exploit.url }}" target="_blank" rel="noopener">Abrir</a>{% endif %}
+                      {% if exploit.path %}<code>{{ exploit.path }}</code>{% endif %}
+                    </li>
+                  {% endfor %}
+                </ul>
+              {% else %}
+                <p class="muted">Sem exploits correlacionados.</p>
+              {% endif %}
+              {% if card.heuristics %}
+                <ul class="heuristic-chips">
+                  {% for mapping in card.heuristics %}
+                    <li title="{{ mapping.rationale }}">{{ mapping.technique_id }} · {{ mapping.get_confidence_display }}</li>
+                  {% endfor %}
+                </ul>
+              {% endif %}
+              {% if card.recommendations %}
+                <ul class="recommendation-list red">
+                  {% for rec in card.recommendations %}
+                    <li>
+                      <strong>{{ rec.title }}</strong>
+                      <span class="muted">{{ rec.summary|default:"Sem descrição detalhada." }}</span>
+                      <small class="tagged">Confiança: {{ rec.get_confidence_display }}</small>
+                    </li>
+                  {% endfor %}
+                </ul>
+              {% else %}
+                <p class="muted">Nenhuma recomendação Red disponível ainda.</p>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="muted">Execute o pipeline de enriquecimento para liberar recomendações Red.</p>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
 <section class="hunt-grid">
   <article class="panel">
     <header class="panel-header">
@@ -267,10 +371,37 @@
   {% endif %}
 </section>
 
+<script>
+document.addEventListener("DOMContentLoaded",function(){const group=document.querySelector('[data-tab-group="hunt-profiles"]');if(!group){return;}const controls=Array.from(group.querySelectorAll('[data-tab-target]'));const panels=Array.from(group.querySelectorAll('[data-tab-panel]'));controls.forEach(function(control){control.addEventListener("click",function(){controls.forEach(function(btn){btn.classList.toggle("active",btn===control);});panels.forEach(function(panel){panel.classList.toggle("active",panel.dataset.tabPanel===control.dataset.tabTarget);});});});});
+</script>
+
 <style>
 .page-heading{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.6rem;gap:1rem;}
 .page-heading h1{margin:0;font-size:1.9rem;color:var(--text);}
 .page-subtitle{margin:.25rem 0 0;font-size:.95rem;color:var(--muted);}
+.prototype-panel{margin-bottom:1.8rem;}
+.prototype-header{align-items:center;}
+.tab-controls{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;}
+.tab-control{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:var(--text);padding:.45rem 1rem;border-radius:999px;font-size:.85rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;transition:all .2s ease;}
+.tab-control:hover{border-color:rgba(118,187,255,0.4);color:#d5ecff;}
+.tab-control.active{background:rgba(118,187,255,0.18);border-color:rgba(118,187,255,0.42);color:#e9f4ff;}
+.tab-panels{margin-top:1.2rem;}
+.tab-panel{display:none;}
+.tab-panel.active{display:block;}
+.profile-tab-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.2rem;}
+.profile-tab-list li{padding:1.1rem;border-radius:14px;border:1px solid rgba(255,255,255,0.09);background:rgba(6,22,42,0.78);box-shadow:0 16px 32px rgba(5,16,32,0.32);display:flex;flex-direction:column;gap:.7rem;}
+.profile-tab-list header{display:flex;align-items:center;gap:.65rem;}
+.profile-tab-list header strong{flex:1;color:var(--text);}
+.profile-tab-list header small{color:var(--muted);font-size:.78rem;}
+.profile-summary{margin:0;color:var(--muted);line-height:1.35;font-size:.9rem;}
+.heuristic-chips{list-style:none;margin:.6rem 0 0;padding:0;display:flex;flex-wrap:wrap;gap:.45rem;}
+.heuristic-chips li{padding:.3rem .65rem;border-radius:999px;background:rgba(118,187,255,0.12);border:1px solid rgba(118,187,255,0.28);color:#d5ecff;font-size:.72rem;font-weight:600;letter-spacing:.06em;}
+.recommendation-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.55rem;}
+.recommendation-list li{padding:.7rem .85rem;border-radius:12px;background:rgba(118,187,255,0.08);border:1px solid rgba(118,187,255,0.18);display:flex;flex-direction:column;gap:.35rem;}
+.recommendation-list.red li{background:rgba(255,138,138,0.08);border-color:rgba(255,138,138,0.22);}
+.recommendation-list strong{color:var(--text);}
+.recommendation-list .muted{font-size:.82rem;}
+.tagged{display:inline-block;margin-top:.2rem;font-size:.72rem;color:rgba(223,240,255,0.92);text-transform:uppercase;letter-spacing:.08em;}
 .hunt-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1.4rem;margin-bottom:1.6rem;}
 .panel{background:rgba(8,23,43,0.78);border-radius:16px;padding:1.4rem;border:1px solid rgba(255,255,255,0.05);box-shadow:0 18px 38px rgba(5,16,32,0.35);position:relative;overflow:hidden;}
 .panel-header{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:1.2rem;}

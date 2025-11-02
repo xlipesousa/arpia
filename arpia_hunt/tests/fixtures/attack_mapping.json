@@ -1,0 +1,31 @@
+{
+  "tactic": {
+    "id": "TA0001",
+    "name": "Initial Access",
+    "short_description": "The first foothold an adversary gains in an environment.",
+    "matrix": "enterprise",
+    "order": 1
+  },
+  "technique": {
+    "id": "T1190",
+    "name": "Exploit Public-Facing Application",
+    "description": "Adversaries may exploit public-facing applications to gain initial access.",
+    "is_subtechnique": false,
+    "platforms": ["Windows", "Linux"],
+    "datasources": ["Web logs", "Application logs"],
+    "external_references": [
+      {
+        "source_name": "mitre-attack",
+        "url": "https://attack.mitre.org/techniques/T1190/",
+        "external_id": "T1190"
+      }
+    ],
+    "version": "14"
+  },
+  "mapping": {
+    "cve": "CVE-2024-9999",
+    "source": "heuristic",
+    "confidence": "high",
+    "rationale": "Exploit público associado ao CVE segundo Vulners."
+  }
+}

@@ -2,6 +2,14 @@
 
 Snapshot de referência: `antes Kickoff da Fase 3` (registrado em 2025-11-02).
 
+## Atualizações recentes (2025-11-02)
+
+- Comando `python manage.py import_attack_catalog --pyattck --matrix all` consolida matrizes enterprise/ics/mobile utilizando merge automático (log: 40 táticas, 1018 técnicas importadas).
+- Fixtures/mocks para NVD, Vulners e searchsploit garantem contratos de integração cobertos por testes.
+- Dashboard Hunt passou a consumir componentes reutilizáveis para abas Blue/Red alimentados por dados reais do pipeline.
+- Documentação de modelagem (`docs/hunt-phase3-modelagem.md`) registra o diagrama de entidades e relacionamentos ATT&CK ↔ recomendações.
+- Template inicial `templates/hunt/findings/detail.html` criado com tabs Blue/Red reutilizando componentes, servindo de base para Fase 4.
+
 ## Objetivos imediatos
 
 1. **Integração de biblioteca ATT&CK**
@@ -22,12 +30,26 @@ Snapshot de referência: `antes Kickoff da Fase 3` (registrado em 2025-11-02).
 - **População inicial do catálogo**: validar processo com fixture `arpia_hunt/fixtures/attack_catalog.json` (carregada via `python manage.py loaddata`). Gestão de pipeline final decidirá entre fixture versionada ou comando que consome `pyattck` para gerar/atualizar o catálogo.
 - **Ferramenta de importação**: o comando `python manage.py import_attack_catalog` importa a fixture local (`attack_catalog.json`) por padrão e aceita os parâmetros `--from-file` (para apontar outro JSON) ou `--pyattck` (carregar direto da biblioteca, quando disponível).
 
+## Avaliação de Bibliotecas ATT&CK
+
+- **pyattck**: aprovado como fonte principal. Possui licença MIT compatível, inclui cache local por versão e expõe matrizes enterprise/ics/mobile com metadados suficientes para heurísticas. O tempo de importação ficou em ~18s com warm cache.
+- **mitreattack-python**: mantido como fallback. Documentação mais granular para relacionamentos, porém sem cache embutido. Optamos por não empacotá-lo por padrão para evitar duplicidade de dependências.
+- **Decisão**: `pyattck` será instalado no ambiente padrão; `mitreattack-python` permanece documentado apenas para cenários onde seja necessário comparar UUIDs internos ou obter campos não expostos pelo `pyattck`.
+
+## Plano de Enriquecimento Incremental
+
+- **Delta contínuo**: `enrich_finding` consulta `HuntEnrichment` mais recente e só dispara `sync_recommendations_for_finding` quando `finding.state_version` aumenta ou quando o catálogo ATT&CK muda (`attack_catalog_version` registrado no cache).
+- **Reprocessamento programado**: job `hunt_enrich_diff` executa diariamente e revalida apenas findings com CVEs alteradas nas últimas 24h (dados provenientes do NVD delta feed armazenado em `tmp/nvd-diff.json`).
+- **Auditoria**: logs estruturados (`project_logging.get_logger("hunt.enrichment")`) gravam decisões de atualização, incluindo justificativa quando uma heurística é removida ou rebaixada.
+- **Fallback manual**: operador pode acionar `python manage.py hunt_reprocess --finding <uuid>` para forçar um enriquecimento completo, útil após atualizações fora de janela.
+
 ## Tarefas próximas
 
-- Elaborar diagrama simplificado dos novos modelos e relações.
-- Preparar proposta de migração inicial (`models` + `migrations`) para estrutura ATT&CK.
-- Escrever testes de contrato para as heurísticas (fixtures contendo CVEs conhecidas ↔ técnicas).
-- Atualizar documentação (`docs/`) com fluxo de dados ATT&CK e plano de rollout.
+- Planejar migrações incrementais para eventuais campos extras (subtécnicas, matrizes adicionais) e registrar backlog de busca full-text para quando PostgreSQL estiver disponível.
+- Validar recomendações automáticas com casos reais (importação do catálogo completo + findings do ambiente de staging).
+- Atualizar documentação (`docs/`) com fluxo de dados ATT&CK e plano de rollout para APIs/UI.
+- Preparar protótipos finais das abas Blue/Red (wireframes) e alinhar padrão com a squad de UI antes da Fase 4.
+- Conectar nova view de detalhe de finding e definir contratos de contexto para consumo dos componentes Blue/Red.
 
 ## Desenho dos novos modelos
 
@@ -52,7 +74,7 @@ Snapshot de referência: `antes Kickoff da Fase 3` (registrado em 2025-11-02).
    - `datasources`: JSONField (lista de data sources do ATT&CK).
    - `external_references`: JSONField (URLs, IDs externos, CAPEC, CWE, etc.).
    - `version`: string para acompanhar updates de conteúdo.
-   - Índices: (`tactic`, `is_subtechnique`) e texto completo (via SearchVector) a considerar na Fase 4.
+   - Índices: (`tactic`, `is_subtechnique`). Busca full-text ficará em backlog dependendo da adoção futura de PostgreSQL.
 
 ### Pivôs ATT&CK ↔ CVE
 
@@ -123,9 +145,10 @@ Snapshot de referência: `antes Kickoff da Fase 3` (registrado em 2025-11-02).
 - **Endpoints REST** (draft):
    - `GET /api/hunt/findings/<uuid>/profiles` → retorna perfis Blue/Red, enriquecimentos vinculados e heurísticas aplicadas.
    - `GET /api/hunt/recommendations` com filtros por `project`, `technique`, `confidence`.
+   - `GET /api/hunt/recommendations/<uuid>/` → payload detalhado com contexto do finding, perfis atuais e heurísticas correlatas.
    - `GET /api/hunt/catalog/techniques` com suporte a busca textual e facetas por tática/matriz.
 - **Views/Templates**: criar páginas `templates/hunt/findings/detail.html` (abas Blue/Red) e `templates/hunt/recommendations/list.html` com componentes reutilizáveis para listas de técnicas e recomendações.
-- **Índices e busca**: planejar índice GIN com `SearchVector` para `AttackTechnique.name/description` e índice composto (`cve`, `source`) em `CveAttackTechnique` para acelerar filtros na API.
+- **Índices e busca**: registrar backlog de busca textual (depende de PostgreSQL) e manter índice composto (`cve`, `source`) em `CveAttackTechnique` para acelerar filtros na API.
 - **Extensões futuras**: considerar endpoint de export (`/reports/hunt/<project>.pdf`) e dashboards combinando métricas de severidade × técnicas ATT&CK.
 
 #### Backlog priorizado (Fase 4)

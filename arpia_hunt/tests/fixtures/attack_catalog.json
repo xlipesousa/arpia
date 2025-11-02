@@ -1,0 +1,37 @@
+[
+  {
+    "model": "arpia_hunt.attacktactic",
+    "pk": "TA0001",
+    "fields": {
+      "name": "Initial Access",
+      "short_description": "The first foothold an adversary gains in an environment.",
+      "matrix": "enterprise",
+      "order": 1,
+      "created_at": "2025-01-01T00:00:00Z",
+      "updated_at": "2025-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "arpia_hunt.attacktechnique",
+    "pk": "T1190",
+    "fields": {
+      "name": "Exploit Public-Facing Application",
+      "description": "Adversaries may exploit public-facing applications to gain initial access.",
+      "is_subtechnique": false,
+      "parent": null,
+      "tactic": "TA0001",
+      "platforms": ["Windows", "Linux"],
+      "datasources": ["Web logs", "Application logs"],
+      "external_references": [
+        {
+          "source_name": "mitre-attack",
+          "url": "https://attack.mitre.org/techniques/T1190/",
+          "external_id": "T1190"
+        }
+      ],
+      "version": "14",
+      "created_at": "2025-01-01T00:00:00Z",
+      "updated_at": "2025-01-01T00:00:00Z"
+    }
+  }
+]

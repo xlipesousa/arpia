@@ -1,0 +1,13 @@
+{% if heuristics %}
+  <ul class="heuristic-chips">
+    {% for mapping in heuristics %}
+      <li title="{{ mapping.rationale }}">
+        {{ mapping.technique_id }}
+        {% if mapping.technique and mapping.technique.tactic %}
+          · {{ mapping.technique.tactic.name }}
+        {% endif %}
+        · {{ mapping.get_confidence_display }}
+      </li>
+    {% endfor %}
+  </ul>
+{% endif %}

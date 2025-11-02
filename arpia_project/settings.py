@@ -215,3 +215,11 @@ ARPIA_GVM_PASSWORD = "c43d1baf-f86e-49eb-991d-a020edad40fa"
 
 # Credenciais de sudo para automação local do gvm-start
 ARPIA_GVM_SUDO_PASSWORD = os.getenv("ARPIA_GVM_SUDO_PASSWORD", "kali")
+
+
+def _env_flag(name: str, default: str = "0") -> bool:
+    return os.getenv(name, default).lower() in {"1", "true", "yes", "on"}
+
+
+ARPIA_HUNT_API_BETA = _env_flag("ARPIA_HUNT_API_BETA")
+ARPIA_HUNT_UI_METRICS_ENABLED = _env_flag("ARPIA_HUNT_UI_METRICS_ENABLED")
