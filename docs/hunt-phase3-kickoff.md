@@ -128,6 +128,37 @@ Snapshot de referência: `antes Kickoff da Fase 3` (registrado em 2025-11-02).
 - **Índices e busca**: planejar índice GIN com `SearchVector` para `AttackTechnique.name/description` e índice composto (`cve`, `source`) em `CveAttackTechnique` para acelerar filtros na API.
 - **Extensões futuras**: considerar endpoint de export (`/reports/hunt/<project>.pdf`) e dashboards combinando métricas de severidade × técnicas ATT&CK.
 
+#### Backlog priorizado (Fase 4)
+
+1. **API pública**
+   - Contratos OpenAPI para findings/profiles/recommendations com exemplos reais (fixtures → `api/tests/fixtures`).
+   - Paginação consistente (cursor) e filtros combinados (`technique`, `confidence`, `project`).
+   - Serializer dedicado para heurísticas aplicadas (`applied_heuristics`) expondo confiança e rationale.
+2. **Camada de serviço**
+   - Adaptar `derive_profiles` e `sync_recommendations_for_finding` para retornarem DTOs reutilizáveis no serializer.
+   - Otimizar queries (prefetch + aggregation) para evitar N+1 na listagem de recomendações.
+   - Feature flag `ARPIA_HUNT_API_BETA` para liberar endpoints gradualmente.
+3. **UI/UX**
+   - Wireframes para abas Blue/Red (Figma → exportar preview estático em `docs/ui/`).
+   - Componentes reutilizáveis (`templates/hunt/components/`) para cards ATT&CK, com cores alinhadas a guidelines existentes.
+   - Interações assíncronas (HTMX/Alpine) para atualizar recomendações sem reload completo.
+4. **Integração e QA**
+   - Testes de contrato (`tests/api/test_hunt_endpoints.py`) garantindo compatibilidade com consumidores externos.
+   - Smoke tests UI (`tests/ui/test_hunt_flows.py`) cobrindo navegação principal.
+   - Monitoramento inicial com métricas `hunt.api.latency` e `hunt.ui.render_time` via `project_logging`.
+
+#### Roteiro incremental
+
+- **Sprint 1**: CRUD read-only (API + serializers) e protótipo UI estático para detail view do finding.
+- **Sprint 2**: Recomendações interativas, filtros avançados e testes de contrato automatizados.
+- **Sprint 3**: Dashboards iniciais + export PDF, ajustes de performance e telemetria.
+
+#### Dependências & riscos
+
+- Alinhar com squad de UI para padrão de componentes (Design System ainda em revisão).
+- Validar impacto de índices extras na replicação do banco antes do deploy.
+- Confirmar política de autenticação (token vs session) com equipe de plataforma para expor API pública.
+
 ## Riscos e pontos de atenção
 
 - Possível aumento de tempo de deploy e memória ao carregar datasets ATT&CK completos.
