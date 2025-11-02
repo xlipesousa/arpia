@@ -54,6 +54,9 @@ Atenção
 - O comando `python manage.py runserver` agora aplica migrações pendentes automaticamente antes de subir o servidor.
   - Caso precise pular esse comportamento (ex.: scripts de CI), use `python manage.py runserver --skip-auto-migrate`.
 
+Documentação adicional
+- [Integrações de enriquecimento do Hunt](docs/enrichment-integrations.md): lista configurações de NVD, Vulners e searchsploit, códigos de erro esperados e fixtures de teste.
+
 ## Módulo de vulnerabilidades — visão rápida
 
 - Dashboard dinâmico com polling a cada 30 segundos via endpoint `GET /vuln/api/dashboard/`, exibindo métricas consolidadas e links diretos para os módulos de Scan e Reports.

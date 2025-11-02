@@ -1,0 +1,12 @@
+{
+  "data": {
+    "documents": [
+      {
+        "id": "EXP-1",
+        "title": "Exploit 1",
+        "href": "https://vulners.example/exploit-1",
+        "cvss": 9.8
+      }
+    ]
+  }
+}

@@ -1,7 +1,10 @@
+import copy
+import json
 import os
 from datetime import timedelta
 from decimal import Decimal
 from io import StringIO
+from pathlib import Path
 from unittest import mock
 
 from django.contrib.auth import get_user_model
@@ -23,6 +26,13 @@ from arpia_hunt.services import synchronize_findings
 from arpia_hunt.enrichment import enrich_cve, enrich_finding
 from arpia_vuln.models import VulnerabilityFinding, VulnScanSession
 from arpia_log.models import LogEntry
+
+FIXTURE_DIR = Path(__file__).parent / "fixtures"
+
+
+def load_json_fixture(name: str) -> dict:
+    with (FIXTURE_DIR / name).open(encoding="utf-8") as stream:
+        return json.load(stream)
 
 
 class SynchronizeFindingsTests(TestCase):
@@ -162,25 +172,14 @@ class FindingProfilesTests(TestCase):
         return HuntFinding.objects.get(vulnerability=vuln)
 
     @mock.patch.dict(os.environ, {"ARPIA_HUNT_ENABLE_REMOTE_ENRICHMENT": "1"})
-    @mock.patch("arpia_hunt.enrichment._fetch_exploitdb")
-    @mock.patch("arpia_hunt.enrichment._fetch_vulners")
-    @mock.patch("arpia_hunt.enrichment._fetch_nvd")
+    @mock.patch("arpia_hunt.enrichment.search_exploitdb")
+    @mock.patch("arpia_hunt.enrichment.fetch_vulners_cve")
+    @mock.patch("arpia_hunt.enrichment.fetch_nvd_cve")
     def test_enrich_finding_updates_profiles_and_creates_snapshot(self, mock_nvd, mock_vulners, mock_exploit):
         finding = self._create_finding()
-        mock_nvd.return_value = {
-            "vulnerabilities": [
-                {
-                    "cve": {
-                        "metrics": {"cvssMetricV31": [{"cvssData": {"baseScore": 9.8}}]},
-                        "references": {"reference_data": [{"url": "https://nvd.example/ref"}]},
-                    },
-                }
-            ]
-        }
-        mock_vulners.return_value = {
-            "data": {"documents": [{"id": "EXP-1", "title": "Exploit 1", "href": "https://vulners.example"}]}
-        }
-        mock_exploit.return_value = {"RESULTS_EXPLOIT": [{"title": "ExploitDB", "path": "exploits/web/1"}]}
+        mock_nvd.return_value = load_json_fixture("nvd_cve.json")
+        mock_vulners.return_value = load_json_fixture("vulners_cve.json")
+        mock_exploit.return_value = load_json_fixture("exploitdb_results.json")
 
         records, changed = enrich_finding(finding, enable_remote=True, force_refresh=True)
 
@@ -195,43 +194,33 @@ class FindingProfilesTests(TestCase):
         )
 
     @mock.patch.dict(os.environ, {"ARPIA_HUNT_ENABLE_REMOTE_ENRICHMENT": "1"})
-    @mock.patch("arpia_hunt.enrichment._fetch_exploitdb")
-    @mock.patch("arpia_hunt.enrichment._fetch_vulners")
-    @mock.patch("arpia_hunt.enrichment._fetch_nvd")
+    @mock.patch("arpia_hunt.enrichment.search_exploitdb")
+    @mock.patch("arpia_hunt.enrichment.fetch_vulners_cve")
+    @mock.patch("arpia_hunt.enrichment.fetch_nvd_cve")
     def test_hunt_enrich_command_reprocesses_findings(self, mock_nvd, mock_vulners, mock_exploit):
         finding = self._create_finding()
-        mock_nvd.return_value = {
-            "vulnerabilities": [
-                {
-                    "cve": {
-                        "metrics": {"cvssMetricV31": [{"cvssData": {"baseScore": 9.0}}]},
-                        "references": {"reference_data": [{"url": "https://nvd.example/ref"}]},
-                    },
-                }
-            ]
-        }
-        mock_vulners.return_value = {
-            "data": {"documents": [{"id": "EXP-1", "title": "Exploit 1", "href": "https://vulners.example"}]}
-        }
+        nvd_payload = load_json_fixture("nvd_cve.json")
+        vulners_payload = load_json_fixture("vulners_cve.json")
+        mock_nvd.return_value = copy.deepcopy(nvd_payload)
+        mock_vulners.return_value = copy.deepcopy(vulners_payload)
         mock_exploit.return_value = {"RESULTS_EXPLOIT": []}
 
         call_command("hunt_enrich", "--limit", "1")
         finding.refresh_from_db()
         self.assertEqual(finding.profile_version, 1)
 
-        mock_nvd.return_value = {
-            "vulnerabilities": [
-                {
-                    "cve": {
-                        "metrics": {"cvssMetricV31": [{"cvssData": {"baseScore": 8.0}}]},
-                        "references": {"reference_data": [{"url": "https://nvd.example/ref2"}]},
-                    },
-                }
-            ]
-        }
-        mock_vulners.return_value = {
-            "data": {"documents": [{"id": "EXP-2", "title": "Exploit 2", "href": "https://vulners.example/2"}]}
-        }
+        nvd_updated = copy.deepcopy(nvd_payload)
+        metrics = nvd_updated["vulnerabilities"][0]["cve"]["metrics"]["cvssMetricV31"][0]["cvssData"]
+        metrics["baseScore"] = 8.0
+        references = nvd_updated["vulnerabilities"][0]["cve"]["references"]["reference_data"]
+        references.append({"url": "https://nvd.example/ref2"})
+        mock_nvd.return_value = nvd_updated
+
+        vulners_updated = copy.deepcopy(vulners_payload)
+        vulners_updated["data"]["documents"].append(
+            {"id": "EXP-2", "title": "Exploit 2", "href": "https://vulners.example/2"}
+        )
+        mock_vulners.return_value = vulners_updated
 
         call_command("hunt_enrich", "--limit", "1", "--force")
         finding.refresh_from_db()

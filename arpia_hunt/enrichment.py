@@ -1,22 +1,19 @@
 from __future__ import annotations
 
-import json
 import os
-import subprocess
 from datetime import timedelta
-from importlib import import_module
-from types import ModuleType
 from typing import Iterable, Mapping
 
-requests: ModuleType | None
-try:
-    requests = import_module("requests")
-except ModuleNotFoundError:  # pragma: no cover - dependência opcional
-    requests = None
 from django.utils import timezone
 
 from arpia_log.models import LogEntry
 
+from .integrations import (
+	IntegrationError,
+	fetch_nvd_cve,
+	fetch_vulners_cve,
+	search_exploitdb,
+)
 from .log_events import emit_hunt_log
 from .models import HuntEnrichment, HuntFinding
 from .profiles import derive_profiles
@@ -102,14 +99,22 @@ def _resolve_enrichment(
 
 	try:
 		payload, expires_at = _fetch_payload(source, cve, ttl)
-		record.mark_fresh(payload, expires_at)
+	except IntegrationError as exc:
+		record.mark_error(str(exc))
 		emit_hunt_log(
-			event_type="hunt.enrichment.completed",
-			message="Enriquecimento concluído com sucesso.",
+			event_type="hunt.enrichment.error",
+			message="Erro ao enriquecer CVE.",
 			component="hunt.enrichment",
-			details={"cve": cve, "source": source, "expires_at": expires_at.isoformat() if expires_at else None},
-			tags=["pipeline:hunt-enrichment", f"source:{source}", "status:success"],
+			severity=LogEntry.Severity.ERROR,
+			details={
+				"cve": cve,
+				"source": source,
+				"error": str(exc),
+				"retriable": exc.retriable,
+			},
+			tags=["pipeline:hunt-enrichment", f"source:{source}", "status:error"],
 		)
+		return record
 	except Exception as exc:  # pragma: no cover - integrações externas
 		record.mark_error(str(exc))
 		emit_hunt_log(
@@ -120,72 +125,35 @@ def _resolve_enrichment(
 			details={"cve": cve, "source": source, "error": str(exc)},
 			tags=["pipeline:hunt-enrichment", f"source:{source}", "status:error"],
 		)
+		return record
+
+	record.mark_fresh(payload, expires_at)
+	emit_hunt_log(
+		event_type="hunt.enrichment.completed",
+		message="Enriquecimento concluído com sucesso.",
+		component="hunt.enrichment",
+		details={
+			"cve": cve,
+			"source": source,
+			"expires_at": expires_at.isoformat() if expires_at else None,
+		},
+		tags=["pipeline:hunt-enrichment", f"source:{source}", "status:success"],
+	)
 	return record
 
 
 def _fetch_payload(source: str, cve: str, ttl: timedelta) -> tuple[Mapping[str, object], timezone.datetime | None]:
 	if source == HuntEnrichment.Source.NVD:
-		payload = _fetch_nvd(cve)
+		payload = fetch_nvd_cve(cve)
 	elif source == HuntEnrichment.Source.VULNERS:
-		payload = _fetch_vulners(cve)
+		payload = fetch_vulners_cve(cve)
 	elif source == HuntEnrichment.Source.EXPLOITDB:
-		payload = _fetch_exploitdb(cve)
+		payload = search_exploitdb(cve)
 	else:
 		raise ValueError(f"Fonte desconhecida: {source}")
 
 	expires_at = timezone.now() + ttl if ttl else None
 	return payload, expires_at
-
-
-def _fetch_nvd(cve: str) -> Mapping[str, object]:
-	endpoint = os.getenv("ARPIA_HUNT_NVD_URL", "https://services.nvd.nist.gov/rest/json/cves/2.0")
-	headers = {}
-	nvd_api_key = os.getenv("ARPIA_HUNT_NVD_API_KEY") or os.getenv("NVD_API_KEY")
-	if nvd_api_key:
-		headers["apiKey"] = nvd_api_key
-	if requests is None:
-		raise RuntimeError("Biblioteca requests não está disponível para consultar a NVD.")
-	response = requests.get(
-		endpoint,
-		params={"cveId": cve},
-		headers=headers,
-		timeout=float(os.getenv("ARPIA_HUNT_NVD_TIMEOUT", "12")),
-	)
-	response.raise_for_status()
-	return response.json()
-
-
-def _fetch_vulners(cve: str) -> Mapping[str, object]:
-	endpoint = os.getenv("ARPIA_HUNT_VULNERS_URL", "https://vulners.com/api/v3/search/id/")
-	headers = {"Content-Type": "application/json"}
-	api_key = os.getenv("ARPIA_HUNT_VULNERS_API_KEY") or os.getenv("VULNERS_API_KEY")
-	if api_key:
-		headers["X-ApiKey"] = api_key
-	if requests is None:
-		raise RuntimeError("Biblioteca requests não está disponível para consultar a Vulners.")
-	response = requests.get(
-		endpoint,
-		params={"id": cve},
-		headers=headers,
-		timeout=float(os.getenv("ARPIA_HUNT_VULNERS_TIMEOUT", "10")),
-	)
-	response.raise_for_status()
-	return response.json()
-
-
-def _fetch_exploitdb(cve: str) -> Mapping[str, object]:
-	searchsploit_path = os.getenv("ARPIA_HUNT_SEARCHSPLOIT_PATH", "searchsploit")
-	process = subprocess.run(
-		[searchsploit_path, "-j", cve],
-		check=True,
-		capture_output=True,
-		text=True,
-		timeout=int(os.getenv("ARPIA_HUNT_SEARCHSPLOIT_TIMEOUT", "15")),
-	)
-	stdout = process.stdout.strip()
-	if not stdout:
-		return {"results": []}
-	return json.loads(stdout)
 
 
 def enrich_finding(
