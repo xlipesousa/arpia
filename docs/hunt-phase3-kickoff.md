@@ -20,6 +20,7 @@ Snapshot de referência: `antes Kickoff da Fase 3` (registrado em 2025-11-02).
 - **Dependências externas**: validar impacto de adicionar `pyattck` (tamanho de pacote, atualização de dados MITRE) e definir versão alvo.
 - **Estratégia de cache**: decidir se armazenaremos o dataset ATT&CK em banco (tabelas dedicadas) ou se uma camada em disco/JSON é suficiente para Fase 3.
 - **População inicial do catálogo**: validar processo com fixture `arpia_hunt/fixtures/attack_catalog.json` (carregada via `python manage.py loaddata`). Gestão de pipeline final decidirá entre fixture versionada ou comando que consome `pyattck` para gerar/atualizar o catálogo.
+- **Ferramenta de importação**: o comando `python manage.py import_attack_catalog` importa a fixture local (`attack_catalog.json`) por padrão e aceita os parâmetros `--from-file` (para apontar outro JSON) ou `--pyattck` (carregar direto da biblioteca, quando disponível).
 
 ## Tarefas próximas
 

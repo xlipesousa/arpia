@@ -252,6 +252,12 @@ class AttackMappingTests(TestCase):
         self.assertTrue(AttackTactic.objects.filter(pk="TA0001").exists())
         self.assertTrue(AttackTechnique.objects.filter(pk="T1190").exists())
 
+    def test_import_attack_catalog_command(self):
+        fixture_path = str(FIXTURE_DIR / "attack_catalog.json")
+        call_command("import_attack_catalog", "--from-file", fixture_path)
+        self.assertTrue(AttackTactic.objects.filter(pk="TA0001").exists())
+        self.assertTrue(AttackTechnique.objects.filter(pk="T1190").exists())
+
     def test_cve_attack_technique_unique_constraint(self):
         fixture = load_json_fixture("attack_mapping.json")
         tactic_data = fixture["tactic"]
