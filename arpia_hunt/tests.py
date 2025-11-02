@@ -15,17 +15,22 @@ from arpia_core.models import Project
 from django.utils import timezone
 
 from arpia_hunt.models import (
+    AttackTactic,
+    AttackTechnique,
+    CveAttackTechnique,
     HuntEnrichment,
     HuntFinding,
     HuntFindingEnrichment,
     HuntFindingSnapshot,
     HuntFindingState,
+    HuntRecommendation,
     HuntSyncLog,
 )
 from arpia_hunt.services import synchronize_findings
 from arpia_hunt.enrichment import enrich_cve, enrich_finding
 from arpia_vuln.models import VulnerabilityFinding, VulnScanSession
 from arpia_log.models import LogEntry
+from django.db import IntegrityError
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
 
@@ -238,3 +243,116 @@ class SchedulerCommandTests(TestCase):
         self.assertGreaterEqual(len(content), 2)
         self.assertTrue(content[0].startswith("*/30"))
         self.assertTrue(LogEntry.objects.filter(event_type="hunt.scheduler.preview").exists())
+
+
+class AttackMappingTests(TestCase):
+    def test_attack_catalog_fixture_loaddata(self):
+        fixture_path = str(FIXTURE_DIR / "attack_catalog.json")
+        call_command("loaddata", fixture_path, verbosity=0)
+        self.assertTrue(AttackTactic.objects.filter(pk="TA0001").exists())
+        self.assertTrue(AttackTechnique.objects.filter(pk="T1190").exists())
+
+    def test_cve_attack_technique_unique_constraint(self):
+        fixture = load_json_fixture("attack_mapping.json")
+        tactic_data = fixture["tactic"]
+        technique_data = fixture["technique"]
+        mapping_data = fixture["mapping"]
+
+        tactic = AttackTactic.objects.create(
+            id=tactic_data["id"],
+            name=tactic_data["name"],
+            short_description=tactic_data.get("short_description", ""),
+            matrix=tactic_data.get("matrix", AttackTactic.Matrix.ENTERPRISE),
+            order=tactic_data.get("order", 0),
+        )
+
+        technique = AttackTechnique.objects.create(
+            id=technique_data["id"],
+            name=technique_data["name"],
+            description=technique_data.get("description", ""),
+            is_subtechnique=technique_data.get("is_subtechnique", False),
+            tactic=tactic,
+            platforms=technique_data.get("platforms", []),
+            datasources=technique_data.get("datasources", []),
+            external_references=technique_data.get("external_references", []),
+            version=technique_data.get("version", ""),
+        )
+
+        CveAttackTechnique.objects.create(
+            cve=mapping_data["cve"],
+            technique=technique,
+            source=mapping_data.get("source", CveAttackTechnique.Source.HEURISTIC),
+            confidence=mapping_data.get("confidence", CveAttackTechnique.Confidence.MEDIUM),
+            rationale=mapping_data.get("rationale", ""),
+        )
+
+        with self.assertRaises(IntegrityError):
+            CveAttackTechnique.objects.create(
+                cve=mapping_data["cve"],
+                technique=technique,
+                source=mapping_data.get("source", CveAttackTechnique.Source.HEURISTIC),
+                confidence=mapping_data.get("confidence", CveAttackTechnique.Confidence.MEDIUM),
+                rationale="duplicated",
+            )
+
+    def test_hunt_recommendation_links_finding_and_enrichment(self):
+        fixture = load_json_fixture("attack_mapping.json")
+        tactic = AttackTactic.objects.create(
+            id="TA0001",
+            name="Initial Access",
+            order=1,
+        )
+        technique = AttackTechnique.objects.create(
+            id="T1190",
+            name="Exploit Public-Facing Application",
+            tactic=tactic,
+        )
+
+        user_model = get_user_model()
+        user = user_model.objects.create_user("attck", "attck@example.com", "hunter")
+        project = Project.objects.create(owner=user, name="Projeto ATT&CK", slug="projeto-attck")
+        session = VulnScanSession.objects.create(project=project, owner=user, title="Sessão Vuln")
+        vuln = VulnerabilityFinding.objects.create(
+            session=session,
+            title="Exploit público",
+            summary="Serviço exposto com exploit disponível.",
+            severity=VulnerabilityFinding.Severity.HIGH,
+            status=VulnerabilityFinding.Status.OPEN,
+            host="10.0.0.1",
+            service="http",
+            port=80,
+            protocol="tcp",
+            cve=fixture["mapping"]["cve"],
+        )
+        finding = HuntFinding.objects.create(
+            project=project,
+            vulnerability=vuln,
+            vuln_session=session,
+            cve=vuln.cve,
+            summary=vuln.summary,
+            severity=vuln.severity,
+        )
+        enrichment = HuntEnrichment.objects.create(
+            cve=vuln.cve,
+            source=HuntEnrichment.Source.NVD,
+            status=HuntEnrichment.Status.FRESH,
+            payload={"references": ["https://nvd.example"]},
+        )
+
+        recommendation = HuntRecommendation.objects.create(
+            finding=finding,
+            technique=technique,
+            recommendation_type=HuntRecommendation.Type.BLUE,
+            title="Aplicar correção",
+            summary="Aplicar patch fornecido pelo vendor.",
+            confidence=CveAttackTechnique.Confidence.HIGH,
+            evidence={"cve": vuln.cve},
+            tags=["patch", "mitigation"],
+            generated_by=HuntRecommendation.Generator.AUTOMATION,
+            source_enrichment=enrichment,
+        )
+
+        self.assertEqual(finding.recommendations.count(), 1)
+        self.assertEqual(recommendation.technique, technique)
+        self.assertEqual(recommendation.source_enrichment, enrichment)
+        self.assertIn("cve", recommendation.evidence)

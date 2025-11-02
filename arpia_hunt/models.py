@@ -199,6 +199,164 @@ class HuntFinding(models.Model):
 		return True
 
 
+class AttackTactic(models.Model):
+	"""Catálogo compacto das táticas MITRE ATT&CK utilizadas pelo Hunt."""
+
+	class Matrix(models.TextChoices):
+		ENTERPRISE = "enterprise", "Enterprise"
+		ICS = "ics", "ICS"
+		MOBILE = "mobile", "Mobile"
+
+	id = models.CharField(primary_key=True, max_length=16)
+	name = models.CharField(max_length=128)
+	short_description = models.TextField(blank=True)
+	matrix = models.CharField(max_length=24, choices=Matrix.choices, default=Matrix.ENTERPRISE)
+	order = models.PositiveSmallIntegerField(default=0)
+	created_at = models.DateTimeField(auto_now_add=True)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		ordering = ("matrix", "order", "id")
+		indexes = [
+			models.Index(fields=["matrix", "order"], name="idx_attack_tactic_matrix_order"),
+		]
+
+	def __str__(self) -> str:  # pragma: no cover - representação simples
+		return f"{self.id} · {self.name}"
+
+
+class AttackTechnique(models.Model):
+	"""Catálogo de técnicas/subtécnicas ATT&CK utilizadas para recomendações."""
+
+	id = models.CharField(primary_key=True, max_length=32)
+	name = models.CharField(max_length=160)
+	description = models.TextField(blank=True)
+	is_subtechnique = models.BooleanField(default=False)
+	parent = models.ForeignKey(
+		"self",
+		related_name="subtechniques",
+		on_delete=models.CASCADE,
+		null=True,
+		blank=True,
+	)
+	tactic = models.ForeignKey(
+		AttackTactic,
+		related_name="techniques",
+		on_delete=models.PROTECT,
+	)
+	platforms = models.JSONField(default=list, blank=True)
+	datasources = models.JSONField(default=list, blank=True)
+	external_references = models.JSONField(default=list, blank=True)
+	version = models.CharField(max_length=32, blank=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		ordering = ("id",)
+		indexes = [
+			models.Index(fields=["tactic", "is_subtechnique"], name="idx_attack_tech_tactic_sub"),
+		]
+
+	def __str__(self) -> str:  # pragma: no cover - representação simples
+		return f"{self.id} · {self.name}"
+
+
+class CveAttackTechnique(models.Model):
+	"""Pivot que descreve o vínculo CVE ↔ técnica ATT&CK e sua confiança."""
+
+	class Source(models.TextChoices):
+		HEURISTIC = "heuristic", "Heurística"
+		DATASET = "dataset", "Dataset"
+		MANUAL = "manual", "Manual"
+
+	class Confidence(models.TextChoices):
+		LOW = "low", "Baixa"
+		MEDIUM = "medium", "Média"
+		HIGH = "high", "Alta"
+
+	id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+	cve = models.CharField(max_length=40, db_index=True)
+	technique = models.ForeignKey(
+		AttackTechnique,
+		related_name="cve_links",
+		on_delete=models.CASCADE,
+	)
+	source = models.CharField(max_length=16, choices=Source.choices, default=Source.HEURISTIC)
+	confidence = models.CharField(max_length=8, choices=Confidence.choices, default=Confidence.MEDIUM)
+	rationale = models.TextField(blank=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		unique_together = ("cve", "technique", "source")
+		indexes = [
+			models.Index(fields=["cve", "confidence"], name="idx_cve_attack_confidence"),
+		]
+		ordering = ("-updated_at", "-created_at")
+
+	def __str__(self) -> str:  # pragma: no cover - representação simples
+		return f"{self.cve} ↔ {self.technique_id}"
+
+
+class HuntRecommendation(models.Model):
+	"""Sugestões de ações Blue/Red derivadas das heurísticas ATT&CK."""
+
+	class Type(models.TextChoices):
+		BLUE = "blue", "Blue Team"
+		RED = "red", "Red Team"
+
+	class Generator(models.TextChoices):
+		AUTOMATION = "automation", "Automação"
+		ANALYST = "analyst", "Analista"
+		IMPORT = "import", "Importação"
+
+	id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+	finding = models.ForeignKey(
+		HuntFinding,
+		related_name="recommendations",
+		on_delete=models.CASCADE,
+		null=True,
+		blank=True,
+	)
+	technique = models.ForeignKey(
+		AttackTechnique,
+		related_name="recommendations",
+		on_delete=models.SET_NULL,
+		null=True,
+		blank=True,
+	)
+	recommendation_type = models.CharField(max_length=8, choices=Type.choices)
+	title = models.CharField(max_length=160)
+	summary = models.TextField(blank=True)
+	confidence = models.CharField(
+		max_length=8,
+		choices=CveAttackTechnique.Confidence.choices,
+		default=CveAttackTechnique.Confidence.MEDIUM,
+	)
+	evidence = models.JSONField(default=dict, blank=True)
+	tags = models.JSONField(default=list, blank=True)
+	generated_by = models.CharField(max_length=16, choices=Generator.choices, default=Generator.AUTOMATION)
+	source_enrichment = models.ForeignKey(
+		"HuntEnrichment",
+		related_name="recommendations",
+		on_delete=models.SET_NULL,
+		null=True,
+		blank=True,
+	)
+	created_at = models.DateTimeField(auto_now_add=True)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		ordering = ("-updated_at", "-created_at")
+		indexes = [
+			models.Index(fields=["finding", "recommendation_type"], name="idx_hunt_rec_finding_type"),
+			models.Index(fields=["technique"], name="idx_hunt_rec_technique"),
+		]
+
+	def __str__(self) -> str:  # pragma: no cover - representação simples
+		return f"{self.recommendation_type.upper()} · {self.title}"
+
+
 class HuntSyncLog(models.Model):
 	class Status(models.TextChoices):
 		SUCCESS = "success", "Sucesso"
