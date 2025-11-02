@@ -26,7 +26,7 @@ from arpia_hunt.models import (
     HuntRecommendation,
     HuntSyncLog,
 )
-from arpia_hunt.services import synchronize_findings
+from arpia_hunt.services import sync_recommendations_for_finding, synchronize_findings
 from arpia_hunt.enrichment import enrich_cve, enrich_finding
 from arpia_vuln.models import VulnerabilityFinding, VulnScanSession
 from arpia_log.models import LogEntry
@@ -187,7 +187,6 @@ class FindingProfilesTests(TestCase):
         mock_exploit.return_value = load_json_fixture("exploitdb_results.json")
 
         records, changed = enrich_finding(finding, enable_remote=True, force_refresh=True)
-
         finding.refresh_from_db()
         self.assertTrue(changed)
         self.assertEqual(finding.profile_version, 1)
@@ -197,6 +196,49 @@ class FindingProfilesTests(TestCase):
         self.assertTrue(
             HuntFindingEnrichment.objects.filter(finding=finding, enrichment__in=records.values()).exists()
         )
+
+    @mock.patch.dict(os.environ, {"ARPIA_HUNT_ENABLE_REMOTE_ENRICHMENT": "1"})
+    @mock.patch("arpia_hunt.enrichment.search_exploitdb")
+    @mock.patch("arpia_hunt.enrichment.fetch_vulners_cve")
+    @mock.patch("arpia_hunt.enrichment.fetch_nvd_cve")
+    def test_enrich_finding_generates_automatic_recommendations(self, mock_nvd, mock_vulners, mock_exploit):
+        attack_tactic = AttackTactic.objects.create(
+            id="TA0001",
+            name="Initial Access",
+            order=1,
+        )
+        attack_technique = AttackTechnique.objects.create(
+            id="T1190",
+            name="Exploit Public-Facing Application",
+            tactic=attack_tactic,
+        )
+        CveAttackTechnique.objects.create(
+            cve="CVE-2024-9999",
+            technique=attack_technique,
+            source=CveAttackTechnique.Source.HEURISTIC,
+            confidence=CveAttackTechnique.Confidence.HIGH,
+            rationale="Exploit público conhecido.",
+        )
+
+        finding = self._create_finding()
+
+        mock_nvd.return_value = load_json_fixture("nvd_cve.json")
+        mock_vulners.return_value = load_json_fixture("vulners_cve.json")
+        mock_exploit.return_value = load_json_fixture("exploitdb_results.json")
+
+        records, changed = enrich_finding(finding, enable_remote=True, force_refresh=True)
+        self.assertTrue(changed)
+
+        recs = list(
+            finding.recommendations.filter(
+                generated_by=HuntRecommendation.Generator.AUTOMATION
+            ).order_by("recommendation_type")
+        )
+        self.assertEqual(len(recs), 2)
+        self.assertEqual({rec.recommendation_type for rec in recs}, {"blue", "red"})
+        self.assertTrue(all(rec.technique_id == "T1190" for rec in recs))
+        self.assertEqual(recs[0].confidence, CveAttackTechnique.Confidence.HIGH)
+        self.assertIn("technique:T1190", recs[0].tags)
 
     @mock.patch.dict(os.environ, {"ARPIA_HUNT_ENABLE_REMOTE_ENRICHMENT": "1"})
     @mock.patch("arpia_hunt.enrichment.search_exploitdb")
@@ -257,6 +299,68 @@ class AttackMappingTests(TestCase):
         call_command("import_attack_catalog", "--from-file", fixture_path)
         self.assertTrue(AttackTactic.objects.filter(pk="TA0001").exists())
         self.assertTrue(AttackTechnique.objects.filter(pk="T1190").exists())
+
+        def test_sync_recommendations_removes_obsolete_entries(self):
+            tactic = AttackTactic.objects.create(id="TA0001", name="Initial Access", order=1)
+            technique = AttackTechnique.objects.create(id="T1190", name="Exploit Public-Facing Application", tactic=tactic)
+            mapping = CveAttackTechnique.objects.create(
+                cve="CVE-2024-9999",
+                technique=technique,
+                source=CveAttackTechnique.Source.DATASET,
+                confidence=CveAttackTechnique.Confidence.MEDIUM,
+            )
+            enrichment = HuntEnrichment.objects.create(
+                cve="CVE-2024-9999",
+                source=HuntEnrichment.Source.NVD,
+                status=HuntEnrichment.Status.FRESH,
+                payload={},
+            )
+            user_model = get_user_model()
+            user = user_model.objects.create_user("recommend", "recommend@example.com", "hunter")
+            project = Project.objects.create(owner=user, name="Projeto Rec", slug="projeto-rec")
+            session = VulnScanSession.objects.create(project=project, owner=user, title="Sessão Vuln")
+            vuln = VulnerabilityFinding.objects.create(
+                session=session,
+                title="Exploit público",
+                severity=VulnerabilityFinding.Severity.HIGH,
+                status=VulnerabilityFinding.Status.OPEN,
+                host="10.0.0.1",
+                service="http",
+                port=80,
+                protocol="tcp",
+                cve="CVE-2024-9999",
+            )
+            finding = HuntFinding.objects.create(
+                project=project,
+                vulnerability=vuln,
+                vuln_session=session,
+                cve=vuln.cve,
+                summary=vuln.summary,
+                severity=vuln.severity,
+            )
+
+            sync_recommendations_for_finding(
+                finding,
+                {
+                    HuntEnrichment.Source.NVD: enrichment,
+                },
+            )
+            self.assertEqual(
+                finding.recommendations.filter(generated_by=HuntRecommendation.Generator.AUTOMATION).count(),
+                2,
+            )
+
+            mapping.delete()
+            sync_recommendations_for_finding(
+                finding,
+                {
+                    HuntEnrichment.Source.NVD: enrichment,
+                },
+            )
+            self.assertEqual(
+                finding.recommendations.filter(generated_by=HuntRecommendation.Generator.AUTOMATION).count(),
+                0,
+            )
 
     def test_cve_attack_technique_unique_constraint(self):
         fixture = load_json_fixture("attack_mapping.json")

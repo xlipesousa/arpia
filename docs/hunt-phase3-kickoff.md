@@ -90,6 +90,11 @@ Snapshot de referência: `antes Kickoff da Fase 3` (registrado em 2025-11-02).
 - `CveAttackTechnique` alimenta heurísticas para gerar `HuntRecommendation` (blue/red) e atualizar perfis existentes.
 - Perfis `blue_profile`/`red_profile` podem incluir referências a recomendações geradas (ID + resumo) para rastreabilidade.
 
+### Heurísticas iniciais implementadas
+
+- `python manage.py import_attack_catalog` + `sync_recommendations_for_finding` sincronizam táticas/técnicas e criam recomendações automáticas (Blue: mitigar, Red: simular) para cada `CveAttackTechnique` do CVE associado ao finding.
+- Recomendações automáticas são atualizadas/excluídas a cada nova execução de `enrich_finding`, garantindo aderência ao catálogo vigente.
+
 ## Riscos e pontos de atenção
 
 - Possível aumento de tempo de deploy e memória ao carregar datasets ATT&CK completos.

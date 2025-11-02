@@ -17,6 +17,7 @@ from .integrations import (
 from .log_events import emit_hunt_log
 from .models import HuntEnrichment, HuntFinding
 from .profiles import derive_profiles
+from .services import sync_recommendations_for_finding
 
 
 def _remote_enrichment_enabled() -> bool:
@@ -181,7 +182,8 @@ def enrich_finding(
 		ttl=ttl,
 	)
 	profile_result = derive_profiles(finding, records)
-	return records, profile_result.updated
+	rec_result = sync_recommendations_for_finding(finding, records)
+	return records, profile_result.updated or rec_result.changed
 
 
 __all__ = ["enrich_cve", "enrich_finding"]
