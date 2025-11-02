@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
-from .models import HuntEnrichment, HuntFinding, HuntFindingSnapshot
+from .models import HuntEnrichment, HuntFinding, HuntFindingSnapshot, HuntFindingState
 
 
 class HuntEnrichmentSerializer(serializers.ModelSerializer):
@@ -31,11 +31,23 @@ class HuntFindingSnapshotSerializer(serializers.ModelSerializer):
         )
 
 
+class HuntFindingStateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HuntFindingState
+        fields = (
+            "version",
+            "captured_at",
+            "source_hash",
+            "payload",
+        )
+
+
 class HuntFindingSerializer(serializers.ModelSerializer):
     project_name = serializers.CharField(source="project.name")
     vulnerability_title = serializers.CharField(source="vulnerability.title")
     enrichments = HuntEnrichmentSerializer(many=True, read_only=True)
     snapshots = HuntFindingSnapshotSerializer(many=True, read_only=True)
+    state_snapshots = HuntFindingStateSerializer(many=True, read_only=True)
 
     class Meta:
         model = HuntFinding
@@ -54,7 +66,10 @@ class HuntFindingSerializer(serializers.ModelSerializer):
             "red_profile",
             "profile_version",
             "last_profiled_at",
+            "state_version",
+            "last_state_snapshot_at",
             "detected_at",
             "enrichments",
             "snapshots",
+            "state_snapshots",
         )

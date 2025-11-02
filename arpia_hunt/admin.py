@@ -12,12 +12,20 @@ class HuntFindingAdmin(admin.ModelAdmin):
 		"severity",
 		"host",
 		"port",
+		"state_version",
+		"profile_version",
 		"last_synced_at",
 	)
 	list_filter = ("project", "severity", "is_active")
 	search_fields = ("vulnerability__title", "cve", "host", "service")
 	autocomplete_fields = ("project", "vulnerability", "asset", "scan_session", "vuln_session")
-	readonly_fields = ("created_at", "updated_at", "last_synced_at")
+	readonly_fields = (
+		"created_at",
+		"updated_at",
+		"last_synced_at",
+		"last_state_snapshot_at",
+		"last_profiled_at",
+	)
 
 
 @admin.register(models.HuntSyncLog)
@@ -65,6 +73,14 @@ class HuntFindingEnrichmentAdmin(admin.ModelAdmin):
 
 @admin.register(models.HuntFindingSnapshot)
 class HuntFindingSnapshotAdmin(admin.ModelAdmin):
+	list_display = ("finding", "version", "captured_at")
+	search_fields = ("finding__vulnerability__title", "finding__cve")
+	readonly_fields = ("captured_at",)
+	autocomplete_fields = ("finding",)
+
+
+@admin.register(models.HuntFindingState)
+class HuntFindingStateAdmin(admin.ModelAdmin):
 	list_display = ("finding", "version", "captured_at")
 	search_fields = ("finding__vulnerability__title", "finding__cve")
 	readonly_fields = ("captured_at",)

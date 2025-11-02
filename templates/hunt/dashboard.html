@@ -4,7 +4,7 @@
 {% block content %}
 <section class="page-heading">
   <div>
-    <h1>Modulo Hunt</h1>
+    <h1>Módulo Hunt</h1>
     <p class="page-subtitle">Fase atual: {{ phase }} · Snapshot base: {{ snapshot_label }}</p>
   </div>
 </section>
@@ -44,8 +44,8 @@
   <article class="panel">
     <header class="panel-header">
       <div>
-        <h2>Entregáveis Fase 0</h2>
-        <p class="muted">Itens mínimos para concluir a fase de descoberta.</p>
+  <h2>Entregáveis Fase 2</h2>
+  <p class="muted">Pontos de controle para consolidar o enriquecimento externo.</p>
       </div>
     </header>
     <ul class="deliverables">
@@ -58,8 +58,8 @@
   <article class="panel">
     <header class="panel-header">
       <div>
-        <h2>Próximos passos</h2>
-        <p class="muted">Sequência planejada para avançar ao enriquecimento.</p>
+  <h2>Próximos passos</h2>
+  <p class="muted">Sequência planejada após consolidar as integrações externas.</p>
       </div>
     </header>
     <ul class="next-steps">
@@ -67,6 +67,20 @@
         <li>{{ step }}</li>
       {% endfor %}
     </ul>
+  </article>
+
+  <article class="panel">
+    <header class="panel-header">
+      <div>
+        <h2>Indicadores atuais</h2>
+        <p class="muted">Total de achados normalizados disponíveis para os perfis.</p>
+      </div>
+    </header>
+    <dl class="stats-grid">
+      <div><dt>Total de achados</dt><dd>{{ stats.findings_total }}</dd></div>
+      <div><dt>Achados ativos</dt><dd>{{ stats.findings_active }}</dd></div>
+      <div><dt>Com CVE associado</dt><dd>{{ stats.findings_with_cve }}</dd></div>
+    </dl>
   </article>
 </section>
 
@@ -99,18 +113,158 @@
   </div>
 </section>
 
+<section class="panel profile-panel">
+  <header class="panel-header">
+    <div>
+      <h2>Insights recentes</h2>
+      <p class="muted">Perfis Blue/Red gerados a partir do enriquecimento externo.</p>
+    </div>
+  </header>
+  <div class="profile-columns">
+    <div class="profile-card blue">
+      <h3>Blue-Team</h3>
+      {% if blue_insights %}
+        <ul>
+          {% for item in blue_insights %}
+            <li>
+              <header>
+                <span class="badge severity-{{ item.finding.severity }}">{{ item.finding.get_severity_display }}</span>
+                <strong>{{ item.finding.vulnerability.title }}</strong>
+                <small>{% if item.finding.last_profiled_at %}{{ item.finding.last_profiled_at|date:"d/m/Y H:i" }}{% else %}—{% endif %}</small>
+              </header>
+              <p>{{ item.profile.summary|default:item.finding.summary|default:"Sem resumo." }}</p>
+              <dl>
+                <div><dt>Projeto</dt><dd>{{ item.finding.project.name }}</dd></div>
+                {% if item.profile.references %}
+                  <div><dt>Referências</dt><dd><a href="{{ item.profile.references.0 }}" target="_blank" rel="noopener">Ver primeira referência</a>{% if item.profile.references|length > 1 %} · {{ item.profile.references|length }} links{% endif %}</dd></div>
+                {% endif %}
+              </dl>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="muted">Nenhum perfil Blue gerado ainda. Execute <code>python manage.py hunt_enrich</code>.</p>
+      {% endif %}
+    </div>
+    <div class="profile-card red">
+      <h3>Red-Team</h3>
+      {% if red_insights %}
+        <ul>
+          {% for item in red_insights %}
+            <li>
+              <header>
+                <span class="badge severity-{{ item.finding.severity }}">{{ item.finding.get_severity_display }}</span>
+                <strong>{{ item.finding.vulnerability.title }}</strong>
+                <small>{% if item.finding.last_profiled_at %}{{ item.finding.last_profiled_at|date:"d/m/Y H:i" }}{% else %}—{% endif %}</small>
+              </header>
+              {% if item.profile.exploits %}
+                <ul class="exploit-list">
+                  {% for exploit in item.profile.exploits|slice:":3" %}
+                    <li>
+                      <strong>{{ exploit.title|default:"Exploit" }}</strong>
+                      <span class="muted">Fonte: {{ exploit.source|default:"?" }}</span>
+                      {% if exploit.url %}<a href="{{ exploit.url }}" target="_blank" rel="noopener">Abrir</a>{% endif %}
+                      {% if exploit.path %}<code>{{ exploit.path }}</code>{% endif %}
+                    </li>
+                  {% endfor %}
+                </ul>
+              {% else %}
+                <p class="muted">Sem exploits correlacionados.</p>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="muted">Nenhum perfil Red gerado ainda. Execute <code>python manage.py hunt_enrich</code>.</p>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
 <section class="panel notes-panel">
   <header class="panel-header">
     <div>
       <h2>Notas rápidas</h2>
-      <p class="muted">Pontos de atenção levantados durante o planejamento.</p>
+      <p class="muted">Pontos de atenção práticos enquanto integrarmos os catálogos externos.</p>
     </div>
   </header>
   <ul class="notes-list">
     <li>Respeitar limites de rate das APIs NVD e Vulners usando cache local incremental.</li>
     <li>Definir formato canônico para armazenar resultados do searchsploit sem exigir parsing manual a cada consulta.</li>
     <li>Garantir que dados sensíveis (creds, PoCs) sejam tratados com controles de acesso adequados.</li>
+    <li>Registrar cada tentativa no arpia_log para facilitar auditoria e troubleshooting.</li>
   </ul>
+</section>
+
+<section class="panel sync-panel">
+  <header class="panel-header">
+    <div>
+      <h2>Histórico de sincronizações</h2>
+      <p class="muted">Últimas execuções do pipeline de ingestão Hunt.</p>
+    </div>
+  </header>
+  {% if recent_syncs %}
+    <table class="sync-table">
+      <thead>
+        <tr>
+          <th>Iniciada</th>
+          <th>Status</th>
+          <th>Total</th>
+          <th>Criados</th>
+          <th>Atualizados</th>
+          <th>Ignorados</th>
+          <th>Duração (ms)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for run in recent_syncs %}
+          <tr>
+            <td>{{ run.started_at|date:"d/m/Y H:i" }}</td>
+            <td><span class="badge status-{{ run.status }}">{{ run.get_status_display }}</span></td>
+            <td>{{ run.total_processed }}</td>
+            <td>{{ run.created_count }}</td>
+            <td>{{ run.updated_count }}</td>
+            <td>{{ run.skipped_count }}</td>
+            <td>{{ run.duration_ms }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">Nenhuma sincronização registrada ainda. Execute <code>python manage.py hunt_sync</code> para iniciar.</p>
+  {% endif %}
+</section>
+
+<section class="panel log-panel">
+  <header class="panel-header">
+    <div>
+      <h2>Eventos recentes do Hunt</h2>
+      <p class="muted">Recortes do arpia_log para acompanhar sincronizações e enriquecimentos.</p>
+    </div>
+  </header>
+  {% if recent_logs %}
+    <ul class="log-feed">
+      {% for entry in recent_logs %}
+        <li>
+          <header>
+            <span class="badge severity-{{ entry.severity|lower }}">{{ entry.severity }}</span>
+            <span class="timestamp">{{ entry.timestamp|date:"d/m/Y H:i" }}</span>
+            <span class="event-type">{{ entry.event_type }}</span>
+          </header>
+          <p class="message">{{ entry.message }}</p>
+          {% if entry.details %}
+            <dl class="details">
+              {% for key, value in entry.details.items %}
+                <div><dt>{{ key }}</dt><dd>{{ value }}</dd></div>
+              {% endfor %}
+            </dl>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="muted">Sem eventos registrados ainda. Rode o sincronizador ou enriquecimentos para popular esta área.</p>
+  {% endif %}
 </section>
 
 <style>
@@ -127,6 +281,10 @@
 .data-sources li{padding:.85rem 1rem;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);}
 .data-sources strong{display:block;color:var(--text);margin-bottom:.35rem;font-size:1rem;}
 .data-sources p{margin:0;color:var(--muted);font-size:.9rem;}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.9rem;margin:0;}
+.stats-grid div{display:flex;flex-direction:column;gap:.25rem;padding:.85rem 1rem;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);}
+.stats-grid dt{margin:0;color:var(--muted);font-size:.8rem;text-transform:uppercase;letter-spacing:.08em;}
+.stats-grid dd{margin:0;color:var(--text);font-weight:700;font-size:1.2rem;}
 .roles-panel{margin-bottom:1.6rem;}
 .role-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.2rem;}
 .role-card{padding:1.2rem;border-radius:14px;border:1px solid rgba(255,255,255,0.05);background:rgba(255,255,255,0.02);display:flex;flex-direction:column;gap:.8rem;}
@@ -135,8 +293,46 @@
 .role-card ul{margin:0;padding-left:1.1rem;display:flex;flex-direction:column;gap:.45rem;color:var(--muted);}
 .role-card.blue{background:rgba(118,187,255,0.08);border-color:rgba(118,187,255,0.18);}
 .role-card.red{background:rgba(255,138,138,0.08);border-color:rgba(255,138,138,0.18);}
+.profile-panel{margin-bottom:2rem;}
+.profile-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.4rem;}
+.profile-card{padding:1.2rem;border-radius:14px;border:1px solid rgba(255,255,255,0.05);background:rgba(255,255,255,0.02);display:flex;flex-direction:column;gap:.8rem;}
+.profile-card h3{margin:0;font-size:1.1rem;color:var(--text);}
+.profile-card ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.9rem;}
+.profile-card li{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:12px;padding:.9rem 1rem;display:flex;flex-direction:column;gap:.6rem;}
+.profile-card header{display:flex;align-items:center;gap:.6rem;}
+.profile-card header strong{flex:1;color:var(--text);}
+.profile-card header small{color:var(--muted);font-size:.78rem;}
+.profile-card dl{margin:0;display:flex;flex-wrap:wrap;gap:.6rem 1.2rem;font-size:.82rem;color:var(--muted);}
+.profile-card dl div{display:flex;flex-direction:column;gap:.2rem;}
+.profile-card.blue{background:rgba(118,187,255,0.08);border-color:rgba(118,187,255,0.18);}
+.profile-card.red{background:rgba(255,138,138,0.08);border-color:rgba(255,138,138,0.18);}
+.exploit-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.5rem;}
+.exploit-list li{display:flex;flex-direction:column;gap:.2rem;}
 .notes-panel{margin-bottom:2rem;}
 .notes-list li{line-height:1.4;}
+.sync-panel{margin-bottom:2rem;}
+.sync-table{width:100%;border-collapse:collapse;font-size:.9rem;}
+.sync-table th,.sync-table td{padding:.6rem .8rem;border-bottom:1px solid rgba(255,255,255,0.05);text-align:left;}
+.sync-table th{font-weight:600;color:var(--muted);text-transform:uppercase;font-size:.75rem;letter-spacing:.08em;}
+.badge.status-success{background:rgba(118,221,174,0.18);color:#d8f6e9;border-radius:999px;padding:.15rem .5rem;display:inline-flex;align-items:center;gap:.3rem;}
+.badge.status-error{background:rgba(255,138,138,0.18);color:#ffd4d4;border-radius:999px;padding:.15rem .5rem;display:inline-flex;}
+.log-panel{margin-bottom:2rem;}
+.log-feed{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.75rem;}
+.log-feed li{padding:.9rem 1.1rem;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);box-shadow:0 10px 24px rgba(5,16,32,0.18);}
+.log-feed .badge{display:inline-flex;align-items:center;gap:.3rem;padding:.2rem .6rem;border-radius:999px;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;}
+.log-feed header{display:flex;align-items:center;gap:.6rem;font-size:.78rem;color:var(--muted);margin-bottom:.5rem;}
+.log-feed .message{margin:0;color:var(--text);font-size:.9rem;}
+.log-feed .details{margin:.6rem 0 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.4rem .6rem;font-size:.78rem;color:#9fb8d8;}
+.log-feed .details dt{margin:0;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-size:.7rem;}
+.log-feed .details dd{margin:0;color:#cfe2ff;font-weight:500;}
+.log-feed .timestamp{opacity:.8;}
+.log-feed .event-type{margin-left:auto;font-weight:600;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;}
+.log-feed .severity-info{background:rgba(118,187,255,0.18);color:#d5ecff;}
+.log-feed .severity-notice{background:rgba(140,205,255,0.2);color:#e3f2ff;}
+.log-feed .severity-warn{background:rgba(255,214,165,0.28);color:#ffe0b2;}
+.log-feed .severity-error{background:rgba(255,138,138,0.28);color:#ffd4d4;}
+.log-feed .severity-critical{background:rgba(255,86,86,0.3);color:#ffd0d0;}
+.log-feed .severity-debug{background:rgba(255,255,255,0.08);color:#f0f6ff;}
 @media (max-width:960px){
   .page-heading{flex-direction:column;align-items:flex-start;}
 }

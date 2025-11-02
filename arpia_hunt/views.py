@@ -101,6 +101,7 @@ class HuntFindingListAPIView(ListAPIView):
 		queryset = HuntFinding.objects.select_related("project", "vulnerability").prefetch_related(
 			"enrichments",
 			"snapshots",
+			"state_snapshots",
 		)
 		project_id = self.request.query_params.get("project")
 		if project_id:

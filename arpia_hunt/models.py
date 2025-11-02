@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from typing import Any, Dict
 
 from django.db import models
 from django.utils import timezone
@@ -32,7 +33,13 @@ class HuntFinding(models.Model):
 		null=True,
 		blank=True,
 	)
-	asset = models.ForeignKey(Asset, related_name="hunt_findings", on_delete=models.SET_NULL, null=True, blank=True)
+	asset = models.ForeignKey(
+		Asset,
+		related_name="hunt_findings",
+		on_delete=models.SET_NULL,
+		null=True,
+		blank=True,
+	)
 
 	host = models.CharField(max_length=200, blank=True)
 	service = models.CharField(max_length=200, blank=True)
@@ -59,6 +66,8 @@ class HuntFinding(models.Model):
 	red_profile = models.JSONField(default=dict, blank=True)
 	profile_version = models.PositiveIntegerField(default=0)
 	last_profiled_at = models.DateTimeField(null=True, blank=True)
+	state_version = models.PositiveIntegerField(default=0)
+	last_state_snapshot_at = models.DateTimeField(null=True, blank=True)
 	created_at = models.DateTimeField(auto_now_add=True)
 	updated_at = models.DateTimeField(auto_now=True)
 	enrichments = models.ManyToManyField(
@@ -80,7 +89,7 @@ class HuntFinding(models.Model):
 		base = self.cve or self.vulnerability.title
 		return f"{base} · {self.host or '—'}:{self.port or '—'}"
 
-	def update_from_payload(self, payload: dict[str, object]) -> None:
+	def update_from_payload(self, payload: Dict[str, Any]) -> None:
 		"""Atualiza campos a partir do payload normalizado."""
 		for field in (
 			"host",
@@ -105,9 +114,55 @@ class HuntFinding(models.Model):
 		self.last_synced_at = timezone.now()
 
 	@staticmethod
-	def build_source_hash(data: dict[str, object]) -> str:
+	def build_source_hash(data: Dict[str, Any]) -> str:
 		payload = json.dumps(data, sort_keys=True, default=str)
 		return uuid.uuid5(uuid.NAMESPACE_URL, payload).hex
+
+	def _state_payload(self) -> Dict[str, Any]:
+		return {
+			"project_id": str(self.project_id),
+			"vulnerability_id": str(self.vulnerability_id),
+			"host": self.host,
+			"service": self.service,
+			"port": self.port,
+			"protocol": self.protocol,
+			"cve": self.cve,
+			"severity": self.severity,
+			"cvss_score": float(self.cvss_score) if self.cvss_score is not None else None,
+			"cvss_vector": self.cvss_vector,
+			"summary": self.summary,
+			"tags": list(self.tags or []),
+			"context": dict(self.context or {}),
+			"detected_at": self.detected_at.isoformat() if self.detected_at else None,
+			"last_synced_at": self.last_synced_at.isoformat() if self.last_synced_at else None,
+		}
+
+	def record_state_snapshot(self) -> bool:
+		"""Persiste versão da camada de ingestão sempre que o hash mudar."""
+
+		if not self.source_hash:
+			return False
+
+		if self.state_snapshots.filter(source_hash=self.source_hash).exists():
+			return False
+
+		self.state_version += 1
+		self.last_state_snapshot_at = timezone.now()
+		self.save(
+			update_fields=[
+				"state_version",
+				"last_state_snapshot_at",
+				"updated_at",
+			]
+		)
+
+		HuntFindingState.objects.create(
+			finding=self,
+			version=self.state_version,
+			source_hash=self.source_hash,
+			payload=self._state_payload(),
+		)
+		return True
 
 	def apply_profiles(
 		self,
@@ -117,10 +172,8 @@ class HuntFinding(models.Model):
 		enrichment_ids: list[str],
 	) -> bool:
 		"""Atualiza perfis Blue/Red e cria snapshot quando houver mudança."""
-		if (
-			self.blue_profile == blue_profile
-			and self.red_profile == red_profile
-		):
+
+		if self.blue_profile == blue_profile and self.red_profile == red_profile:
 			return False
 
 		self.blue_profile = blue_profile
@@ -236,6 +289,23 @@ class HuntFindingSnapshot(models.Model):
 	blue_profile = models.JSONField(default=dict, blank=True)
 	red_profile = models.JSONField(default=dict, blank=True)
 	enrichment_ids = models.JSONField(default=list, blank=True)
+	captured_at = models.DateTimeField(default=timezone.now)
+
+	class Meta:
+		unique_together = ("finding", "version")
+		ordering = ("-captured_at", "-version")
+
+
+class HuntFindingState(models.Model):
+	id = models.BigAutoField(primary_key=True)
+	finding = models.ForeignKey(
+		HuntFinding,
+		on_delete=models.CASCADE,
+		related_name="state_snapshots",
+	)
+	version = models.PositiveIntegerField()
+	source_hash = models.CharField(max_length=64, blank=True, db_index=True)
+	payload = models.JSONField(default=dict, blank=True)
 	captured_at = models.DateTimeField(default=timezone.now)
 
 	class Meta:

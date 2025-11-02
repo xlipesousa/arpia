@@ -168,6 +168,7 @@ def synchronize_findings(
 
             if created:
                 result.created += 1
+                hunt_finding.record_state_snapshot()
                 continue
 
             if hunt_finding.source_hash == source_hash:
@@ -195,6 +196,7 @@ def synchronize_findings(
             )
             hunt_finding.save()
             result.updated += 1
+            hunt_finding.record_state_snapshot()
 
         if log_entry:
             log_entry.total_processed = result.total

@@ -1,6 +1,7 @@
 import os
 from datetime import timedelta
 from decimal import Decimal
+from io import StringIO
 from unittest import mock
 
 from django.contrib.auth import get_user_model
@@ -15,6 +16,7 @@ from arpia_hunt.models import (
     HuntFinding,
     HuntFindingEnrichment,
     HuntFindingSnapshot,
+    HuntFindingState,
     HuntSyncLog,
 )
 from arpia_hunt.services import synchronize_findings
@@ -62,6 +64,11 @@ class SynchronizeFindingsTests(TestCase):
         self.assertEqual(hunt_entry.vulnerability, vuln)
         self.assertEqual(hunt_entry.cve, vuln.cve)
         self.assertEqual(hunt_entry.project, self.project)
+        self.assertEqual(hunt_entry.state_version, 1)
+        self.assertEqual(hunt_entry.state_snapshots.count(), 1)
+        state_snapshot = hunt_entry.state_snapshots.get()
+        self.assertEqual(state_snapshot.source_hash, hunt_entry.source_hash)
+        self.assertIn("summary", state_snapshot.payload)
         self.assertTrue(HuntSyncLog.objects.exists())
         self.assertTrue(LogEntry.objects.filter(event_type="hunt.sync.completed").exists())
 
@@ -81,7 +88,23 @@ class SynchronizeFindingsTests(TestCase):
         self.assertNotEqual(hunt_entry.source_hash, original_hash)
         self.assertEqual(result.updated, 1)
         self.assertEqual(result.skipped, 0)
+        self.assertEqual(hunt_entry.state_version, 2)
+        self.assertEqual(hunt_entry.state_snapshots.count(), 2)
         self.assertGreaterEqual(LogEntry.objects.filter(event_type="hunt.sync.completed").count(), 2)
+
+    def test_sync_skips_without_creating_additional_state_snapshot(self):
+        self._create_vulnerability()
+        synchronize_findings()
+
+        hunt_entry = HuntFinding.objects.get()
+        self.assertEqual(hunt_entry.state_version, 1)
+
+        result = synchronize_findings()
+        hunt_entry.refresh_from_db()
+
+        self.assertEqual(result.skipped, result.total)
+        self.assertEqual(hunt_entry.state_version, 1)
+        self.assertEqual(hunt_entry.state_snapshots.count(), 1)
 
 
 class EnrichmentServiceTests(TestCase):
@@ -215,3 +238,14 @@ class FindingProfilesTests(TestCase):
         self.assertEqual(finding.profile_version, 2)
         self.assertGreaterEqual(HuntFindingSnapshot.objects.filter(finding=finding).count(), 2)
         self.assertTrue(LogEntry.objects.filter(event_type="hunt.enrichment.batch").exists())
+
+
+class SchedulerCommandTests(TestCase):
+    def test_hunt_schedule_preview_logs_event(self):
+        out = StringIO()
+        call_command("hunt_schedule", stdout=out, stderr=StringIO())
+
+        content = out.getvalue().strip().splitlines()
+        self.assertGreaterEqual(len(content), 2)
+        self.assertTrue(content[0].startswith("*/30"))
+        self.assertTrue(LogEntry.objects.filter(event_type="hunt.scheduler.preview").exists())
