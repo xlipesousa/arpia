@@ -9,6 +9,7 @@ from ...services.attack_catalog import (
     CatalogImportError,
     load_catalog_from_fixture,
     load_from_pyattck,
+    merge_catalogs,
     sync_attack_catalog,
 )
 
@@ -28,7 +29,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--matrix",
             dest="matrix",
-            choices=[choice for choice, _label in AttackTactic.Matrix.choices],
+            choices=[choice for choice, _label in AttackTactic.Matrix.choices] + ["all"],
             default=AttackTactic.Matrix.ENTERPRISE,
             help="Matriz ATT&CK a importar quando utilizar pyattck (default: enterprise).",
         )
@@ -57,7 +58,14 @@ class Command(BaseCommand):
 
     def _load_dataset(self, options):
         if options.get("use_pyattck"):
-            return load_from_pyattck(matrix=options["matrix"])
+            matrix_choice = options["matrix"]
+            if matrix_choice == "all":
+                datasets = [
+                    load_from_pyattck(matrix=value)
+                    for value, _label in AttackTactic.Matrix.choices
+                ]
+                return merge_catalogs(*datasets)
+            return load_from_pyattck(matrix=matrix_choice)
 
         if options.get("from_file"):
             path = Path(options["from_file"]).expanduser().resolve()

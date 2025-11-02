@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     # third-party
     "rest_framework",
     "rest_framework.authtoken",  # habilita TokenAuth
+    "graphene_django",
     # ARPIA apps
     "arpia_core",
     "arpia_scan",
@@ -223,3 +224,7 @@ def _env_flag(name: str, default: str = "0") -> bool:
 
 ARPIA_HUNT_API_BETA = _env_flag("ARPIA_HUNT_API_BETA")
 ARPIA_HUNT_UI_METRICS_ENABLED = _env_flag("ARPIA_HUNT_UI_METRICS_ENABLED")
+
+GRAPHENE = {
+    "SCHEMA": "api.schema.schema",
+}

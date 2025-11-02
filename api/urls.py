@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 from .views import ProjectViewSet, AssetViewSet, ObservedEndpointViewSet, HealthCheck
@@ -6,6 +7,8 @@ from .hunt_views import (
     HuntFindingViewSet,
     HuntRecommendationViewSet,
 )
+from .graphql.views import HuntGraphQLView
+from .schema import schema
 
 router = DefaultRouter()
 router.register(r"projects", ProjectViewSet, basename="project")
@@ -18,4 +21,9 @@ router.register(r"hunt/catalog/techniques", AttackTechniqueViewSet, basename="hu
 urlpatterns = [
     path("", include(router.urls)),
     path("health/", HealthCheck.as_view(), name="health"),
+    path(
+        "hunt/graphql/",
+        HuntGraphQLView.as_view(schema=schema, graphiql=settings.DEBUG),
+        name="hunt-graphql",
+    ),
 ]

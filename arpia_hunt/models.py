@@ -5,6 +5,7 @@ import uuid
 from typing import Any, Dict
 
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 
 from arpia_core.models import Asset, Project
@@ -336,6 +337,8 @@ class HuntRecommendation(models.Model):
 	evidence = models.JSONField(default=dict, blank=True)
 	tags = models.JSONField(default=list, blank=True)
 	generated_by = models.CharField(max_length=16, choices=Generator.choices, default=Generator.AUTOMATION)
+	confidence_note = models.CharField(max_length=512, blank=True)
+	playbook_slug = models.CharField(max_length=128, blank=True)
 	source_enrichment = models.ForeignKey(
 		"HuntEnrichment",
 		related_name="recommendations",
@@ -351,6 +354,16 @@ class HuntRecommendation(models.Model):
 		indexes = [
 			models.Index(fields=["finding", "recommendation_type"], name="idx_hunt_rec_finding_type"),
 			models.Index(fields=["technique"], name="idx_hunt_rec_technique"),
+			models.Index(
+				fields=["recommendation_type", "created_at"],
+				name="idx_hunt_rec_auto_recent",
+				condition=Q(generated_by="automation"),
+			),
+			models.Index(
+				fields=["playbook_slug"],
+				name="idx_hunt_rec_playbook",
+				condition=Q(playbook_slug__gt=""),
+			),
 		]
 
 	def __str__(self) -> str:  # pragma: no cover - representação simples

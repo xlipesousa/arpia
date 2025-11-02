@@ -28,30 +28,15 @@
             <li>
               <header>
                 <span class="badge severity-{{ card.finding.severity }}">{{ card.finding.get_severity_display }}</span>
-                <strong>{{ card.finding.vulnerability.title }}</strong>
+                <strong><a href="{% url 'arpia_hunt:finding-detail' card.finding.id %}">{{ card.finding.vulnerability.title }}</a></strong>
                 <small>{{ card.finding.project.name }}</small>
               </header>
               <p class="profile-summary">{{ card.profile.summary|default:card.finding.summary|default:"Sem resumo." }}</p>
-              {% if card.heuristics %}
-                <ul class="heuristic-chips">
-                  {% for mapping in card.heuristics %}
-                    <li title="{{ mapping.rationale }}">{{ mapping.technique_id }} · {{ mapping.get_confidence_display }}</li>
-                  {% endfor %}
-                </ul>
-              {% endif %}
-              {% if card.recommendations %}
-                <ul class="recommendation-list">
-                  {% for rec in card.recommendations %}
-                    <li>
-                      <strong>{{ rec.title }}</strong>
-                      <span class="muted">{{ rec.summary|default:"Sem resumo detalhado." }}</span>
-                      <small class="tagged">Confiança: {{ rec.get_confidence_display }}</small>
-                    </li>
-                  {% endfor %}
-                </ul>
-              {% else %}
-                <p class="muted">Nenhuma recomendação automatizada ainda.</p>
-              {% endif %}
+              {% include "hunt/components/heuristic_chips.html" with heuristics=card.heuristics %}
+              {% include "hunt/components/recommendation_list.html" with recommendations=card.recommendations tone="blue" empty_message="Nenhuma recomendação automatizada ainda." %}
+              <div class="card-actions">
+                <a class="detail-link" href="{% url 'arpia_hunt:finding-detail' card.finding.id %}">Abrir detalhe</a>
+              </div>
             </li>
           {% endfor %}
         </ul>
@@ -66,7 +51,7 @@
             <li>
               <header>
                 <span class="badge severity-{{ card.finding.severity }}">{{ card.finding.get_severity_display }}</span>
-                <strong>{{ card.finding.vulnerability.title }}</strong>
+                <strong><a href="{% url 'arpia_hunt:finding-detail' card.finding.id %}">{{ card.finding.vulnerability.title }}</a></strong>
                 <small>{{ card.finding.project.name }}</small>
               </header>
               {% if card.profile.exploits %}
@@ -83,26 +68,11 @@
               {% else %}
                 <p class="muted">Sem exploits correlacionados.</p>
               {% endif %}
-              {% if card.heuristics %}
-                <ul class="heuristic-chips">
-                  {% for mapping in card.heuristics %}
-                    <li title="{{ mapping.rationale }}">{{ mapping.technique_id }} · {{ mapping.get_confidence_display }}</li>
-                  {% endfor %}
-                </ul>
-              {% endif %}
-              {% if card.recommendations %}
-                <ul class="recommendation-list red">
-                  {% for rec in card.recommendations %}
-                    <li>
-                      <strong>{{ rec.title }}</strong>
-                      <span class="muted">{{ rec.summary|default:"Sem descrição detalhada." }}</span>
-                      <small class="tagged">Confiança: {{ rec.get_confidence_display }}</small>
-                    </li>
-                  {% endfor %}
-                </ul>
-              {% else %}
-                <p class="muted">Nenhuma recomendação Red disponível ainda.</p>
-              {% endif %}
+              {% include "hunt/components/heuristic_chips.html" with heuristics=card.heuristics %}
+              {% include "hunt/components/recommendation_list.html" with recommendations=card.recommendations tone="red" empty_message="Nenhuma recomendação Red disponível ainda." %}
+              <div class="card-actions">
+                <a class="detail-link" href="{% url 'arpia_hunt:finding-detail' card.finding.id %}">Abrir detalhe</a>
+              </div>
             </li>
           {% endfor %}
         </ul>
@@ -148,8 +118,8 @@
   <article class="panel">
     <header class="panel-header">
       <div>
-  <h2>Entregáveis Fase 2</h2>
-  <p class="muted">Pontos de controle para consolidar o enriquecimento externo.</p>
+  <h2>Entregáveis Fase 3</h2>
+  <p class="muted">Pontos de controle para consolidar heurísticas ATT&amp;CK e recomendações.</p>
       </div>
     </header>
     <ul class="deliverables">
@@ -233,7 +203,7 @@
             <li>
               <header>
                 <span class="badge severity-{{ item.finding.severity }}">{{ item.finding.get_severity_display }}</span>
-                <strong>{{ item.finding.vulnerability.title }}</strong>
+                <strong><a href="{% url 'arpia_hunt:finding-detail' item.finding.id %}">{{ item.finding.vulnerability.title }}</a></strong>
                 <small>{% if item.finding.last_profiled_at %}{{ item.finding.last_profiled_at|date:"d/m/Y H:i" }}{% else %}—{% endif %}</small>
               </header>
               <p>{{ item.profile.summary|default:item.finding.summary|default:"Sem resumo." }}</p>
@@ -258,7 +228,7 @@
             <li>
               <header>
                 <span class="badge severity-{{ item.finding.severity }}">{{ item.finding.get_severity_display }}</span>
-                <strong>{{ item.finding.vulnerability.title }}</strong>
+                <strong><a href="{% url 'arpia_hunt:finding-detail' item.finding.id %}">{{ item.finding.vulnerability.title }}</a></strong>
                 <small>{% if item.finding.last_profiled_at %}{{ item.finding.last_profiled_at|date:"d/m/Y H:i" }}{% else %}—{% endif %}</small>
               </header>
               {% if item.profile.exploits %}
@@ -392,6 +362,8 @@ document.addEventListener("DOMContentLoaded",function(){const group=document.que
 .profile-tab-list li{padding:1.1rem;border-radius:14px;border:1px solid rgba(255,255,255,0.09);background:rgba(6,22,42,0.78);box-shadow:0 16px 32px rgba(5,16,32,0.32);display:flex;flex-direction:column;gap:.7rem;}
 .profile-tab-list header{display:flex;align-items:center;gap:.65rem;}
 .profile-tab-list header strong{flex:1;color:var(--text);}
+.profile-tab-list header strong a{color:inherit;text-decoration:none;}
+.profile-tab-list header strong a:hover{text-decoration:underline;}
 .profile-tab-list header small{color:var(--muted);font-size:.78rem;}
 .profile-summary{margin:0;color:var(--muted);line-height:1.35;font-size:.9rem;}
 .heuristic-chips{list-style:none;margin:.6rem 0 0;padding:0;display:flex;flex-wrap:wrap;gap:.45rem;}
@@ -402,6 +374,9 @@ document.addEventListener("DOMContentLoaded",function(){const group=document.que
 .recommendation-list strong{color:var(--text);}
 .recommendation-list .muted{font-size:.82rem;}
 .tagged{display:inline-block;margin-top:.2rem;font-size:.72rem;color:rgba(223,240,255,0.92);text-transform:uppercase;letter-spacing:.08em;}
+.card-actions{margin-top:.6rem;display:flex;flex-wrap:wrap;justify-content:flex-end;}
+.detail-link{display:inline-flex;align-items:center;gap:.35rem;padding:.45rem .9rem;border-radius:999px;background:rgba(118,187,255,0.12);border:1px solid rgba(118,187,255,0.28);color:#e3f1ff;font-size:.78rem;font-weight:600;text-decoration:none;text-transform:uppercase;letter-spacing:.08em;transition:all .2s ease;}
+.detail-link:hover{background:rgba(118,187,255,0.2);border-color:rgba(118,187,255,0.42);color:#fff;}
 .hunt-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1.4rem;margin-bottom:1.6rem;}
 .panel{background:rgba(8,23,43,0.78);border-radius:16px;padding:1.4rem;border:1px solid rgba(255,255,255,0.05);box-shadow:0 18px 38px rgba(5,16,32,0.35);position:relative;overflow:hidden;}
 .panel-header{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:1.2rem;}
@@ -432,6 +407,8 @@ document.addEventListener("DOMContentLoaded",function(){const group=document.que
 .profile-card li{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:12px;padding:.9rem 1rem;display:flex;flex-direction:column;gap:.6rem;}
 .profile-card header{display:flex;align-items:center;gap:.6rem;}
 .profile-card header strong{flex:1;color:var(--text);}
+.profile-card header strong a{color:inherit;text-decoration:none;}
+.profile-card header strong a:hover{text-decoration:underline;}
 .profile-card header small{color:var(--muted);font-size:.78rem;}
 .profile-card dl{margin:0;display:flex;flex-wrap:wrap;gap:.6rem 1.2rem;font-size:.82rem;color:var(--muted);}
 .profile-card dl div{display:flex;flex-direction:column;gap:.2rem;}

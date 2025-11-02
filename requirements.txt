@@ -5,6 +5,7 @@ python-dotenv>=1.0
 psycopg2-binary>=2.9
 prometheus-client>=0.16
 python-gvm>=23.0.0
+graphene-django>=3.0
 pyattck>=7.1
 
 # Imagens, static serving and template helpers

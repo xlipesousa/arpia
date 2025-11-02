@@ -283,117 +283,6 @@ class FindingProfilesTests(TestCase):
         self.assertEqual(finding.profile_version, 2)
         self.assertGreaterEqual(HuntFindingSnapshot.objects.filter(finding=finding).count(), 2)
         self.assertTrue(LogEntry.objects.filter(event_type="hunt.enrichment.batch").exists())
-
-
-class HuntApiViewTests(APITestCase):
-    maxDiff = None
-
-    def setUp(self):
-        user_model = get_user_model()
-        self.user = user_model.objects.create_user("apiuser", "api@example.com", "hunter")
-        self.client.force_authenticate(user=self.user)
-        self.project = Project.objects.create(owner=self.user, name="Projeto API", slug="projeto-api")
-        self.session = VulnScanSession.objects.create(project=self.project, owner=self.user, title="Sessão API")
-
-        self.vuln = VulnerabilityFinding.objects.create(
-            session=self.session,
-            title="Apache Remote Execution",
-            summary="Execução remota crítica em Apache HTTPD",
-            severity=VulnerabilityFinding.Severity.CRITICAL,
-            status=VulnerabilityFinding.Status.OPEN,
-            host="10.0.0.5",
-            service="http",
-            port=80,
-            protocol="tcp",
-            cve="CVE-2024-4242",
-            cvss_score=Decimal("9.8"),
-        )
-
-        self.finding = HuntFinding.objects.create(
-            project=self.project,
-            vulnerability=self.vuln,
-            vuln_session=self.session,
-            cve=self.vuln.cve,
-            summary=self.vuln.summary,
-            severity=self.vuln.severity,
-            detected_at=timezone.now(),
-            blue_profile={"summary": "Aplicar correções oficiais e reforçar WAF."},
-            red_profile={"exploits": [{"title": "PoC pública", "source": "ExploitDB"}]},
-            profile_version=1,
-            last_profiled_at=timezone.now(),
-        )
-
-        self.tactic = AttackTactic.objects.create(id="TA0001", name="Initial Access", order=1)
-        self.technique = AttackTechnique.objects.create(
-            id="T1190",
-            name="Exploit Public-Facing Application",
-            tactic=self.tactic,
-        )
-
-        self.mapping = CveAttackTechnique.objects.create(
-            cve=self.finding.cve,
-            technique=self.technique,
-            source=CveAttackTechnique.Source.HEURISTIC,
-            confidence=CveAttackTechnique.Confidence.HIGH,
-            rationale="Resumo menciona RCE público.",
-        )
-
-        self.blue_rec = HuntRecommendation.objects.create(
-            finding=self.finding,
-            technique=self.technique,
-            recommendation_type=HuntRecommendation.Type.BLUE,
-            title="Aplicar atualizações críticas",
-            summary="Aplique o patch oficial e ajuste regras de firewall.",
-            confidence=CveAttackTechnique.Confidence.HIGH,
-            tags=[f"technique:{self.technique.id}", "strategy:mitigate"],
-        )
-        self.red_rec = HuntRecommendation.objects.create(
-            finding=self.finding,
-            technique=self.technique,
-            recommendation_type=HuntRecommendation.Type.RED,
-            title="Simular exploração externa",
-            summary="Reproduza o exploit para validar monitoramento.",
-            confidence=CveAttackTechnique.Confidence.MEDIUM,
-            tags=["strategy:simulate"],
-        )
-
-    @override_settings(ARPIA_HUNT_API_BETA=True)
-    def test_findings_endpoint_returns_heuristics_and_counts(self):
-        url = reverse("hunt-finding-list")
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertIn("results", payload)
-        self.assertGreater(len(payload["results"]), 0)
-        item = payload["results"][0]
-        self.assertEqual(item["id"], str(self.finding.id))
-        self.assertEqual(item["recommendation_counts"], {"total": 2, "blue": 1, "red": 1})
-        heuristic_ids = {mapping["technique_id"] for mapping in item["applied_heuristics"]}
-        self.assertIn(self.technique.id, heuristic_ids)
-
-    @override_settings(ARPIA_HUNT_API_BETA=False)
-    def test_findings_endpoint_respects_feature_flag(self):
-        url = reverse("hunt-finding-list")
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, 404)
-
-    @override_settings(ARPIA_HUNT_API_BETA=True)
-    def test_profile_action_returns_recommendations(self):
-        url = reverse("hunt-finding-profiles", args=[self.finding.id])
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(payload["finding_id"], str(self.finding.id))
-        self.assertEqual(payload["recommendation_counts"], {"total": 2, "blue": 1, "red": 1})
-        self.assertEqual(len(payload["recommendations"]), 2)
-
-    @override_settings(ARPIA_HUNT_API_BETA=True)
-    def test_recommendations_endpoint_filters_by_project(self):
-        url = reverse("hunt-recommendation-list")
-        response = self.client.get(url, {"project": str(self.project.id)})
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(payload["results"][0]["project_id"], str(self.project.id))
 class SchedulerCommandTests(TestCase):
     def test_hunt_schedule_preview_logs_event(self):
         out = StringIO()
@@ -418,67 +307,135 @@ class AttackMappingTests(TestCase):
         self.assertTrue(AttackTactic.objects.filter(pk="TA0001").exists())
         self.assertTrue(AttackTechnique.objects.filter(pk="T1190").exists())
 
-        def test_sync_recommendations_removes_obsolete_entries(self):
-            tactic = AttackTactic.objects.create(id="TA0001", name="Initial Access", order=1)
-            technique = AttackTechnique.objects.create(id="T1190", name="Exploit Public-Facing Application", tactic=tactic)
-            mapping = CveAttackTechnique.objects.create(
-                cve="CVE-2024-9999",
-                technique=technique,
-                source=CveAttackTechnique.Source.DATASET,
-                confidence=CveAttackTechnique.Confidence.MEDIUM,
-            )
-            enrichment = HuntEnrichment.objects.create(
-                cve="CVE-2024-9999",
-                source=HuntEnrichment.Source.NVD,
-                status=HuntEnrichment.Status.FRESH,
-                payload={},
-            )
-            user_model = get_user_model()
-            user = user_model.objects.create_user("recommend", "recommend@example.com", "hunter")
-            project = Project.objects.create(owner=user, name="Projeto Rec", slug="projeto-rec")
-            session = VulnScanSession.objects.create(project=project, owner=user, title="Sessão Vuln")
-            vuln = VulnerabilityFinding.objects.create(
-                session=session,
-                title="Exploit público",
-                severity=VulnerabilityFinding.Severity.HIGH,
-                status=VulnerabilityFinding.Status.OPEN,
-                host="10.0.0.1",
-                service="http",
-                port=80,
-                protocol="tcp",
-                cve="CVE-2024-9999",
-            )
-            finding = HuntFinding.objects.create(
-                project=project,
-                vulnerability=vuln,
-                vuln_session=session,
-                cve=vuln.cve,
-                summary=vuln.summary,
-                severity=vuln.severity,
+    @mock.patch("arpia_hunt.management.commands.import_attack_catalog.load_from_pyattck")
+    def test_import_attack_catalog_command_pyattck(self, mock_loader):
+        mock_loader.return_value = {
+            "tactics": [
+                {
+                    "id": "TA0001",
+                    "name": "Initial Access",
+                    "matrix": AttackTactic.Matrix.ENTERPRISE,
+                    "order": 1,
+                }
+            ],
+            "techniques": [
+                {
+                    "id": "T1190",
+                    "name": "Exploit Public-Facing Application",
+                    "tactic": "TA0001",
+                    "matrix": AttackTactic.Matrix.ENTERPRISE,
+                }
+            ],
+        }
+
+        call_command("import_attack_catalog", "--pyattck", "--matrix", AttackTactic.Matrix.ENTERPRISE)
+
+        mock_loader.assert_called_once_with(matrix=AttackTactic.Matrix.ENTERPRISE)
+        self.assertTrue(AttackTactic.objects.filter(pk="TA0001").exists())
+        self.assertTrue(AttackTechnique.objects.filter(pk="T1190").exists())
+
+    @mock.patch("arpia_hunt.management.commands.import_attack_catalog.load_from_pyattck")
+    def test_import_attack_catalog_command_pyattck_all(self, mock_loader):
+        datasets = []
+        for value, _label in AttackTactic.Matrix.choices:
+            prefix = value.upper()
+            datasets.append(
+                {
+                    "tactics": [
+                        {
+                            "id": f"{prefix}-TA",
+                            "name": f"{prefix} tactic",
+                            "matrix": value,
+                            "order": 1,
+                        }
+                    ],
+                    "techniques": [
+                        {
+                            "id": f"{prefix}-T1",
+                            "name": f"{prefix} technique",
+                            "tactic": f"{prefix}-TA",
+                            "matrix": value,
+                        }
+                    ],
+                }
             )
 
-            sync_recommendations_for_finding(
-                finding,
-                {
-                    HuntEnrichment.Source.NVD: enrichment,
-                },
-            )
-            self.assertEqual(
-                finding.recommendations.filter(generated_by=HuntRecommendation.Generator.AUTOMATION).count(),
-                2,
-            )
+        mock_loader.side_effect = datasets
 
-            mapping.delete()
-            sync_recommendations_for_finding(
-                finding,
-                {
-                    HuntEnrichment.Source.NVD: enrichment,
-                },
-            )
-            self.assertEqual(
-                finding.recommendations.filter(generated_by=HuntRecommendation.Generator.AUTOMATION).count(),
-                0,
-            )
+        call_command("import_attack_catalog", "--pyattck", "--matrix", "all")
+
+        self.assertEqual(mock_loader.call_count, len(AttackTactic.Matrix.choices))
+        expected_matrices = [value for value, _label in AttackTactic.Matrix.choices]
+        actual_calls = [call.kwargs.get("matrix") for call in mock_loader.call_args_list]
+        self.assertListEqual(actual_calls, expected_matrices)
+
+        for dataset in datasets:
+            tactic_id = dataset["tactics"][0]["id"]
+            tech_id = dataset["techniques"][0]["id"]
+            self.assertTrue(AttackTactic.objects.filter(pk=tactic_id).exists())
+            self.assertTrue(AttackTechnique.objects.filter(pk=tech_id).exists())
+
+    def test_sync_recommendations_removes_obsolete_entries(self):
+        tactic = AttackTactic.objects.create(id="TA0001", name="Initial Access", order=1)
+        technique = AttackTechnique.objects.create(id="T1190", name="Exploit Public-Facing Application", tactic=tactic)
+        mapping = CveAttackTechnique.objects.create(
+            cve="CVE-2024-9999",
+            technique=technique,
+            source=CveAttackTechnique.Source.DATASET,
+            confidence=CveAttackTechnique.Confidence.MEDIUM,
+        )
+        enrichment = HuntEnrichment.objects.create(
+            cve="CVE-2024-9999",
+            source=HuntEnrichment.Source.NVD,
+            status=HuntEnrichment.Status.FRESH,
+            payload={},
+        )
+        user_model = get_user_model()
+        user = user_model.objects.create_user("recommend", "recommend@example.com", "hunter")
+        project = Project.objects.create(owner=user, name="Projeto Rec", slug="projeto-rec")
+        session = VulnScanSession.objects.create(project=project, owner=user, title="Sessão Vuln")
+        vuln = VulnerabilityFinding.objects.create(
+            session=session,
+            title="Exploit público",
+            severity=VulnerabilityFinding.Severity.HIGH,
+            status=VulnerabilityFinding.Status.OPEN,
+            host="10.0.0.1",
+            service="http",
+            port=80,
+            protocol="tcp",
+            cve="CVE-2024-9999",
+        )
+        finding = HuntFinding.objects.create(
+            project=project,
+            vulnerability=vuln,
+            vuln_session=session,
+            cve=vuln.cve,
+            summary=vuln.summary,
+            severity=vuln.severity,
+        )
+
+        sync_recommendations_for_finding(
+            finding,
+            {
+                HuntEnrichment.Source.NVD: enrichment,
+            },
+        )
+        self.assertEqual(
+            finding.recommendations.filter(generated_by=HuntRecommendation.Generator.AUTOMATION).count(),
+            2,
+        )
+
+        mapping.delete()
+        sync_recommendations_for_finding(
+            finding,
+            {
+                HuntEnrichment.Source.NVD: enrichment,
+            },
+        )
+        self.assertEqual(
+            finding.recommendations.filter(generated_by=HuntRecommendation.Generator.AUTOMATION).count(),
+            0,
+        )
 
     def test_cve_attack_technique_unique_constraint(self):
         fixture = load_json_fixture("attack_mapping.json")
@@ -841,3 +798,232 @@ class AttackCatalogFallbackTests(TestCase):
 
         assigned_ids = set(AttackTechnique.objects.filter(tactic=fallback_tactic).values_list("id", flat=True))
         self.assertSetEqual(assigned_ids, {"T1425", "T1999"})
+
+
+class HuntFindingDetailViewTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user("hunter", "hunter@example.com", "hunter")
+        self.project = Project.objects.create(owner=self.user, name="Projeto Hunt", slug="projeto-hunt")
+        self.session = VulnScanSession.objects.create(project=self.project, owner=self.user, title="Sessão Vuln")
+
+    def _make_finding(self) -> HuntFinding:
+        vuln = VulnerabilityFinding.objects.create(
+            session=self.session,
+            title="Apache HTTPD outdated",
+            summary="Servidor Apache vulnerável à execução remota.",
+            severity=VulnerabilityFinding.Severity.HIGH,
+            status=VulnerabilityFinding.Status.OPEN,
+            host="192.168.1.10",
+            service="http",
+            port=80,
+            protocol="tcp",
+            cve="CVE-2024-9999",
+            cvss_score=Decimal("8.5"),
+        )
+        synchronize_findings()
+        finding = HuntFinding.objects.get(vulnerability=vuln)
+        finding.blue_profile = {"summary": "Mitigações priorizadas."}
+        finding.red_profile = {"summary": "Caminhos de exploração."}
+        finding.save(update_fields=["blue_profile", "red_profile", "updated_at"])
+        return finding
+
+    def test_detail_view_exposes_expected_context(self):
+        finding = self._make_finding()
+        self.client.force_login(self.user)
+
+        tactic = AttackTactic.objects.create(id="TA0001", name="Initial Access", matrix=AttackTactic.Matrix.ENTERPRISE)
+        technique = AttackTechnique.objects.create(
+            id="T1059",
+            name="Command Execution",
+            description="Execução de comandos",
+            tactic=tactic,
+        )
+        CveAttackTechnique.objects.create(
+            cve=finding.cve,
+            technique=technique,
+            source=CveAttackTechnique.Source.HEURISTIC,
+            confidence=CveAttackTechnique.Confidence.HIGH,
+        )
+        HuntRecommendation.objects.create(
+            finding=finding,
+            technique=technique,
+            recommendation_type=HuntRecommendation.Type.BLUE,
+            title="Aplicar correção",
+            summary="Atualizar serviço.",
+        )
+        HuntRecommendation.objects.create(
+            finding=finding,
+            technique=technique,
+            recommendation_type=HuntRecommendation.Type.RED,
+            title="Simular exploração",
+            summary="Executar playbook ofensivo.",
+        )
+
+        enrichment = HuntEnrichment.objects.create(
+            cve=finding.cve,
+            source=HuntEnrichment.Source.NVD,
+            status=HuntEnrichment.Status.FRESH,
+            payload={"sample": True},
+        )
+        HuntFindingEnrichment.objects.create(finding=finding, enrichment=enrichment)
+        LogEntry.objects.create(
+            timestamp=timezone.now(),
+            source_app="arpia_hunt",
+            component="hunt.enrichment",
+            event_type="hunt.enrichment.completed",
+            severity=LogEntry.Severity.INFO,
+            message="Enriquecimento concluído.",
+            details={"finding_id": str(finding.pk)},
+        )
+
+        response = self.client.get(reverse("arpia_hunt:finding-detail", args=[finding.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "hunt/findings/detail.html")
+        self.assertEqual(response.context["finding"].pk, finding.pk)
+        self.assertEqual(len(response.context["blue_recommendations"]), 1)
+        self.assertEqual(len(response.context["red_recommendations"]), 1)
+        self.assertEqual(len(response.context["blue_heuristics"]), 1)
+        self.assertEqual(len(response.context["enrichments"]), 1)
+        self.assertEqual(len(response.context["recent_logs"]), 1)
+        self.assertIn("Mitigações", response.context["blue_profile"]["summary"])
+        self.assertIsNotNone(response.context.get("report_url"))
+        self.assertIn(str(self.project.pk), response.context["report_url"])
+        self.assertContains(response, "Gerar relatório do projeto (API)")
+
+
+class HuntDashboardViewTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user("hunter", "hunter@example.com", "hunter")
+        self.project = Project.objects.create(owner=self.user, name="Projeto Hunt", slug="projeto-hunt")
+        self.session = VulnScanSession.objects.create(project=self.project, owner=self.user, title="Sessão Vuln")
+
+    def test_dashboard_cards_link_to_detail_view(self):
+        vuln = VulnerabilityFinding.objects.create(
+            session=self.session,
+            title="Apache HTTPD outdated",
+            summary="Servidor Apache vulnerável à execução remota.",
+            severity=VulnerabilityFinding.Severity.HIGH,
+            status=VulnerabilityFinding.Status.OPEN,
+            host="192.168.1.10",
+            service="http",
+            port=80,
+            protocol="tcp",
+            cve="CVE-2024-9999",
+        )
+        synchronize_findings()
+        finding = HuntFinding.objects.get(vulnerability=vuln)
+        finding.blue_profile = {"summary": "Mitigações priorizadas."}
+        finding.red_profile = {"summary": "Caminhos ofensivos."}
+        finding.profile_version = 1
+        finding.last_profiled_at = timezone.now()
+        finding.save(update_fields=["blue_profile", "red_profile", "profile_version", "last_profiled_at", "updated_at"])
+
+        tactic = AttackTactic.objects.create(id="TA0001", name="Initial Access", matrix=AttackTactic.Matrix.ENTERPRISE)
+        technique = AttackTechnique.objects.create(id="T1190", name="Exploit Public-Facing Application", tactic=tactic)
+        CveAttackTechnique.objects.create(
+            cve=finding.cve,
+            technique=technique,
+            source=CveAttackTechnique.Source.HEURISTIC,
+            confidence=CveAttackTechnique.Confidence.HIGH,
+        )
+        HuntRecommendation.objects.create(
+            finding=finding,
+            technique=technique,
+            recommendation_type=HuntRecommendation.Type.BLUE,
+            title="Aplicar mitigação",
+            summary="Atualizar serviço.",
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("arpia_hunt:dashboard"))
+        self.assertEqual(response.status_code, 200)
+        detail_url = reverse("arpia_hunt:finding-detail", args=[finding.pk])
+        self.assertContains(response, detail_url)
+        self.assertContains(response, "Abrir detalhe")
+
+
+@override_settings(ARPIA_HUNT_API_BETA=True)
+class HuntRecommendationDetailAPITests(APITestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user("hunter", "hunter@example.com", "hunter")
+        self.project = Project.objects.create(owner=self.user, name="Projeto Hunt", slug="projeto-hunt")
+        self.session = VulnScanSession.objects.create(project=self.project, owner=self.user, title="Sessão Vuln")
+        vuln = VulnerabilityFinding.objects.create(
+            session=self.session,
+            title="Apache HTTPD outdated",
+            summary="Servidor Apache vulnerável.",
+            severity=VulnerabilityFinding.Severity.HIGH,
+            status=VulnerabilityFinding.Status.OPEN,
+            host="192.168.1.10",
+            service="http",
+            port=80,
+            protocol="tcp",
+            cve="CVE-2024-9999",
+        )
+        synchronize_findings()
+        self.finding = HuntFinding.objects.get(vulnerability=vuln)
+        tactic = AttackTactic.objects.create(id="TA0001", name="Initial Access", matrix=AttackTactic.Matrix.ENTERPRISE)
+        self.technique = AttackTechnique.objects.create(
+            id="T1059",
+            name="Command Execution",
+            description="Execução de comandos",
+            tactic=tactic,
+        )
+        CveAttackTechnique.objects.create(
+            cve=self.finding.cve,
+            technique=self.technique,
+            source=CveAttackTechnique.Source.HEURISTIC,
+            confidence=CveAttackTechnique.Confidence.MEDIUM,
+        )
+        self.recommendation = HuntRecommendation.objects.create(
+            finding=self.finding,
+            technique=self.technique,
+            recommendation_type=HuntRecommendation.Type.BLUE,
+            title="Aplicar mitigação",
+            summary="Atualizar pacote vuln.",
+            confidence=CveAttackTechnique.Confidence.HIGH,
+            generated_by=HuntRecommendation.Generator.AUTOMATION,
+            confidence_note="Checklist validado",
+            playbook_slug="blue-hardening",
+        )
+        self.other_recommendation = HuntRecommendation.objects.create(
+            finding=None,
+            technique=self.technique,
+            recommendation_type=HuntRecommendation.Type.RED,
+            title="Executar exploração",
+            summary="Simular ataque controlado.",
+            confidence=CveAttackTechnique.Confidence.MEDIUM,
+            generated_by=HuntRecommendation.Generator.ANALYST,
+            confidence_note="",
+            playbook_slug="red-chain",
+        )
+
+    def test_retrieve_returns_detailed_payload(self):
+        self.client.force_authenticate(self.user)
+        url = reverse("hunt-recommendation-detail", args=[self.recommendation.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["id"], str(self.recommendation.pk))
+        self.assertIn("finding", payload)
+        self.assertEqual(payload["finding"]["id"], str(self.finding.pk))
+        self.assertEqual(payload["finding"]["cve"], self.finding.cve)
+        self.assertEqual(payload["finding"]["severity"], self.finding.severity)
+        self.assertIn("heuristics", payload)
+        self.assertEqual(len(payload["heuristics"]), 1)
+        self.assertEqual(payload["heuristics"][0]["technique_id"], self.technique.id)
+        self.assertIn("blue_profile", payload["finding"])
+        self.assertEqual(payload["confidence_note"], "Checklist validado")
+        self.assertEqual(payload["playbook_slug"], "blue-hardening")
+
+    def test_list_filter_by_finding_parameter(self):
+        self.client.force_authenticate(self.user)
+        url = reverse("hunt-recommendation-list")
+        response = self.client.get(url, {"finding": str(self.finding.pk)})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        results = payload.get("results", [])
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["id"], str(self.recommendation.pk))

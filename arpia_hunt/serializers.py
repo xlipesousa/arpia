@@ -173,6 +173,7 @@ class HuntRecommendationSerializer(serializers.ModelSerializer):
     project_name = serializers.CharField(source="finding.project.name", read_only=True)
     project_slug = serializers.CharField(source="finding.project.slug", read_only=True)
     tags = serializers.ListField(child=serializers.CharField(), allow_empty=True, read_only=True)
+    source_enrichment_id = serializers.UUIDField(read_only=True, allow_null=True)
 
     class Meta:
         model = HuntRecommendation
@@ -188,9 +189,11 @@ class HuntRecommendationSerializer(serializers.ModelSerializer):
             "title",
             "summary",
             "confidence",
+            "confidence_note",
             "evidence",
             "tags",
             "generated_by",
+            "playbook_slug",
             "source_enrichment_id",
             "created_at",
             "updated_at",
@@ -219,3 +222,46 @@ class HuntFindingProfileSerializer(serializers.Serializer):
         red = sum(1 for rec in recommendations if getattr(rec, "recommendation_type", None) == HuntRecommendation.Type.RED)
         total = blue + red
         return {"total": total, "blue": blue, "red": red}
+
+
+class HuntRecommendationDetailSerializer(HuntRecommendationSerializer):
+    finding = serializers.SerializerMethodField()
+    heuristics = serializers.SerializerMethodField()
+
+    class Meta(HuntRecommendationSerializer.Meta):
+        fields = HuntRecommendationSerializer.Meta.fields + (
+            "finding",
+            "heuristics",
+        )
+
+    def get_finding(self, obj: HuntRecommendation) -> dict[str, object] | None:
+        if not obj.finding:
+            return None
+        finding = obj.finding
+        return {
+            "id": str(finding.pk),
+            "project_id": str(finding.project_id) if finding.project_id else None,
+            "project_name": finding.project.name if finding.project_id else None,
+            "project_slug": finding.project.slug if finding.project_id else None,
+            "vulnerability_id": str(finding.vulnerability_id) if finding.vulnerability_id else None,
+            "cve": finding.cve,
+            "severity": finding.severity,
+            "summary": finding.summary,
+            "blue_profile": finding.blue_profile or {},
+            "red_profile": finding.red_profile or {},
+            "profile_version": finding.profile_version,
+        }
+
+    def get_heuristics(self, obj: HuntRecommendation) -> list[dict[str, object]]:
+        finding = obj.finding
+        if not finding or not finding.cve:
+            return []
+        cache: dict[str, list[dict[str, object]]] = self.context.setdefault("heuristic_cache", {})
+        if finding.cve not in cache:
+            mappings = list(
+                CveAttackTechnique.objects.filter(cve=finding.cve)
+                .select_related("technique", "technique__tactic")
+                .order_by("-updated_at")
+            )
+            cache[finding.cve] = CveAttackTechniqueSerializer(mappings, many=True, context=self.context).data
+        return cache[finding.cve]

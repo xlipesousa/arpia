@@ -54,8 +54,10 @@ Atenção
 - O comando `python manage.py runserver` agora aplica migrações pendentes automaticamente antes de subir o servidor.
   - Caso precise pular esse comportamento (ex.: scripts de CI), use `python manage.py runserver --skip-auto-migrate`.
 
-Documentação adicional
-- [Integrações de enriquecimento do Hunt](docs/enrichment-integrations.md): lista configurações de NVD, Vulners e searchsploit, códigos de erro esperados e fixtures de teste.
+Documentacao adicional
+- [Integracoes de enriquecimento do Hunt](docs/hunt-integracoes.md): detalha configuracao de NVD, Vulners, searchsploit e importacao do catalogo ATT&CK, alem de fixtures e contratos de teste.
+- [Modelo de dados ATT&CK](docs/hunt-phase3-modelagem.md): diagrama PlantUML dos relacionamentos entre AttackTactic, AttackTechnique, CveAttackTechnique, HuntFinding e HuntRecommendation.
+- [Planejamento de migracoes Fase 4](docs/hunt-phase4-migracoes.md): lista indices adicionais, campos complementares e passos de validacao antes do rollout.
 
 ## Módulo de vulnerabilidades — visão rápida
 

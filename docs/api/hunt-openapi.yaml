@@ -16,28 +16,36 @@ paths:
       parameters:
         - in: query
           name: project
+          style: form
+          explode: false
           schema:
             type: string
             description: UUID único ou lista CSV de UUIDs
-          description: Filtra findings por projeto.
+          description: Filtra findings por projeto (aceita múltiplos valores via CSV).
         - in: query
           name: technique
+          style: form
+          explode: false
           schema:
             type: string
             description: ID ATT&CK (ex. T1190) ou lista CSV
           description: Filtra findings que possuem recomendações correlacionadas à técnica.
         - in: query
           name: confidence
+          style: form
+          explode: false
           schema:
             type: string
             enum: [low, medium, high]
-          description: Filtra findings pela confiança das recomendações associadas (aceita CSV).
+          description: Filtra findings pela confiança das recomendações associadas.
         - in: query
           name: type
+          style: form
+          explode: false
           schema:
             type: string
             enum: [blue, red]
-          description: Limita a findings que possuam recomendações do tipo informado (CSV).
+          description: Limita a findings que possuam recomendações do tipo informado.
         - in: query
           name: search
           schema:
@@ -85,31 +93,43 @@ paths:
       parameters:
         - in: query
           name: project
+          style: form
+          explode: false
           schema:
             type: string
             description: UUID ou lista CSV.
         - in: query
           name: finding
+          style: form
+          explode: false
           schema:
             type: string
             description: UUID ou lista CSV.
         - in: query
           name: technique
+          style: form
+          explode: false
           schema:
             type: string
             description: ID ATT&CK (CSV opcional).
         - in: query
           name: confidence
+          style: form
+          explode: false
           schema:
             type: string
             enum: [low, medium, high]
         - in: query
           name: type
+          style: form
+          explode: false
           schema:
             type: string
             enum: [blue, red]
         - in: query
           name: generated_by
+          style: form
+          explode: false
           schema:
             type: string
             enum: [automation, analyst, import]
@@ -270,8 +290,83 @@ components:
         - type: object
           properties:
             finding:
-              type: object
-              nullable: true
+              $ref: '#/components/schemas/HuntRecommendationFinding'
+            heuristics:
+              type: array
+              items:
+                $ref: '#/components/schemas/HeuristicMapping'
+    HuntRecommendationFinding:
+      type: object
+      nullable: true
+      properties:
+        id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+          nullable: true
+        project_name:
+          type: string
+          nullable: true
+        project_slug:
+          type: string
+          nullable: true
+        vulnerability_id:
+          type: string
+          format: uuid
+          nullable: true
+        cve:
+          type: string
+          nullable: true
+        severity:
+          type: string
+        summary:
+          type: string
+          nullable: true
+        blue_profile:
+          type: object
+        red_profile:
+          type: object
+        profile_version:
+          type: integer
+    HeuristicMapping:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        cve:
+          type: string
+        technique_id:
+          type: string
+        technique_name:
+          type: string
+        tactic_id:
+          type: string
+        tactic_name:
+          type: string
+        source:
+          type: string
+          enum: [heuristic, dataset, manual]
+        confidence:
+          type: string
+          enum: [low, medium, high]
+        rationale:
+          type: string
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+    RecommendationCounts:
+      type: object
+      properties:
+        total:
+          type: integer
+        blue:
+          type: integer
+        red:
+          type: integer
             heuristics:
               type: array
               items:
@@ -317,11 +412,11 @@ components:
           format: date-time
           nullable: true
         recommendation_counts:
-          type: object
+          $ref: '#/components/schemas/RecommendationCounts'
         applied_heuristics:
           type: array
           items:
-            type: object
+            $ref: '#/components/schemas/HeuristicMapping'
     PaginatedFindings:
       allOf:
         - $ref: '#/components/schemas/Pagination'

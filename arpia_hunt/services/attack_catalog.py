@@ -269,6 +269,30 @@ def load_from_pyattck(matrix: str = AttackTactic.Matrix.ENTERPRISE) -> dict[str,
     return {"tactics": tactics, "techniques": techniques}
 
 
+def merge_catalogs(
+    *datasets: Mapping[str, Iterable[Mapping[str, object]]]
+) -> dict[str, list[MutableMapping[str, object]]]:
+    tactic_map: dict[str, MutableMapping[str, object]] = {}
+    technique_map: dict[str, MutableMapping[str, object]] = {}
+
+    for dataset in datasets:
+        for tactic in dataset.get("tactics", []) or []:
+            tactic_id = tactic.get("id")
+            if tactic_id is None:
+                continue
+            tactic_map[str(tactic_id)] = dict(tactic)
+        for technique in dataset.get("techniques", []) or []:
+            technique_id = technique.get("id")
+            if technique_id is None:
+                continue
+            technique_map[str(technique_id)] = dict(technique)
+
+    return {
+        "tactics": list(tactic_map.values()),
+        "techniques": list(technique_map.values()),
+    }
+
+
 def _normalize_external_references(references: Iterable[Any]) -> list[MutableMapping[str, object]]:
     normalized: list[MutableMapping[str, object]] = []
     for reference in references or []:
@@ -312,5 +336,6 @@ __all__ = [
     "CatalogSyncResult",
     "load_catalog_from_fixture",
     "load_from_pyattck",
+    "merge_catalogs",
     "sync_attack_catalog",
 ]

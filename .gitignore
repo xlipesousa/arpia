@@ -14,3 +14,4 @@ env/
 .idea/
 /tmp/
 /recon/
+/arpia_project/settings.py

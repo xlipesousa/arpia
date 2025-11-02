@@ -153,6 +153,7 @@
   <ul class="action-list">
     {% if project_url %}<li><a href="{{ project_url }}#hunt">Ver outros findings do projeto</a></li>{% endif %}
     {% if vulnerability_url %}<li><a href="{{ vulnerability_url }}">Abrir sessão de vulnerabilidades relacionada</a></li>{% endif %}
+    {% if report_url %}<li><a href="{{ report_url }}" target="_blank" rel="noopener">Gerar relatório do projeto (API)</a></li>{% endif %}
     <li><a href="{{ profiles_api_url }}" target="_blank" rel="noopener">Consultar API de perfis</a></li>
     <li><a href="{{ recommendations_api_url }}?finding={{ finding.id }}" target="_blank" rel="noopener">Listar recomendações relacionadas (API)</a></li>
   </ul>
