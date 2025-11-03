@@ -96,11 +96,11 @@
   <header class="topbar">
     <div class="top-left">
       <div class="module-switch">
-        {% with current_namespace=request.resolver_match.namespace %}
+        {% with current_namespace=request.resolver_match.namespace current_url=request.resolver_match.url_name %}
           <a href="{% url 'arpia_scan:dashboard' %}" class="module {% if current_namespace == 'arpia_scan' %}active{% endif %}">Scan</a>
           <a href="{% url 'arpia_vuln:dashboard' %}" class="module {% if current_namespace == 'arpia_vuln' %}active{% endif %}">Vuln</a>
           <a href="{% url 'arpia_hunt:dashboard' %}" class="module {% if current_namespace == 'arpia_hunt' %}active{% endif %}">Hunt</a>
-          <a href="#" class="module">Pentest</a>
+          <a href="{% url 'arpia_pentest:dashboard' %}" class="module {% if current_namespace == 'arpia_pentest' or current_url == 'pentest_dashboard' %}active{% endif %}">Pentest</a>
         {% endwith %}
       </div>
     </div>

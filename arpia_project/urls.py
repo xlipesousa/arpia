@@ -16,6 +16,8 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+
+from arpia_pentest.views import PentestDashboardView
 from django.contrib.auth import views as auth_views
 
 urlpatterns = [
@@ -29,5 +31,7 @@ urlpatterns = [
     path("vuln/", include(("arpia_vuln.urls", "arpia_vuln"), namespace="arpia_vuln")),
     path("hunt/", include(("arpia_hunt.urls", "arpia_hunt"), namespace="arpia_hunt")),
     path("reports/", include(("arpia_report.urls", "arpia_report"), namespace="arpia_report")),
+    path("pentest/", include(("arpia_pentest.urls", "arpia_pentest"), namespace="arpia_pentest")),
+    path("pentest", PentestDashboardView.as_view(), name="pentest_dashboard"),
     path("api/", include("api.urls")),
 ]
