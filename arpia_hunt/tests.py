@@ -8,7 +8,9 @@ from pathlib import Path
 from unittest import mock
 
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.core.management import call_command
+from django.db.models.signals import post_save
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
@@ -19,6 +21,7 @@ from arpia_hunt.models import (
     AttackTactic,
     AttackTechnique,
     CveAttackTechnique,
+    HuntAlert,
     HuntEnrichment,
     HuntFinding,
     HuntFindingEnrichment,
@@ -34,6 +37,8 @@ from arpia_hunt.services import (
     synchronize_findings,
 )
 from arpia_hunt.services.attack_catalog import _FALLBACK_CACHE
+from arpia_hunt.services.alerts import evaluate_alerts_for_finding
+from arpia_hunt.signals import trigger_alerts_on_finding, trigger_alerts_on_recommendation
 from arpia_hunt.enrichment import enrich_cve, enrich_finding
 from arpia_hunt.integrations import IntegrationError, fetch_nvd_cve, fetch_vulners_cve, search_exploitdb
 from arpia_vuln.models import VulnerabilityFinding, VulnScanSession
@@ -1027,3 +1032,102 @@ class HuntRecommendationDetailAPITests(APITestCase):
         results = payload.get("results", [])
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["id"], str(self.recommendation.pk))
+
+
+@override_settings(
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+    HUNT_ALERTS={
+        "BLUE_EMAILS": ["blue@example.com"],
+        "RED_EMAILS": ["red@example.com"],
+        "EMAIL_SENDER": "alerts@example.com",
+        "DEFAULT_SLA_MINUTES": 45,
+        "SLA_MINUTES": {HuntAlert.Kind.PRIORITY_CRITICAL: 30},
+        "WEBHOOK_URL": "",
+    },
+)
+class HuntAlertServiceTests(TestCase):
+    def setUp(self):
+        post_save.disconnect(trigger_alerts_on_finding, sender=HuntFinding)
+        post_save.disconnect(trigger_alerts_on_recommendation, sender=HuntRecommendation)
+        self.addCleanup(post_save.connect, trigger_alerts_on_finding, sender=HuntFinding, weak=False)
+        self.addCleanup(post_save.connect, trigger_alerts_on_recommendation, sender=HuntRecommendation, weak=False)
+
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user("hunter", "hunter@example.com", "hunter")
+        self.project = Project.objects.create(owner=self.user, name="Projeto Hunt", slug="projeto-hunt")
+        self.session = VulnScanSession.objects.create(project=self.project, owner=self.user, title="Sessão Vuln")
+        self.vuln = VulnerabilityFinding.objects.create(
+            session=self.session,
+            title="Apache HTTPD outdated",
+            summary="Servidor Apache vulnerável à execução remota.",
+            severity=VulnerabilityFinding.Severity.CRITICAL,
+            status=VulnerabilityFinding.Status.OPEN,
+            host="192.168.1.10",
+            service="http",
+            port=80,
+            protocol="tcp",
+            cve="CVE-2024-9999",
+            cvss_score=Decimal("9.4"),
+        )
+        synchronize_findings()
+        self.finding = HuntFinding.objects.get(vulnerability=self.vuln)
+        mail.outbox.clear()
+
+    def test_priority_alert_triggers_and_sends_email(self):
+        HuntRecommendation.objects.bulk_create(
+            [
+                HuntRecommendation(
+                    finding=self.finding,
+                    recommendation_type=HuntRecommendation.Type.RED,
+                    title="Executar exploração controlada",
+                    summary="Validação ofensiva confirma criticidade.",
+                    generated_by=HuntRecommendation.Generator.ANALYST,
+                    confidence=CveAttackTechnique.Confidence.HIGH,
+                )
+            ]
+        )
+
+        baseline_emails = len(mail.outbox)
+        result = evaluate_alerts_for_finding(self.finding.pk)
+
+        alerts = HuntAlert.objects.filter(finding=self.finding, kind=HuntAlert.Kind.PRIORITY_CRITICAL)
+        self.assertEqual(alerts.count(), 1)
+        alert = alerts.first()
+        self.assertTrue(alert.is_active)
+        self.assertIn(alert.pk, [item.pk for item in result["triggered"]])
+        self.assertEqual(len(mail.outbox), baseline_emails + 1)
+        last_email = mail.outbox[-1]
+        self.assertIn("[ARPIA][Hunt]", last_email.subject)
+        self.assertTrue(last_email.subject.endswith("(triggered)") or last_email.subject.endswith("(updated)"))
+        self.assertIn("blue@example.com", last_email.to)
+        self.assertIn("red@example.com", last_email.to)
+
+    def test_priority_alert_resolves_when_threshold_not_met(self):
+        HuntRecommendation.objects.bulk_create(
+            [
+                HuntRecommendation(
+                    finding=self.finding,
+                    recommendation_type=HuntRecommendation.Type.RED,
+                    title="Executar exploração controlada",
+                    summary="Validação ofensiva confirma criticidade.",
+                    generated_by=HuntRecommendation.Generator.ANALYST,
+                    confidence=CveAttackTechnique.Confidence.HIGH,
+                )
+            ]
+        )
+        evaluate_alerts_for_finding(self.finding.pk)
+        alert = HuntAlert.objects.get(finding=self.finding, kind=HuntAlert.Kind.PRIORITY_CRITICAL)
+
+        HuntRecommendation.objects.filter(finding=self.finding).delete()
+        self.finding.cvss_score = Decimal("5.0")
+        self.finding.save(update_fields=["cvss_score", "updated_at"])
+        baseline_emails = len(mail.outbox)
+
+        result = evaluate_alerts_for_finding(self.finding.pk)
+
+        alert.refresh_from_db()
+        self.assertFalse(alert.is_active)
+        self.assertIsNotNone(alert.resolved_at)
+        self.assertIn(alert.pk, [item.pk for item in result["resolved"]])
+        self.assertEqual(len(mail.outbox), baseline_emails + 1)
+        self.assertIn("resolved", mail.outbox[-1].subject)

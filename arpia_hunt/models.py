@@ -370,6 +370,48 @@ class HuntRecommendation(models.Model):
 		return f"{self.recommendation_type.upper()} · {self.title}"
 
 
+class HuntAlert(models.Model):
+	"""Estado dos alertas operacionais derivados dos perfis Hunt."""
+
+	class Kind(models.TextChoices):
+		PRIORITY_CRITICAL = "priority_critical", "Prioridade crítica"
+		AUTOMATION_HIGH = "automation_high", "Heurística automática (alta confiança)"
+		BLUE_REVIEW = "blue_review", "Revisão Blue"
+
+	finding = models.ForeignKey(
+		HuntFinding,
+		related_name="alerts",
+		on_delete=models.CASCADE,
+	)
+	kind = models.CharField(max_length=40, choices=Kind.choices)
+	is_active = models.BooleanField(default=True)
+	trigger_count = models.PositiveIntegerField(default=1)
+	first_triggered_at = models.DateTimeField(default=timezone.now)
+	last_triggered_at = models.DateTimeField(default=timezone.now)
+	resolved_at = models.DateTimeField(null=True, blank=True)
+	metadata = models.JSONField(default=dict, blank=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		ordering = ("-last_triggered_at", "-created_at")
+		indexes = [
+			models.Index(fields=["kind", "is_active"], name="idx_hunt_alert_kind_active"),
+			models.Index(fields=["finding", "is_active"], name="idx_hunt_alert_finding_active"),
+		]
+		constraints = [
+			models.UniqueConstraint(
+				fields=["finding", "kind"],
+				condition=Q(is_active=True),
+				name="uniq_active_alert_per_kind",
+			)
+		]
+
+	def __str__(self) -> str:  # pragma: no cover - representação simples
+		status = "ativo" if self.is_active else "resolvido"
+		return f"{self.get_kind_display()} · {self.finding_id} ({status})"
+
+
 class HuntSyncLog(models.Model):
 	class Status(models.TextChoices):
 		SUCCESS = "success", "Sucesso"

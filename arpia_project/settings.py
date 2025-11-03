@@ -19,6 +19,23 @@ from urllib.parse import urlparse
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
+
+def _env_list(var_name: str, default: str = "") -> list[str]:
+    value = os.getenv(var_name, default)
+    if not value:
+        return []
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _env_int(var_name: str, default: int) -> int:
+    value = os.getenv(var_name, "").strip()
+    if not value:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        return default
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -198,6 +215,19 @@ ARPIA_LOG_INGEST_TOKEN = os.getenv("ARPIA_LOG_INGEST_TOKEN", "") or None
 ARPIA_GVM_HOST = os.getenv("ARPIA_GVM_HOST", "127.0.0.1")
 ARPIA_GVM_PORT = int(os.getenv("ARPIA_GVM_PORT", "9390"))
 ARPIA_GVM_SOCKET_PATH = os.getenv("ARPIA_GVM_SOCKET_PATH", "/run/gvmd/gvmd.sock") or None
+
+HUNT_ALERTS = {
+    "BLUE_EMAILS": _env_list("HUNT_ALERT_BLUE_EMAILS"),
+    "RED_EMAILS": _env_list("HUNT_ALERT_RED_EMAILS"),
+    "WEBHOOK_URL": os.getenv("HUNT_ALERT_WEBHOOK_URL", ""),
+    "EMAIL_SENDER": os.getenv("HUNT_ALERT_EMAIL_SENDER", os.getenv("DEFAULT_FROM_EMAIL", "alerts@arpia.local")),
+    "DEFAULT_SLA_MINUTES": _env_int("HUNT_ALERT_DEFAULT_SLA", 120),
+    "SLA_MINUTES": {
+        "priority_critical": _env_int("HUNT_ALERT_SLA_CRITICAL", 30),
+        "automation_high": _env_int("HUNT_ALERT_SLA_AUTOMATION", 60),
+        "blue_review": _env_int("HUNT_ALERT_SLA_BLUE_REVIEW", 240),
+    },
+}
 ARPIA_GVM_USERNAME = os.getenv("ARPIA_GVM_USERNAME")
 ARPIA_GVM_PASSWORD = os.getenv("ARPIA_GVM_PASSWORD")
 ARPIA_GVM_SCANNER_ID = os.getenv("ARPIA_GVM_SCANNER_ID", "08b69003-5fc2-4037-a479-93b440211c73")

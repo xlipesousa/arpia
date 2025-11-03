@@ -143,40 +143,40 @@ class HuntDashboardView(LoginRequiredMixin, TemplateView):
 
 		context.update(
 			{
-				"phase": "Fase 3",
-				"snapshot_label": "kickoff fase 3",
+				"phase": "Fase 5",
+				"snapshot_label": "Automação & alertas",
 				"data_sources": [
 					{
 						"label": "Scan",
-						"description": "Sessões, hosts, portas, serviços e metadados consolidados em arpia_scan.",
+						"description": "Resultados consolidados do módulo arpia_scan com contexto de superfície exposta.",
 					},
 					{
 						"label": "Vulnerabilidades",
-						"description": "Findings enriquecidos do módulo arpia_vuln, incluindo CVE/CWE e contexto agregado.",
+						"description": "Findings priorizados provenientes do módulo arpia_vuln com CVSS, CWE e owners definidos.",
 					},
 					{
 						"label": "Logs Hunt",
-						"description": "Eventos operacionais registrados via arpia_log para auditoria e depuração da ingestão.",
+						"description": "Eventos operacionais registrados via arpia_log empregados em métricas e auditoria contínua.",
 					},
 					{
 						"label": "Catálogos externos",
-						"description": "NVD (nvdlib), Vulners, Exploit-DB/searchsploit, MITRE ATT&CK (pyattck/mitreattack).",
+						"description": "NVD, Vulners, Exploit-DB/searchsploit e MITRE ATT&CK atualizados para alimentar heurísticas.",
 					},
 				],
 				"phase_objectives": [
-					"Mapear técnicas ATT&CK via heurísticas por CVE, CWE e keywords e sincronizar catálogo completo.",
-					"Gerar recomendações Blue/Red reutilizando enriquecimentos e confiança dos vínculos ATT&CK.",
-					"Unificar taxonomias Blue/Red em componentes de UI consumindo dados reais do pipeline.",
+					"Ativar alertas automatizados com thresholds configuráveis para findings críticos.",
+					"Garantir reprocessamento incremental mantendo perfis Blue/Red atualizados.",
+					"Conectar recomendações ATT&CK a playbooks operacionais e notificações acionáveis.",
 				],
 				"deliverables": [
-					"Comando de importação ATT&CK capaz de consumir todas as matrizes via pyattck.",
-					"Fixtures e contratos de teste cobrindo integrações externas e heurísticas ATT&CK.",
-					"Componentes de UI para tabs Blue/Red utilizando perfis e recomendações reais.",
+					"Serviço de alertas com SLA configurável e canais de notificação (email/webhook).",
+					"Comando e jobs de avaliação periódica dos findings priorizados.",
+					"Dashboards consolidados para acompanhamento de alertas e métricas operacionais.",
 				],
 				"next_steps": [
-					"Expor endpoints públicos (Fase 4) com paginação e filtros por técnica/confiança.",
-					"Evoluir protótipo de abas para componentes definitivos com interações assíncronas.",
-					"Instrumentar métricas e alertas para consumo das recomendações automatizadas.",
+					"Instrumentar monitoramento e métricas para a execução dos alertas automatizados.",
+					"Agendar o comando hunt_alerts em cron ou Celery alinhado às SLAs definidas.",
+					"Preparar workshop de rollout com equipes Blue e Red para revisar responsabilidades.",
 				],
 				"stats": stats,
 				"recent_syncs": recent_syncs,

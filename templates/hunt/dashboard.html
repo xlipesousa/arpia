@@ -9,11 +9,11 @@
   </div>
 </section>
 
-<section class="panel prototype-panel" data-tab-group="hunt-profiles">
-  <header class="panel-header prototype-header">
+<section class="panel alert-panel" data-tab-group="hunt-profiles">
+  <header class="panel-header alert-header">
     <div>
-      <h2>Protótipo · Abas Blue/Red</h2>
-      <p class="muted">Pré-visualização das interações previstas para a Fase 4, combinando heurísticas ATT&amp;CK e recomendações.</p>
+      <h2>Alertas automatizados · Perfis Blue/Red</h2>
+      <p class="muted">Visão consolidada dos findings priorizados e recomendações acionáveis disponíveis na operação.</p>
     </div>
     <div class="tab-controls">
       <button type="button" class="tab-control active" data-tab-target="blue">Blue Team</button>
@@ -23,59 +23,93 @@
   <div class="tab-panels">
     <div class="tab-panel active" data-tab-panel="blue">
       {% if blue_tabs %}
-        <ul class="profile-tab-list">
+        <div class="profile-accordion">
           {% for card in blue_tabs %}
-            <li>
-              <header>
-                <span class="badge severity-{{ card.finding.severity }}">{{ card.finding.get_severity_display }}</span>
-                <strong><a href="{% url 'arpia_hunt:finding-detail' card.finding.id %}">{{ card.finding.vulnerability.title }}</a></strong>
-                <small>{{ card.finding.project.name }}</small>
-              </header>
-              <p class="profile-summary">{{ card.profile.summary|default:card.finding.summary|default:"Sem resumo." }}</p>
-              {% include "hunt/components/heuristic_chips.html" with heuristics=card.heuristics %}
-              {% include "hunt/components/recommendation_list.html" with recommendations=card.recommendations tone="blue" empty_message="Nenhuma recomendação automatizada ainda." %}
-              <div class="card-actions">
-                <a class="detail-link" href="{% url 'arpia_hunt:finding-detail' card.finding.id %}">Abrir detalhe</a>
+            <details class="profile-item" data-tone="blue">
+              <summary class="profile-summary-row">
+                <span class="summary-left">
+                  <span class="badge severity-{{ card.finding.severity }}">{{ card.finding.get_severity_display }}</span>
+                  <span class="summary-text">
+                    <strong><a href="{% url 'arpia_hunt:finding-detail' card.finding.id %}">{{ card.finding.vulnerability.title }}</a></strong>
+                    <small>{{ card.finding.project.name }}</small>
+                  </span>
+                </span>
+                <span class="summary-meta">
+                  {% if card.finding.cvss_score %}
+                    <span class="meta-chip">CVSS {{ card.finding.cvss_score|floatformat:1 }}</span>
+                  {% endif %}
+                  {% if card.finding.cve %}
+                    <span class="meta-chip">{{ card.finding.cve }}</span>
+                  {% endif %}
+                  {% if card.profile.confidence %}
+                    <span class="meta-chip">{{ card.profile.confidence|title }}</span>
+                  {% endif %}
+                </span>
+              </summary>
+              <div class="profile-body">
+                <p class="profile-summary">{{ card.profile.summary|default:card.finding.summary|default:"Sem resumo." }}</p>
+                {% include "hunt/components/heuristic_chips.html" with heuristics=card.heuristics %}
+                {% include "hunt/components/recommendation_list.html" with recommendations=card.recommendations tone="blue" empty_message="Nenhuma recomendação automatizada ainda." %}
+                <div class="card-actions">
+                  <a class="detail-link" href="{% url 'arpia_hunt:finding-detail' card.finding.id %}">Abrir detalhe</a>
+                </div>
               </div>
-            </li>
+            </details>
           {% endfor %}
-        </ul>
+        </div>
       {% else %}
         <p class="muted">Gere perfis Blue executando <code>python manage.py hunt_enrich</code>.</p>
       {% endif %}
     </div>
     <div class="tab-panel" data-tab-panel="red">
       {% if red_tabs %}
-        <ul class="profile-tab-list">
+        <div class="profile-accordion">
           {% for card in red_tabs %}
-            <li>
-              <header>
-                <span class="badge severity-{{ card.finding.severity }}">{{ card.finding.get_severity_display }}</span>
-                <strong><a href="{% url 'arpia_hunt:finding-detail' card.finding.id %}">{{ card.finding.vulnerability.title }}</a></strong>
-                <small>{{ card.finding.project.name }}</small>
-              </header>
-              {% if card.profile.exploits %}
-                <ul class="exploit-list">
-                  {% for exploit in card.profile.exploits|slice:":3" %}
-                    <li>
-                      <strong>{{ exploit.title|default:"Exploit" }}</strong>
-                      <span class="muted">Fonte: {{ exploit.source|default:"?" }}</span>
-                      {% if exploit.url %}<a href="{{ exploit.url }}" target="_blank" rel="noopener">Abrir</a>{% endif %}
-                      {% if exploit.path %}<code>{{ exploit.path }}</code>{% endif %}
-                    </li>
-                  {% endfor %}
-                </ul>
-              {% else %}
-                <p class="muted">Sem exploits correlacionados.</p>
-              {% endif %}
-              {% include "hunt/components/heuristic_chips.html" with heuristics=card.heuristics %}
-              {% include "hunt/components/recommendation_list.html" with recommendations=card.recommendations tone="red" empty_message="Nenhuma recomendação Red disponível ainda." %}
-              <div class="card-actions">
-                <a class="detail-link" href="{% url 'arpia_hunt:finding-detail' card.finding.id %}">Abrir detalhe</a>
+            <details class="profile-item" data-tone="red">
+              <summary class="profile-summary-row">
+                <span class="summary-left">
+                  <span class="badge severity-{{ card.finding.severity }}">{{ card.finding.get_severity_display }}</span>
+                  <span class="summary-text">
+                    <strong><a href="{% url 'arpia_hunt:finding-detail' card.finding.id %}">{{ card.finding.vulnerability.title }}</a></strong>
+                    <small>{{ card.finding.project.name }}</small>
+                  </span>
+                </span>
+                <span class="summary-meta">
+                  {% if card.finding.cvss_score %}
+                    <span class="meta-chip">CVSS {{ card.finding.cvss_score|floatformat:1 }}</span>
+                  {% endif %}
+                  {% if card.finding.cve %}
+                    <span class="meta-chip">{{ card.finding.cve }}</span>
+                  {% endif %}
+                  {% if card.profile.confidence %}
+                    <span class="meta-chip">{{ card.profile.confidence|title }}</span>
+                  {% endif %}
+                </span>
+              </summary>
+              <div class="profile-body">
+                {% if card.profile.exploits %}
+                  <ul class="exploit-list">
+                    {% for exploit in card.profile.exploits|slice:":3" %}
+                      <li>
+                        <strong>{{ exploit.title|default:"Exploit" }}</strong>
+                        <span class="muted">Fonte: {{ exploit.source|default:"?" }}</span>
+                        {% if exploit.url %}<a href="{{ exploit.url }}" target="_blank" rel="noopener">Abrir</a>{% endif %}
+                        {% if exploit.path %}<code>{{ exploit.path }}</code>{% endif %}
+                      </li>
+                    {% endfor %}
+                  </ul>
+                {% else %}
+                  <p class="muted">Sem exploits correlacionados.</p>
+                {% endif %}
+                {% include "hunt/components/heuristic_chips.html" with heuristics=card.heuristics %}
+                {% include "hunt/components/recommendation_list.html" with recommendations=card.recommendations tone="red" empty_message="Nenhuma recomendação Red disponível ainda." %}
+                <div class="card-actions">
+                  <a class="detail-link" href="{% url 'arpia_hunt:finding-detail' card.finding.id %}">Abrir detalhe</a>
+                </div>
               </div>
-            </li>
+            </details>
           {% endfor %}
-        </ul>
+        </div>
       {% else %}
         <p class="muted">Execute o pipeline de enriquecimento para liberar recomendações Red.</p>
       {% endif %}
@@ -83,12 +117,12 @@
   </div>
 </section>
 
-<section class="hunt-grid">
+<section class="panel-stack">
   <article class="panel">
     <header class="panel-header">
       <div>
-        <h2>Objetivo da fase</h2>
-        <p class="muted">Preparar o terreno para perfis Blue-Team e Red-Team baseados em dados do Scan e Vuln.</p>
+        <h2>Foco atual</h2>
+        <p class="muted">Prioridades da fase de automação e alertas.</p>
       </div>
     </header>
     <ul class="bullet-list">
@@ -102,7 +136,7 @@
     <header class="panel-header">
       <div>
         <h2>Fontes de dados</h2>
-        <p class="muted">Mapeamento inicial do que será correlacionado pelo Hunt.</p>
+        <p class="muted">Bases ativas que alimentam correlação e disparo de alertas.</p>
       </div>
     </header>
     <ul class="data-sources">
@@ -118,8 +152,8 @@
   <article class="panel">
     <header class="panel-header">
       <div>
-  <h2>Entregáveis Fase 3</h2>
-  <p class="muted">Pontos de controle para consolidar heurísticas ATT&amp;CK e recomendações.</p>
+        <h2>Entregáveis Fase 5</h2>
+        <p class="muted">Pontos de controle para consolidar automação e monitoramento.</p>
       </div>
     </header>
     <ul class="deliverables">
@@ -132,8 +166,8 @@
   <article class="panel">
     <header class="panel-header">
       <div>
-  <h2>Próximos passos</h2>
-  <p class="muted">Sequência planejada após consolidar as integrações externas.</p>
+        <h2>Próximos passos</h2>
+        <p class="muted">Sequência planejada para estabilizar a operação dos alertas.</p>
       </div>
     </header>
     <ul class="next-steps">
@@ -147,7 +181,7 @@
     <header class="panel-header">
       <div>
         <h2>Indicadores atuais</h2>
-        <p class="muted">Total de achados normalizados disponíveis para os perfis.</p>
+        <p class="muted">Totais de achados que sustentam os alertas configurados.</p>
       </div>
     </header>
     <dl class="stats-grid">
@@ -198,24 +232,44 @@
     <div class="profile-card blue">
       <h3>Blue-Team</h3>
       {% if blue_insights %}
-        <ul>
+        <div class="profile-accordion">
           {% for item in blue_insights %}
-            <li>
-              <header>
-                <span class="badge severity-{{ item.finding.severity }}">{{ item.finding.get_severity_display }}</span>
-                <strong><a href="{% url 'arpia_hunt:finding-detail' item.finding.id %}">{{ item.finding.vulnerability.title }}</a></strong>
-                <small>{% if item.finding.last_profiled_at %}{{ item.finding.last_profiled_at|date:"d/m/Y H:i" }}{% else %}—{% endif %}</small>
-              </header>
-              <p>{{ item.profile.summary|default:item.finding.summary|default:"Sem resumo." }}</p>
-              <dl>
-                <div><dt>Projeto</dt><dd>{{ item.finding.project.name }}</dd></div>
-                {% if item.profile.references %}
-                  <div><dt>Referências</dt><dd><a href="{{ item.profile.references.0 }}" target="_blank" rel="noopener">Ver primeira referência</a>{% if item.profile.references|length > 1 %} · {{ item.profile.references|length }} links{% endif %}</dd></div>
-                {% endif %}
-              </dl>
-            </li>
+            <details class="profile-item" data-tone="blue">
+              <summary class="profile-summary-row">
+                <span class="summary-left">
+                  <span class="badge severity-{{ item.finding.severity }}">{{ item.finding.get_severity_display }}</span>
+                  <span class="summary-text">
+                    <strong><a href="{% url 'arpia_hunt:finding-detail' item.finding.id %}">{{ item.finding.vulnerability.title }}</a></strong>
+                    <small>{% if item.finding.last_profiled_at %}{{ item.finding.last_profiled_at|date:"d/m/Y H:i" }}{% else %}—{% endif %}</small>
+                  </span>
+                </span>
+                <span class="summary-meta">
+                  {% if item.finding.cvss_score %}
+                    <span class="meta-chip">CVSS {{ item.finding.cvss_score|floatformat:1 }}</span>
+                  {% endif %}
+                  {% if item.finding.cve %}
+                    <span class="meta-chip">{{ item.finding.cve }}</span>
+                  {% endif %}
+                  {% if item.profile.confidence %}
+                    <span class="meta-chip">{{ item.profile.confidence|title }}</span>
+                  {% endif %}
+                </span>
+              </summary>
+              <div class="profile-body">
+                <p class="profile-summary">{{ item.profile.summary|default:item.finding.summary|default:"Sem resumo." }}</p>
+                <dl>
+                  <div><dt>Projeto</dt><dd>{{ item.finding.project.name }}</dd></div>
+                  {% if item.profile.references %}
+                    <div><dt>Referências</dt><dd><a href="{{ item.profile.references.0 }}" target="_blank" rel="noopener">Ver primeira referência</a>{% if item.profile.references|length > 1 %} · {{ item.profile.references|length }} links{% endif %}</dd></div>
+                  {% endif %}
+                </dl>
+                <div class="card-actions">
+                  <a class="detail-link" href="{% url 'arpia_hunt:finding-detail' item.finding.id %}">Abrir detalhe</a>
+                </div>
+              </div>
+            </details>
           {% endfor %}
-        </ul>
+        </div>
       {% else %}
         <p class="muted">Nenhum perfil Blue gerado ainda. Execute <code>python manage.py hunt_enrich</code>.</p>
       {% endif %}
@@ -223,31 +277,51 @@
     <div class="profile-card red">
       <h3>Red-Team</h3>
       {% if red_insights %}
-        <ul>
+        <div class="profile-accordion">
           {% for item in red_insights %}
-            <li>
-              <header>
-                <span class="badge severity-{{ item.finding.severity }}">{{ item.finding.get_severity_display }}</span>
-                <strong><a href="{% url 'arpia_hunt:finding-detail' item.finding.id %}">{{ item.finding.vulnerability.title }}</a></strong>
-                <small>{% if item.finding.last_profiled_at %}{{ item.finding.last_profiled_at|date:"d/m/Y H:i" }}{% else %}—{% endif %}</small>
-              </header>
-              {% if item.profile.exploits %}
-                <ul class="exploit-list">
-                  {% for exploit in item.profile.exploits|slice:":3" %}
-                    <li>
-                      <strong>{{ exploit.title|default:"Exploit" }}</strong>
-                      <span class="muted">Fonte: {{ exploit.source|default:"?" }}</span>
-                      {% if exploit.url %}<a href="{{ exploit.url }}" target="_blank" rel="noopener">Abrir</a>{% endif %}
-                      {% if exploit.path %}<code>{{ exploit.path }}</code>{% endif %}
-                    </li>
-                  {% endfor %}
-                </ul>
-              {% else %}
-                <p class="muted">Sem exploits correlacionados.</p>
-              {% endif %}
-            </li>
+            <details class="profile-item" data-tone="red">
+              <summary class="profile-summary-row">
+                <span class="summary-left">
+                  <span class="badge severity-{{ item.finding.severity }}">{{ item.finding.get_severity_display }}</span>
+                  <span class="summary-text">
+                    <strong><a href="{% url 'arpia_hunt:finding-detail' item.finding.id %}">{{ item.finding.vulnerability.title }}</a></strong>
+                    <small>{% if item.finding.last_profiled_at %}{{ item.finding.last_profiled_at|date:"d/m/Y H:i" }}{% else %}—{% endif %}</small>
+                  </span>
+                </span>
+                <span class="summary-meta">
+                  {% if item.finding.cvss_score %}
+                    <span class="meta-chip">CVSS {{ item.finding.cvss_score|floatformat:1 }}</span>
+                  {% endif %}
+                  {% if item.finding.cve %}
+                    <span class="meta-chip">{{ item.finding.cve }}</span>
+                  {% endif %}
+                  {% if item.profile.confidence %}
+                    <span class="meta-chip">{{ item.profile.confidence|title }}</span>
+                  {% endif %}
+                </span>
+              </summary>
+              <div class="profile-body">
+                {% if item.profile.exploits %}
+                  <ul class="exploit-list">
+                    {% for exploit in item.profile.exploits|slice:":3" %}
+                      <li>
+                        <strong>{{ exploit.title|default:"Exploit" }}</strong>
+                        <span class="muted">Fonte: {{ exploit.source|default:"?" }}</span>
+                        {% if exploit.url %}<a href="{{ exploit.url }}" target="_blank" rel="noopener">Abrir</a>{% endif %}
+                        {% if exploit.path %}<code>{{ exploit.path }}</code>{% endif %}
+                      </li>
+                    {% endfor %}
+                  </ul>
+                {% else %}
+                  <p class="muted">Sem exploits correlacionados.</p>
+                {% endif %}
+                <div class="card-actions">
+                  <a class="detail-link" href="{% url 'arpia_hunt:finding-detail' item.finding.id %}">Abrir detalhe</a>
+                </div>
+              </div>
+            </details>
           {% endfor %}
-        </ul>
+        </div>
       {% else %}
         <p class="muted">Nenhum perfil Red gerado ainda. Execute <code>python manage.py hunt_enrich</code>.</p>
       {% endif %}
@@ -349,8 +423,8 @@ document.addEventListener("DOMContentLoaded",function(){const group=document.que
 .page-heading{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.6rem;gap:1rem;}
 .page-heading h1{margin:0;font-size:1.9rem;color:var(--text);}
 .page-subtitle{margin:.25rem 0 0;font-size:.95rem;color:var(--muted);}
-.prototype-panel{margin-bottom:1.8rem;}
-.prototype-header{align-items:center;}
+.alert-panel{margin-bottom:1.8rem;}
+.alert-header{align-items:center;}
 .tab-controls{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;}
 .tab-control{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:var(--text);padding:.45rem 1rem;border-radius:999px;font-size:.85rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;transition:all .2s ease;}
 .tab-control:hover{border-color:rgba(118,187,255,0.4);color:#d5ecff;}
@@ -358,13 +432,26 @@ document.addEventListener("DOMContentLoaded",function(){const group=document.que
 .tab-panels{margin-top:1.2rem;}
 .tab-panel{display:none;}
 .tab-panel.active{display:block;}
-.profile-tab-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.2rem;}
-.profile-tab-list li{padding:1.1rem;border-radius:14px;border:1px solid rgba(255,255,255,0.09);background:rgba(6,22,42,0.78);box-shadow:0 16px 32px rgba(5,16,32,0.32);display:flex;flex-direction:column;gap:.7rem;}
-.profile-tab-list header{display:flex;align-items:center;gap:.65rem;}
-.profile-tab-list header strong{flex:1;color:var(--text);}
-.profile-tab-list header strong a{color:inherit;text-decoration:none;}
-.profile-tab-list header strong a:hover{text-decoration:underline;}
-.profile-tab-list header small{color:var(--muted);font-size:.78rem;}
+.profile-accordion{display:flex;flex-direction:column;gap:1rem;margin:0;padding:0;list-style:none;}
+.profile-item{border-radius:14px;border:1px solid rgba(255,255,255,0.09);background:rgba(6,22,42,0.78);box-shadow:0 16px 32px rgba(5,16,32,0.32);overflow:hidden;}
+.profile-item[data-tone="blue"]{border-color:rgba(118,187,255,0.24);}
+.profile-item[data-tone="red"]{border-color:rgba(255,138,138,0.24);}
+.profile-item summary{list-style:none;}
+.profile-item summary::-webkit-details-marker{display:none;}
+.profile-summary-row{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1rem 1.2rem;cursor:pointer;}
+.profile-item[open] .profile-summary-row{border-bottom:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.02);}
+.summary-left{display:flex;align-items:center;gap:.75rem;min-width:0;}
+.summary-text{display:flex;flex-direction:column;gap:.15rem;min-width:0;}
+.summary-text strong{color:var(--text);font-size:1rem;line-height:1.2;}
+.summary-text strong a{color:inherit;text-decoration:none;}
+.summary-text strong a:hover{text-decoration:underline;}
+.summary-text small{color:var(--muted);font-size:.78rem;}
+.summary-meta{display:flex;align-items:center;gap:.45rem;flex-wrap:wrap;justify-content:flex-end;}
+.profile-summary-row::after{content:"\25BC";font-size:.75rem;color:var(--muted);transition:transform .2s ease;}
+.profile-item[open] .profile-summary-row::after{transform:rotate(180deg);}
+.profile-summary-row:focus{outline:2px solid rgba(118,187,255,0.45);outline-offset:3px;}
+.meta-chip{display:inline-flex;align-items:center;gap:.25rem;padding:.35rem .65rem;border-radius:999px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.16);font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;}
+.profile-body{padding:1.1rem 1.3rem;display:flex;flex-direction:column;gap:.9rem;background:rgba(255,255,255,0.02);}
 .profile-summary{margin:0;color:var(--muted);line-height:1.35;font-size:.9rem;}
 .heuristic-chips{list-style:none;margin:.6rem 0 0;padding:0;display:flex;flex-wrap:wrap;gap:.45rem;}
 .heuristic-chips li{padding:.3rem .65rem;border-radius:999px;background:rgba(118,187,255,0.12);border:1px solid rgba(118,187,255,0.28);color:#d5ecff;font-size:.72rem;font-weight:600;letter-spacing:.06em;}
@@ -377,7 +464,8 @@ document.addEventListener("DOMContentLoaded",function(){const group=document.que
 .card-actions{margin-top:.6rem;display:flex;flex-wrap:wrap;justify-content:flex-end;}
 .detail-link{display:inline-flex;align-items:center;gap:.35rem;padding:.45rem .9rem;border-radius:999px;background:rgba(118,187,255,0.12);border:1px solid rgba(118,187,255,0.28);color:#e3f1ff;font-size:.78rem;font-weight:600;text-decoration:none;text-transform:uppercase;letter-spacing:.08em;transition:all .2s ease;}
 .detail-link:hover{background:rgba(118,187,255,0.2);border-color:rgba(118,187,255,0.42);color:#fff;}
-.hunt-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1.4rem;margin-bottom:1.6rem;}
+.panel-stack{display:flex;flex-direction:column;gap:1.4rem;margin-bottom:1.6rem;}
+.panel-stack>.panel{width:100%;}
 .panel{background:rgba(8,23,43,0.78);border-radius:16px;padding:1.4rem;border:1px solid rgba(255,255,255,0.05);box-shadow:0 18px 38px rgba(5,16,32,0.35);position:relative;overflow:hidden;}
 .panel-header{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:1.2rem;}
 .panel-header h2{margin:0;color:var(--text);font-size:1.35rem;}
@@ -401,10 +489,9 @@ document.addEventListener("DOMContentLoaded",function(){const group=document.que
 .role-card.red{background:rgba(255,138,138,0.08);border-color:rgba(255,138,138,0.18);}
 .profile-panel{margin-bottom:2rem;}
 .profile-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.4rem;}
-.profile-card{padding:1.2rem;border-radius:14px;border:1px solid rgba(255,255,255,0.05);background:rgba(255,255,255,0.02);display:flex;flex-direction:column;gap:.8rem;}
+.profile-card{padding:1.2rem;border-radius:14px;border:1px solid rgba(255,255,255,0.05);background:rgba(255,255,255,0.02);display:flex;flex-direction:column;gap:1.1rem;}
 .profile-card h3{margin:0;font-size:1.1rem;color:var(--text);}
 .profile-card ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.9rem;}
-.profile-card li{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:12px;padding:.9rem 1rem;display:flex;flex-direction:column;gap:.6rem;}
 .profile-card header{display:flex;align-items:center;gap:.6rem;}
 .profile-card header strong{flex:1;color:var(--text);}
 .profile-card header strong a{color:inherit;text-decoration:none;}

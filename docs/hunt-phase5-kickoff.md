@@ -21,9 +21,26 @@
 
 ## Ações Preparatórias
 
-- [ ] Consolidar critérios de alerta propostos (baseline de CVSS, tags de exposição, heurísticas ATT&CK).
+- [x] Consolidar critérios de alerta propostos (baseline de CVSS, tags de exposição, heurísticas ATT&CK).
 - [ ] Catalogar playbooks existentes (mitigações e simulações) e identificar lacunas para automação.
-- [ ] Definir template para notificações (payload, contexto, links para dashboards, dados da API).
+- [x] Definir template para notificações (payload, contexto, links para dashboards, dados da API).
+
+### Estado atual da automação
+
+- Serviço `arpia_hunt.services.alerts` avalia thresholds operacionais:
+   - Prioridade crítica: `cvss_score ≥ 9.0` e recomendações Red > 0.
+   - Alerta imediato: recomendações geradas por automação com confiança `high`.
+   - Revisão Blue: severidade ≥ `medium` com ≥2 recomendações Blue.
+- Alertas persistem em `HuntAlert`, disparam logs via `arpia_log` e, se configurado, notificações por e-mail/webhook.
+- Comando `python manage.py hunt_alerts [--finding UUID | --project UUID | --limit N]` permite reprocesso batch (agendamento sugerido via cron/Celery).
+- Configuração de canais, destinatários e SLA em `settings.HUNT_ALERTS` (`HUNT_ALERT_*` no `.env`).
+
+### SLA e canais
+
+- `priority_critical`: SLA padrão 30 min — notifica Blue & Red, marcador `team:blue`, `team:red`.
+- `automation_high`: SLA padrão 60 min — foco Red, integra playbooks ofensivos.
+- `blue_review`: SLA padrão 240 min — acompanhamento de mitigação Blue.
+- Webhook padrão publica evento `hunt.alert.<estado>` com payload JSON (finding, SLA, metadados). Ajustar `HUNT_ALERT_WEBHOOK_URL` para integrar SIEM ou orquestradores.
 
 ## Monitoramento Pós-Deploy (Fase 4 → Fase 5)
 
