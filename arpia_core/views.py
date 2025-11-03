@@ -4,19 +4,22 @@ import datetime
 import json
 import os
 import re
+from collections import Counter
 from pathlib import Path
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator
-from django.db.models import Q
+from django.db.models import Avg, Count, Q
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 from django.views.generic import TemplateView
 from django.views.generic.edit import CreateView, DeleteView, FormMixin, UpdateView
+
+from django.utils import timezone
 
 from .forms import ScriptForm, ToolForm, WordlistForm
 from .models import Project, ProjectMembership, Script, Tool, Wordlist
@@ -32,6 +35,71 @@ from .utils import safe_filename
 
 BASE_DIR = Path(__file__).resolve().parent
 SCRIPTS_BASE = BASE_DIR / "scripts"
+
+OWASP_TOP10_LABELS = {
+    "A01:2021": "A01:2021 - Broken Access Control",
+    "A02:2021": "A02:2021 - Cryptographic Failures",
+    "A03:2021": "A03:2021 - Injection",
+    "A04:2021": "A04:2021 - Insecure Design",
+    "A05:2021": "A05:2021 - Security Misconfiguration",
+    "A06:2021": "A06:2021 - Vulnerable and Outdated Components",
+    "A07:2021": "A07:2021 - Identification and Authentication Failures",
+    "A08:2021": "A08:2021 - Software and Data Integrity Failures",
+    "A09:2021": "A09:2021 - Security Logging and Monitoring Failures",
+    "A10:2021": "A10:2021 - Server-Side Request Forgery (SSRF)",
+}
+
+OWASP_CWE_MAPPING = {
+    "CWE-22": "A05:2021",
+    "CWE-79": "A03:2021",
+    "CWE-89": "A03:2021",
+    "CWE-94": "A03:2021",
+    "CWE-119": "A05:2021",
+    "CWE-200": "A02:2021",
+    "CWE-201": "A02:2021",
+    "CWE-269": "A01:2021",
+    "CWE-284": "A01:2021",
+    "CWE-287": "A07:2021",
+    "CWE-352": "A01:2021",
+    "CWE-434": "A08:2021",
+    "CWE-502": "A08:2021",
+    "CWE-611": "A05:2021",
+    "CWE-798": "A07:2021",
+    "CWE-918": "A10:2021",
+}
+
+OWASP_KEYWORD_MAPPING = [
+    ("sql injection", "A03:2021"),
+    ("nosql injection", "A03:2021"),
+    ("command injection", "A03:2021"),
+    ("ldap injection", "A03:2021"),
+    ("injection", "A03:2021"),
+    ("cross-site scripting", "A03:2021"),
+    ("xss", "A03:2021"),
+    ("broken access control", "A01:2021"),
+    ("access control", "A01:2021"),
+    ("csrf", "A01:2021"),
+    ("authorization", "A01:2021"),
+    ("sensitive data", "A02:2021"),
+    ("data exposure", "A02:2021"),
+    ("information disclosure", "A02:2021"),
+    ("security misconfiguration", "A05:2021"),
+    ("path traversal", "A05:2021"),
+    ("directory traversal", "A05:2021"),
+    ("outdated component", "A06:2021"),
+    ("dependency", "A06:2021"),
+    ("weak password", "A07:2021"),
+    ("credential", "A07:2021"),
+    ("authentication", "A07:2021"),
+    ("session fixation", "A07:2021"),
+    ("deserialization", "A08:2021"),
+    ("serialization", "A08:2021"),
+    ("supply chain", "A08:2021"),
+    ("logging", "A09:2021"),
+    ("monitoring", "A09:2021"),
+    ("ssrf", "A10:2021"),
+    ("server-side request forgery", "A10:2021"),
+]
 
 
 @login_required
@@ -102,6 +170,144 @@ def scripts_list(request):
         "page_size_choices": [5, 10, 25],
     }
     return render(request, "scripts/list.html", context)
+
+
+def _normalize_owasp_value(value):
+    if not value:
+        return None
+    if isinstance(value, str):
+        return value.strip() or None
+    if isinstance(value, dict):
+        for key in ("name", "label", "title", "value", "id", "code", "category"):
+            if key in value:
+                normalized = _normalize_owasp_value(value[key])
+                if normalized:
+                    return normalized
+    if isinstance(value, (list, tuple, set)):
+        for item in value:
+            normalized = _normalize_owasp_value(item)
+            if normalized:
+                return normalized
+    return None
+
+
+def _map_keywords_to_code(text: str | None) -> str | None:
+    if not text:
+        return None
+    lowered = text.lower()
+    for keyword, code in OWASP_KEYWORD_MAPPING:
+        if keyword in lowered:
+            return code
+    return None
+
+
+def _map_cwe_to_code(raw_cwe: str | None) -> str | None:
+    if not raw_cwe:
+        return None
+    if isinstance(raw_cwe, (list, tuple, set)):
+        for item in raw_cwe:
+            code = _map_cwe_to_code(item)
+            if code:
+                return code
+        return None
+    if isinstance(raw_cwe, dict):
+        return _map_cwe_to_code(_normalize_owasp_value(raw_cwe))
+    parts = re.split(r"[\s,;/]+", str(raw_cwe))
+    for part in parts:
+        if not part:
+            continue
+        candidate = part.strip().upper().replace("_", "-")
+        if not candidate:
+            continue
+        if not candidate.startswith("CWE"):
+            candidate = f"CWE-{candidate}" if candidate[0].isdigit() else candidate
+        mapping = OWASP_CWE_MAPPING.get(candidate)
+        if mapping:
+            return mapping
+    return None
+
+
+def _resolve_owasp_label(value: str | None) -> str | None:
+    if not value:
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    upper = text.upper()
+    if upper in OWASP_TOP10_LABELS:
+        return OWASP_TOP10_LABELS[upper]
+    for code, label in OWASP_TOP10_LABELS.items():
+        normalized_code = code.upper()
+        if upper.startswith(normalized_code) or normalized_code in upper:
+            return label
+        if label.upper() == upper or upper in label.upper():
+            return label
+    mapped_code = _map_keywords_to_code(text)
+    if mapped_code:
+        return OWASP_TOP10_LABELS.get(mapped_code, mapped_code)
+    return None
+
+
+def _derive_owasp_category(finding) -> str | None:
+    tags = getattr(finding, "tags", []) or []
+    for tag in tags:
+        label = _resolve_owasp_label(_normalize_owasp_value(tag))
+        if label:
+            return label
+
+    context = getattr(finding, "context", {}) or {}
+    if isinstance(context, dict):
+        for key in ("owasp", "owasp_top_10", "owasp_category"):
+            label = _resolve_owasp_label(_normalize_owasp_value(context.get(key)))
+            if label:
+                return label
+        classification_block = context.get("classification") if isinstance(context.get("classification"), dict) else None
+        if isinstance(classification_block, dict):
+            label = _resolve_owasp_label(_normalize_owasp_value(classification_block.get("owasp")))
+            if label:
+                return label
+        classifications_block = context.get("classifications") if isinstance(context.get("classifications"), dict) else None
+        if isinstance(classifications_block, dict):
+            label = _resolve_owasp_label(_normalize_owasp_value(classifications_block.get("owasp")))
+            if label:
+                return label
+        cwe_code = _map_cwe_to_code(context.get("cwe"))
+        if cwe_code:
+            return OWASP_TOP10_LABELS.get(cwe_code, cwe_code)
+
+    vulnerability = getattr(finding, "vulnerability", None)
+    if vulnerability is not None:
+        vuln_data = getattr(vulnerability, "data", {}) or {}
+        if isinstance(vuln_data, dict):
+            for key in ("owasp", "owasp_top_10", "owasp_category"):
+                label = _resolve_owasp_label(_normalize_owasp_value(vuln_data.get(key)))
+                if label:
+                    return label
+            classifications = vuln_data.get("classifications")
+            if isinstance(classifications, dict):
+                label = _resolve_owasp_label(_normalize_owasp_value(classifications.get("owasp")))
+                if label:
+                    return label
+            cwe_sources = []
+            for key in ("cwe", "cwes"):
+                if key in vuln_data:
+                    cwe_sources.append(vuln_data[key])
+            for cwe_source in cwe_sources:
+                normalized_source = _normalize_owasp_value(cwe_source) or cwe_source
+                cwe_code = _map_cwe_to_code(normalized_source)
+                if cwe_code:
+                    return OWASP_TOP10_LABELS.get(cwe_code, cwe_code)
+
+    text_candidates = [
+        getattr(vulnerability, "title", "") if vulnerability is not None else "",
+        getattr(vulnerability, "summary", "") if vulnerability is not None else "",
+        getattr(finding, "summary", ""),
+    ]
+    for text in text_candidates:
+        code = _map_keywords_to_code(text)
+        if code:
+            return OWASP_TOP10_LABELS.get(code, code)
+    return None
 
 
 @login_required
@@ -558,6 +764,249 @@ def _write_user_script_file(user, filename: str, content: str) -> Path:
 
 class DashboardView(LoginRequiredMixin, TemplateView):
     template_name = "dashboard/home.html"
+
+    def get_context_data(self, **kwargs):  # type: ignore[override]
+        context = super().get_context_data(**kwargs)
+
+        from arpia_core.models import Asset, ObservedEndpoint, Project
+        from arpia_hunt.models import HuntAlert, HuntFinding
+        from arpia_vuln.models import VulnerabilityFinding
+        from arpia_scan.models import ScanSession
+
+        severity_map = {
+            key: 0
+            for key, _ in VulnerabilityFinding.Severity.choices
+        }
+
+        active_findings = (
+            HuntFinding.objects.filter(is_active=True)
+            .select_related("vulnerability", "project")
+        )
+
+        severity_counts = (
+            active_findings.values("severity").annotate(total=Count("id"))
+        )
+        for row in severity_counts:
+            severity_map[row["severity"]] = row["total"]
+
+        total_findings = sum(severity_map.values())
+
+        severity_choices = dict(VulnerabilityFinding.Severity.choices)
+        severity_order = [
+            VulnerabilityFinding.Severity.CRITICAL,
+            VulnerabilityFinding.Severity.HIGH,
+            VulnerabilityFinding.Severity.MEDIUM,
+            VulnerabilityFinding.Severity.LOW,
+            VulnerabilityFinding.Severity.INFO,
+            VulnerabilityFinding.Severity.UNKNOWN,
+        ]
+        severity_labels = [severity_choices.get(key, key.title()) for key in severity_order]
+        severity_values = [severity_map.get(key, 0) for key in severity_order]
+
+        top_vulnerabilities_qs = (
+            active_findings.exclude(vulnerability__title="")
+            .values("vulnerability__title", "severity")
+            .annotate(total=Count("id"))
+            .order_by("-total", "vulnerability__title")[:5]
+        )
+        top_vulnerabilities = [
+            {
+                "title": row["vulnerability__title"],
+                "severity": row["severity"],
+                "severity_display": severity_choices.get(row["severity"], row["severity"].title()),
+                "count": row["total"],
+            }
+            for row in top_vulnerabilities_qs
+        ]
+
+        top_cves_qs = (
+            active_findings.exclude(cve="")
+            .values("cve")
+            .annotate(total=Count("id"), avg_score=Avg("cvss_score"))
+            .order_by("-total", "cve")[:5]
+        )
+        top_cves = [
+            {
+                "cve": row["cve"],
+                "count": row["total"],
+                "avg_score": float(row["avg_score"]) if row["avg_score"] is not None else None,
+            }
+            for row in top_cves_qs
+        ]
+
+        latest_projects = [
+            {
+                "name": project.name,
+                "client": project.client_name or "—",
+                "status": project.get_status_display(),
+                "created": timezone.localtime(project.created).strftime("%d/%m %H:%M")
+                if project.created
+                else "—",
+            }
+            for project in (
+                Project.objects.select_related("owner")
+                .order_by("-created")[:10]
+            )
+        ]
+
+        top_ports = [
+            {
+                "label": f"{row['port']}/{row['proto'] or 'tcp'}",
+                "count": row["total"],
+                "port": row["port"],
+                "proto": row["proto"] or "tcp",
+            }
+            for row in (
+                ObservedEndpoint.objects.values("port", "proto")
+                .annotate(total=Count("id"))
+                .order_by("-total", "port")[:5]
+            )
+        ]
+
+        top_services = [
+            {"service": row["service"], "count": row["total"]}
+            for row in (
+                ObservedEndpoint.objects.exclude(service="")
+                .values("service")
+                .annotate(total=Count("id"))
+                .order_by("-total", "service")[:5]
+            )
+        ]
+
+        os_counter: Counter[str] = Counter()
+
+        def _consume_os(value):
+            if isinstance(value, str):
+                label = value.strip()
+                if label:
+                    os_counter[label] += 1
+            elif isinstance(value, list):
+                for item in value:
+                    _consume_os(item)
+            elif isinstance(value, dict):
+                name = value.get("name") or value.get("label")
+                if name:
+                    _consume_os(name)
+
+        for metadata in Asset.objects.exclude(metadata={}).values_list("metadata", flat=True):
+            if not isinstance(metadata, dict):
+                continue
+            candidate = (
+                metadata.get("operating_system")
+                or metadata.get("os")
+                or metadata.get("system")
+                or metadata.get("platform")
+            )
+            if not candidate and isinstance(metadata.get("fingerprints"), dict):
+                candidate = metadata["fingerprints"].get("os")
+            if candidate:
+                _consume_os(candidate)
+
+        top_operating_systems = [
+            {"label": label, "count": count}
+            for label, count in os_counter.most_common(5)
+        ]
+
+        top_ports_max = top_ports[0]["count"] if top_ports else 0
+        top_services_max = top_services[0]["count"] if top_services else 0
+        top_os_max = top_operating_systems[0]["count"] if top_operating_systems else 0
+
+        if top_ports_max:
+            for item in top_ports:
+                item["percent"] = round((item["count"] / top_ports_max) * 100, 2)
+        else:
+            for item in top_ports:
+                item["percent"] = 0.0
+
+        if top_services_max:
+            for item in top_services:
+                item["percent"] = round((item["count"] / top_services_max) * 100, 2)
+        else:
+            for item in top_services:
+                item["percent"] = 0.0
+
+        if top_os_max:
+            for item in top_operating_systems:
+                item["percent"] = round((item["count"] / top_os_max) * 100, 2)
+        else:
+            for item in top_operating_systems:
+                item["percent"] = 0.0
+
+        owasp_counter: Counter[str] = Counter()
+        for finding in active_findings.select_related("vulnerability"):
+            category_label = _derive_owasp_category(finding)
+            if category_label:
+                owasp_counter[category_label] += 1
+
+        top_owasp = [
+            {"label": label, "count": count}
+            for label, count in owasp_counter.most_common(10)
+        ]
+        if top_owasp:
+            top_owasp_max = top_owasp[0]["count"] or 1
+            for entry in top_owasp:
+                entry["percent"] = round((entry["count"] / top_owasp_max) * 100, 2)
+        else:
+            top_owasp_max = 0
+
+        recent_scans = [
+            {
+                "title": scan.title,
+                "project": scan.project.name if scan.project else "—",
+                "status": scan.get_status_display(),
+                "started_at": timezone.localtime(scan.started_at).strftime("%d/%m %H:%M")
+                if scan.started_at
+                else "—",
+            }
+            for scan in (
+                ScanSession.objects.select_related("project")
+                .order_by("-started_at", "-created_at")[:5]
+            )
+        ]
+
+        active_alerts = [
+            {
+                "kind": alert.get_kind_display(),
+                "finding_title": alert.finding.vulnerability.title,
+                "project": alert.finding.project.name,
+                "last_triggered": timezone.localtime(alert.last_triggered_at).strftime("%d/%m %H:%M"),
+            }
+            for alert in (
+                HuntAlert.objects.select_related("finding", "finding__project", "finding__vulnerability")
+                .filter(is_active=True)
+                .order_by("-last_triggered_at")[:5]
+            )
+        ]
+
+        project_count = Project.objects.count()
+        running_scans = ScanSession.objects.filter(status=ScanSession.Status.RUNNING).count()
+
+        context.update(
+            {
+                "last_updated": timezone.now(),
+                "kpi_cards": [
+                    {"label": "Findings ativos", "value": total_findings},
+                    {"label": "Criticidade crítica", "value": severity_map.get(VulnerabilityFinding.Severity.CRITICAL, 0)},
+                    {"label": "Criticidade alta", "value": severity_map.get(VulnerabilityFinding.Severity.HIGH, 0)},
+                    {"label": "Projetos monitorados", "value": project_count},
+                ],
+                "severity_chart": {
+                    "labels": severity_labels,
+                    "values": severity_values,
+                },
+                "top_vulnerabilities": top_vulnerabilities,
+                "top_ports": top_ports,
+                "top_services": top_services,
+                "top_operating_systems": top_operating_systems,
+                "top_owasp": top_owasp,
+                "top_cves": top_cves,
+                "latest_projects": latest_projects,
+                "recent_scans": recent_scans,
+                "active_alerts": active_alerts,
+                "running_scans": running_scans,
+            }
+        )
+        return context
 
 
 class ProjectsListView(LoginRequiredMixin, TemplateView):

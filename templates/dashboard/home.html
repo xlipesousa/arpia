@@ -1,80 +1,358 @@
 {% extends "base.html" %}
-{% block title %}Dashboard - ARPIA{% endblock %}
+{% block title %}Dashboard — ARPIA{% endblock %}
 {% block content %}
-<div class="dashboard-frame">
+<div class="hunt-dashboard">
+  <header class="dashboard-header">
+    <div>
+      <h1>Visão geral operacional</h1>
+      <p class="muted">Atualizado em {{ last_updated|date:"d/m/Y H:i" }} · Scans em execução: {{ running_scans }}</p>
+    </div>
+  </header>
 
-  <!-- Top KPI row -->
-  <div class="kpi-row">
-    <div class="kpi card">
-      <div class="kpi-label">Total Vulnerabilities</div>
-      <div class="kpi-value" id="kpi-total">342</div>
-    </div>
-    <div class="kpi card">
-      <div class="kpi-label">High Severity</div>
-      <div class="kpi-value" id="kpi-high">78</div>
-    </div>
-    <div class="kpi card">
-      <div class="kpi-label">Medium Severity</div>
-      <div class="kpi-value" id="kpi-medium">190</div>
-    </div>
-    <div class="kpi card">
-      <div class="kpi-label">Low Severity</div>
-      <div class="kpi-value" id="kpi-low">74</div>
-    </div>
-  </div>
+  <section class="kpi-grid">
+    {% for card in kpi_cards %}
+      <article class="kpi-card">
+        <span class="kpi-label">{{ card.label }}</span>
+        <strong class="kpi-value">{{ card.value|default:"0" }}</strong>
+      </article>
+    {% endfor %}
+  </section>
 
-  <!-- Charts + side panels -->
-  <div class="content-grid">
-    <section class="main-charts">
-      <div class="card chart-card">
-        <h4>Vulnerabilities by Severity</h4>
-        <canvas id="sevBar" height="140"></canvas>
+  <div class="dashboard-grid">
+    <section class="primary-column">
+  <div class="primary-row triptych">
+        <article class="card chart-card">
+          <header class="card-header">
+            <h2>Distribuição por severidade</h2>
+            <span class="caption">Findings ativos</span>
+          </header>
+          <canvas id="severityChart" height="220"></canvas>
+        </article>
+
+        <article class="card list-card owasp-card">
+          <header class="card-header">
+            <h2>Top 10 OWASP</h2>
+            <span class="caption">Ocorrências por categoria</span>
+          </header>
+          {% if top_owasp %}
+            <ul class="progress-list">
+              {% for item in top_owasp %}
+                <li>
+                  <div class="progress-head">
+                    <span>{{ item.label }}</span>
+                    <span class="muted">{{ item.count }}</span>
+                  </div>
+                  <div class="progress-bar"><span style="width: {{ item.percent|floatformat:0 }}%;"></span></div>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="empty">Nenhuma categoria OWASP registrada até o momento.</p>
+          {% endif %}
+        </article>
+
+        <article class="card list-card projects-card">
+          <header class="card-header">
+            <h2>Projetos recentes</h2>
+            <span class="caption">Últimos 10 cadastros</span>
+          </header>
+          {% if latest_projects %}
+            <ul class="recent-list">
+              {% for project in latest_projects %}
+                <li>
+                  <div class="recent-head">
+                    <strong>{{ project.name }}</strong>
+                    <span class="muted">{{ project.status }}</span>
+                  </div>
+                  <div class="recent-meta">
+                    <span>{{ project.client }}</span>
+                    <span class="timestamp">{{ project.created }}</span>
+                  </div>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="empty">Nenhum projeto cadastrado até o momento.</p>
+          {% endif %}
+        </article>
       </div>
 
-      <div class="card chart-card">
-        <h4>Vulnerabilities by Type</h4>
-        <canvas id="typeDonut" height="140"></canvas>
-      </div>
+  <article class="card list-card wide-card">
+        <header class="card-header">
+          <h2>Top vulnerabilidades</h2>
+          <span class="caption">Agrupadas por ocorrência</span>
+        </header>
+        {% if top_vulnerabilidades %}
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Vulnerabilidade</th>
+                <th>Severidade</th>
+                <th class="align-end">Qtd.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in top_vulnerabilidades %}
+                <tr>
+                  <td>{{ item.title }}</td>
+                  <td><span class="sev-pill sev-{{ item.severity }}">{{ item.severity_display }}</span></td>
+                  <td class="align-end">{{ item.count }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="empty">Nenhum dado consolidado de vulnerabilidades no momento.</p>
+        {% endif %}
+      </article>
 
-      <div class="card chart-card wide">
-        <h4>Vulnerability Trends</h4>
-        <canvas id="trendLine" height="90"></canvas>
-      </div>
+  <article class="card list-card wide-card">
+        <header class="card-header">
+          <h2>Top CVEs expostos</h2>
+          <span class="caption">Volume e média de score</span>
+        </header>
+        {% if top_cves %}
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>CVE</th>
+                <th>Média CVSS</th>
+                <th class="align-end">Qtd.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in top_cves %}
+                <tr>
+                  <td>{{ row.cve }}</td>
+                  <td>{% if row.avg_score %}{{ row.avg_score|floatformat:1 }}{% else %}—{% endif %}</td>
+                  <td class="align-end">{{ row.count }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="empty">Sem CVEs correlacionados até o momento.</p>
+        {% endif %}
+      </article>
     </section>
 
-    <aside class="side-panels">
-      <div class="card">
-        <h4>Top Vulnerabilities</h4>
-        <table class="table-compact" id="topVulns">
-          <thead><tr><th>Vulnerability</th><th>Severity</th><th>Count</th></tr></thead>
-          <tbody>
-            <tr><td>SQL Injection</td><td class="sev high">High</td><td>12</td></tr>
-            <tr><td>Cross-Site Scripting</td><td class="sev medium">Medium</td><td>10</td></tr>
-            <tr><td>Buffer Overflow</td><td class="sev high">High</td><td>8</td></tr>
-            <tr><td>Directory Traversal</td><td class="sev medium">Medium</td><td>7</td></tr>
-            <tr><td>Weak Password</td><td class="sev low">Low</td><td>3</td></tr>
-          </tbody>
-        </table>
-      </div>
+    <aside class="secondary-column">
+      <article class="card list-card">
+        <header class="card-header">
+          <h2>Alertas ativos</h2>
+          <span class="caption">Últimos disparos</span>
+        </header>
+        {% if active_alerts %}
+          <ul class="alert-list">
+            {% for alert in active_alerts %}
+              <li>
+                <div class="alert-head">
+                  <strong>{{ alert.finding_title }}</strong>
+                  <span class="timestamp">{{ alert.last_triggered }}</span>
+                </div>
+                <div class="alert-meta">
+                  <span class="alert-kind">{{ alert.kind }}</span>
+                  <span class="muted">Projeto · {{ alert.project }}</span>
+                </div>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="empty">Nenhum alerta ativo no momento.</p>
+        {% endif %}
+      </article>
 
-      <div class="card">
-        <h4>Recent Scans</h4>
-        <ul class="recent-scans" id="recentScans">
-          <li>Network Scan — 2025-08-30</li>
-          <li>Web App Scan — 2025-08-28</li>
-          <li>Infrastructure Scan — 2025-08-24</li>
-        </ul>
-      </div>
+      <article class="card list-card">
+        <header class="card-header">
+          <h2>Top portas abertas</h2>
+          <span class="caption">Amostra consolidada</span>
+        </header>
+        {% if top_ports %}
+          <ul class="progress-list">
+            {% for item in top_ports %}
+              <li>
+                <div class="progress-head">
+                  <span>{{ item.label }}</span>
+                  <span class="muted">{{ item.count }}</span>
+                </div>
+                <div class="progress-bar"><span style="width: {{ item.percent|floatformat:0 }}%;"></span></div>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="empty">Nenhuma porta mapeada.</p>
+        {% endif %}
+      </article>
 
-      <div class="card">
-        <h4>Project Summary</h4>
-        <ul class="quick-stats">
-          <li>Projects: <strong id="stat-projects">7</strong></li>
-          <li>Active Scans: <strong id="stat-scans">3</strong></li>
-          <li>Open Findings: <strong id="stat-open">31</strong></li>
-        </ul>
-      </div>
+      <article class="card list-card">
+        <header class="card-header">
+          <h2>Serviços vulneráveis</h2>
+        </header>
+        {% if top_services %}
+          <ul class="progress-list">
+            {% for svc in top_services %}
+              <li>
+                <div class="progress-head">
+                  <span>{{ svc.service }}</span>
+                  <span class="muted">{{ svc.count }}</span>
+                </div>
+                <div class="progress-bar"><span style="width: {{ svc.percent|floatformat:0 }}%;"></span></div>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="empty">Sem serviços vulneráveis listados.</p>
+        {% endif %}
+      </article>
+
+      <article class="card list-card">
+        <header class="card-header">
+          <h2>Sistemas operacionais</h2>
+        </header>
+        {% if top_operating_systems %}
+          <ul class="progress-list">
+            {% for item in top_operating_systems %}
+              <li>
+                <div class="progress-head">
+                  <span>{{ item.label }}</span>
+                  <span class="muted">{{ item.count }}</span>
+                </div>
+                <div class="progress-bar"><span style="width: {{ item.percent|floatformat:0 }}%;"></span></div>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="empty">Nenhum sistema operacional identificado.</p>
+        {% endif %}
+      </article>
+
+      <article class="card list-card">
+        <header class="card-header">
+          <h2>Scans recentes</h2>
+        </header>
+        {% if recent_scans %}
+          <ul class="recent-list">
+            {% for scan in recent_scans %}
+              <li>
+                <div class="recent-head">
+                  <strong>{{ scan.title }}</strong>
+                  <span class="muted">{{ scan.status }}</span>
+                </div>
+                <div class="recent-meta">
+                  <span>{{ scan.project }}</span>
+                  <span class="timestamp">{{ scan.started_at }}</span>
+                </div>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="empty">Nenhum scan executado recentemente.</p>
+        {% endif %}
+      </article>
     </aside>
   </div>
 </div>
+
+{{ severity_chart.labels|json_script:"severity-chart-labels" }}
+{{ severity_chart.values|json_script:"severity-chart-values" }}
+
+<script>
+document.addEventListener("DOMContentLoaded", function(){
+  const severityCtx = document.getElementById("severityChart");
+  const severityLabels = JSON.parse(document.getElementById("severity-chart-labels").textContent);
+  const severityValues = JSON.parse(document.getElementById("severity-chart-values").textContent);
+
+  if(severityCtx){
+    new Chart(severityCtx, {
+      type: "doughnut",
+      data: {
+        labels: severityLabels,
+        datasets: [{
+          data: severityValues,
+          backgroundColor: ["#ff6b6b", "#ffb347", "#ffd166", "#64e38a", "#6e7eff", "#9aa0bc"],
+          borderColor: "rgba(14,24,44,0.3)",
+          borderWidth: 1,
+        }],
+      },
+      options: {
+        plugins: {
+          legend: {
+            position: "bottom",
+            labels: {
+              color: "#d5ddf5",
+              boxWidth: 12,
+            },
+          },
+        },
+        cutout: "62%",
+      },
+    });
+  }
+
+});
+</script>
+
+<style>
+.hunt-dashboard{display:flex;flex-direction:column;gap:1.6rem;padding:1.4rem 1.8rem;}
+.dashboard-header h1{margin:0;font-size:1.9rem;color:var(--text);}
+.dashboard-header .muted{margin-top:.4rem;color:var(--muted);font-size:.95rem;}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;}
+.kpi-card{background:rgba(8,21,41,0.88);border-radius:16px;padding:1.2rem 1.4rem;border:1px solid rgba(255,255,255,0.04);box-shadow:0 18px 32px rgba(4,14,28,0.35);display:flex;flex-direction:column;gap:.4rem;}
+.kpi-label{color:var(--muted);font-size:.9rem;text-transform:uppercase;letter-spacing:.08em;}
+.kpi-value{color:var(--text);font-size:1.9rem;line-height:1;font-weight:700;}
+.dashboard-grid{display:grid;grid-template-columns:2.1fr 1fr;gap:1.5rem;align-items:flex-start;}
+.dashboard-grid .card{background:rgba(8,21,41,0.88);border-radius:18px;border:1px solid rgba(255,255,255,0.04);box-shadow:0 18px 40px rgba(4,14,28,0.45);padding:1.4rem;display:flex;flex-direction:column;gap:1.2rem;}
+.primary-column{display:flex;flex-direction:column;gap:1.4rem;}
+.primary-column>.card{width:100%;max-width:100%;}
+.primary-column>.wide-card{max-width:90%;}
+.primary-row{display:flex;gap:1.4rem;flex-wrap:wrap;justify-content:flex-start;}
+.primary-row.triptych{flex-wrap:nowrap;}
+.primary-row.triptych .card{flex:1 1 33%;max-width:33%;}
+.chart-card canvas{width:100%;}
+.card-header{display:flex;align-items:center;justify-content:space-between;gap:1rem;}
+.card-header h2{margin:0;font-size:1.2rem;color:var(--text);}
+.card-header .caption{color:var(--muted);font-size:.85rem;}
+.data-table{width:100%;border-collapse:collapse;font-size:.92rem;}
+.data-table th,.data-table td{padding:.65rem .4rem;border-bottom:1px solid rgba(255,255,255,0.04);text-align:left;color:var(--text);}
+.data-table thead th{color:var(--muted);font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;}
+.data-table tbody tr:last-child td{border-bottom:none;}
+.align-end{text-align:right;}
+.sev-pill{display:inline-flex;align-items:center;justify-content:center;padding:.25rem .6rem;border-radius:999px;font-size:.75rem;font-weight:600;letter-spacing:.05em;color:#0f1c32;background:rgba(255,255,255,0.85);}
+.sev-pill.sev-critical{background:rgba(255,107,107,0.22);color:#ff8080;}
+.sev-pill.sev-high{background:rgba(255,179,71,0.22);color:#ffb347;}
+.sev-pill.sev-medium{background:rgba(255,209,102,0.22);color:#ffd166;}
+.sev-pill.sev-low{background:rgba(100,227,138,0.22);color:#64e38a;}
+.sev-pill.sev-info,.sev-pill.sev-unknown{background:rgba(158,167,191,0.22);color:#aeb4cc;}
+.secondary-column{display:flex;flex-direction:column;gap:1.2rem;}
+.alert-list,.progress-list,.recent-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1rem;}
+.alert-head{display:flex;align-items:center;justify-content:space-between;gap:.75rem;font-size:.95rem;color:var(--text);}
+.alert-meta{display:flex;align-items:center;justify-content:space-between;gap:.75rem;font-size:.82rem;color:var(--muted);}
+.alert-kind{padding:.2rem .6rem;border-radius:12px;background:rgba(118,187,255,0.14);color:#78c6ff;font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;}
+.progress-head{display:flex;align-items:center;justify-content:space-between;color:var(--text);font-size:.9rem;}
+.progress-bar{position:relative;height:8px;border-radius:999px;background:rgba(255,255,255,0.06);overflow:hidden;}
+.progress-bar span{display:block;height:100%;background:linear-gradient(90deg,#76bbff,#64e38a);border-radius:inherit;}
+.recent-list li{display:flex;flex-direction:column;gap:.45rem;padding-bottom:.8rem;border-bottom:1px solid rgba(255,255,255,0.04);}
+.recent-list li:last-child{border-bottom:none;padding-bottom:0;}
+.recent-head{display:flex;align-items:center;justify-content:space-between;color:var(--text);font-size:.95rem;}
+.recent-meta{display:flex;align-items:center;justify-content:space-between;color:var(--muted);font-size:.82rem;}
+.timestamp{color:var(--muted);font-size:.78rem;}
+.empty{margin:0;color:var(--muted);font-size:.9rem;}
+@media (max-width:1200px){
+  .dashboard-grid{grid-template-columns:1fr;}
+  .secondary-column{flex-direction:row;flex-wrap:wrap;}
+  .secondary-column>.card{flex:1 1 280px;}
+  .primary-row.triptych{flex-wrap:wrap;}
+  .primary-row.triptych .card{flex:1 1 48%;max-width:48%;}
+  .primary-column>.wide-card{max-width:100%;}
+}
+@media (max-width:768px){
+  .hunt-dashboard{padding:1rem;}
+  .kpi-grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));}
+  .primary-column{gap:1rem;}
+  .secondary-column{flex-direction:column;}
+  .primary-row.triptych{flex-wrap:wrap;}
+  .primary-row.triptych .card{flex:1 1 100%;max-width:100%;}
+  .primary-column>.wide-card{max-width:100%;}
+}
+</style>
 {% endblock %}
