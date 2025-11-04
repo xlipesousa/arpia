@@ -22,3 +22,4 @@ pytest-django>=4.5
 # Dependências de sistema (instale manualmente quando necessário):
 #   jq .............. sudo apt install -y jq
 #   rustscan ........ sudo apt update && sudo apt install -y cargo && cargo install rustscan
+#   sshpass ......... sudo apt install -y sshpass
