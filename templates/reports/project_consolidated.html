@@ -1,0 +1,550 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Relatório Consolidado — {{ project.name }}{% endblock %}
+
+{% block content %}
+<section class="consolidated-report">
+  <header class="report-heading">
+    <div class="brand">
+      <img src="{% static 'img/logo.png' %}" alt="Logotipo ARPIA" class="brand-logo"/>
+      <div>
+        <h1>Relatório Consolidado</h1>
+        <p class="muted">Projeto {{ project.name }}{% if project.client_name %} · Cliente {{ project.client_name }}{% endif %}</p>
+        <p class="muted">Gerado em {{ generated_at|date:"d/m/Y H:i" }}</p>
+      </div>
+    </div>
+    <div class="report-actions no-print">
+  <a href="{% url 'arpia_report:report_home' %}" class="btn-secondary">Voltar para relatórios</a>
+      <button type="button" class="btn-primary" onclick="window.print()">Exportar PDF</button>
+    </div>
+  </header>
+
+  <section class="project-summary">
+    <article class="summary-card">
+      <h2>Visão geral do projeto</h2>
+      <dl class="summary-grid">
+        <div>
+          <dt>Cliente</dt>
+          <dd>{{ project.client_name|default:"Não informado" }}</dd>
+        </div>
+        <div>
+          <dt>Responsável</dt>
+          <dd>{{ project.owner_display|default:project.owner }}</dd>
+        </div>
+        <div>
+          <dt>Status</dt>
+          <dd><span class="status-pill status-{{ project.status|default:'draft' }}">{{ project.get_status_display|default:project.status|title }}</span></dd>
+        </div>
+        <div>
+          <dt>Início previsto</dt>
+          <dd>{% if project.start_at %}{{ project.start_at|date:"d/m/Y H:i" }}{% else %}<span class="muted">—</span>{% endif %}</dd>
+        </div>
+        <div>
+          <dt>Término previsto</dt>
+          <dd>{% if project.end_at %}{{ project.end_at|date:"d/m/Y H:i" }}{% else %}<span class="muted">—</span>{% endif %}</dd>
+        </div>
+        <div>
+          <dt>Gerado</dt>
+          <dd>{{ generated_at|date:"d/m/Y H:i" }}</dd>
+        </div>
+      </dl>
+      {% if memberships %}
+      <div class="team-block">
+        <h3>Equipe envolvida</h3>
+        <ul>
+          <li>{{ project.owner_display }} <span class="muted">(Owner)</span></li>
+          {% for membership in memberships %}
+            {% if membership.user != project.owner %}
+              <li>{{ membership.user.get_full_name|default:membership.user.get_username }} <span class="muted">({{ membership.get_role_display }})</span></li>
+            {% endif %}
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+    </article>
+
+    <article class="summary-card">
+      <h2>Resumo dos módulos</h2>
+      <div class="module-grid">
+        <div class="module-chip">
+          <span class="module-label">Scan</span>
+          <span class="module-value">{{ findings_totals.scan|default:0 }}</span>
+        </div>
+        <div class="module-chip">
+          <span class="module-label">Vulnerabilidades</span>
+          <span class="module-value">{{ findings_totals.vuln|default:0 }}</span>
+        </div>
+        <div class="module-chip">
+          <span class="module-label">Hunt</span>
+          <span class="module-value">{{ findings_totals.hunt|default:0 }}</span>
+        </div>
+        <div class="module-chip disabled">
+          <span class="module-label">Pentest</span>
+          <span class="muted">Não incluído nesta entrega</span>
+        </div>
+      </div>
+      {% if project_report.summary %}
+      <p class="project-summary-text">{{ project_report.summary }}</p>
+      {% endif %}
+    </article>
+  </section>
+
+  <section class="scope-section">
+    <header>
+      <h2>Escopo e restrições</h2>
+      <p class="muted">Dados consolidados das macros de projeto e dos ativos monitorados.</p>
+    </header>
+    <div class="scope-grid">
+      <article class="scope-card">
+        <h3>Alvos declarados</h3>
+        {% if macro_hosts %}
+          <ul class="token-list">
+            {% for host in macro_hosts %}<li>{{ host }}</li>{% endfor %}
+          </ul>
+        {% else %}
+          <p class="empty">Nenhum host cadastrado.</p>
+        {% endif %}
+        {% if macro_networks %}
+        <h4>Redes</h4>
+        <ul class="token-list">
+          {% for network in macro_networks %}<li>{{ network }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+      </article>
+      <article class="scope-card">
+        <h3>Portas monitoradas</h3>
+        {% if macro_ports %}
+          <ul class="token-list">
+            {% for port in macro_ports %}<li>{{ port }}</li>{% endfor %}
+          </ul>
+        {% else %}
+          <p class="empty">Portas não definidas.</p>
+        {% endif %}
+        {% if protected_hosts %}
+        <h4>Restrições</h4>
+        <ul class="token-list">
+          {% for host in protected_hosts %}<li>{{ host }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+      </article>
+      <article class="scope-card">
+        <h3>Credenciais operacionais</h3>
+        {% if credential_table %}
+          <table class="credential-table">
+            <thead>
+              <tr>
+                <th>Usuário</th>
+                <th>Senha</th>
+                <th>Observações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for cred in credential_table %}
+              <tr>
+                <td>{{ cred.username|default:"—" }}</td>
+                <td>{{ cred.password|default:"—" }}</td>
+                <td>{{ cred.context|default:"" }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="empty">Nenhuma credencial armazenada.</p>
+        {% endif %}
+      </article>
+    </div>
+  </section>
+
+  <section class="assets-section">
+    <header>
+      <h2>Ativos consolidados</h2>
+      <p class="muted">Panorama dos principais ativos identificados durante as atividades.</p>
+    </header>
+    {% if assets %}
+      <table class="assets-table">
+        <thead>
+          <tr>
+            <th>Identificador</th>
+            <th>Nome</th>
+            <th>Hostnames</th>
+            <th>IPs</th>
+            <th>Categoria</th>
+            <th>Última observação</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for asset in assets|slice:":15" %}
+          <tr>
+            <td>{{ asset.identifier }}</td>
+            <td>{{ asset.name|default:"—" }}</td>
+            <td>{% if asset.hostnames %}{{ asset.hostnames|join:", " }}{% else %}<span class="muted">—</span>{% endif %}</td>
+            <td>{% if asset.ips %}{{ asset.ips|join:", " }}{% else %}<span class="muted">—</span>{% endif %}</td>
+            <td>{{ asset.category|default:"—" }}</td>
+            <td>{% if asset.last_seen %}{{ asset.last_seen|date:"d/m/Y H:i" }}{% else %}{{ asset.created|date:"d/m/Y H:i" }}{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if assets|length > 15 %}
+        <p class="muted">Listando 15 de {{ assets|length }} ativos.</p>
+      {% endif %}
+    {% else %}
+      <p class="empty">Nenhum ativo consolidado para este projeto.</p>
+    {% endif %}
+  </section>
+
+  <section class="scan-section">
+    <header>
+      <h2>Atividades de scan</h2>
+      <p class="muted">Resumo da última execução registrada.</p>
+    </header>
+    {% if scan_item %}
+    <div class="scan-grid">
+      <article class="scan-card">
+        <h3>Resumo operacional</h3>
+        <dl class="summary-grid two-columns">
+          <div>
+            <dt>Sessão</dt>
+            <dd>{{ scan_item.title }}</dd>
+          </div>
+          <div>
+            <dt>Status</dt>
+            <dd><span class="status-pill status-{{ scan_metadata.status|default:'pending' }}">{{ scan_metadata.status|default:'pending'|title }}</span></dd>
+          </div>
+          <div>
+            <dt>Início</dt>
+            <dd>{% if scan_metadata.started_at %}{{ scan_metadata.started_at|date:"d/m/Y H:i" }}{% else %}<span class="muted">—</span>{% endif %}</dd>
+          </div>
+          <div>
+            <dt>Término</dt>
+            <dd>{% if scan_metadata.finished_at %}{{ scan_metadata.finished_at|date:"d/m/Y H:i" }}{% else %}<span class="muted">—</span>{% endif %}</dd>
+          </div>
+          <div>
+            <dt>Duração</dt>
+            <dd>{% if scan_timing.duration_seconds %}{{ scan_timing.duration_seconds|floatformat:1 }} s{% else %}<span class="muted">—</span>{% endif %}</dd>
+          </div>
+          <div>
+            <dt>Hosts analisados</dt>
+            <dd>{{ scan_hosts|length }}</dd>
+          </div>
+        </dl>
+        {% if scan_stats %}
+        <div class="metric-row">
+          <div><span class="metric-value">{{ scan_stats.total_tasks|default:0 }}</span><span class="metric-label">Tarefas</span></div>
+          <div><span class="metric-value">{{ scan_stats.completed_tasks|default:0 }}</span><span class="metric-label">Concluídas</span></div>
+          <div><span class="metric-value">{{ scan_stats.failed_tasks|default:0 }}</span><span class="metric-label">Falhas</span></div>
+          <div><span class="metric-value">{{ scan_stats.total_findings|default:0 }}</span><span class="metric-label">Achados</span></div>
+        </div>
+        {% endif %}
+        {% if scan_highlights %}
+        <ul class="highlight-list">
+          {% for highlight in scan_highlights|slice:":4" %}
+            <li>{{ highlight.message|default:highlight }}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </article>
+      <article class="scan-card">
+        <h3>Principais hosts</h3>
+        {% if scan_hosts %}
+        <ul class="token-list">
+          {% for host in scan_hosts|slice:":10" %}<li>{{ host }}</li>{% endfor %}
+        </ul>
+        {% else %}
+          <p class="empty">Sem registros de hosts para esta execução.</p>
+        {% endif %}
+        {% if scan_services.items %}
+        <h4>Serviços destacados</h4>
+        <ul class="token-list">
+          {% for service in scan_services.items|slice:":6" %}
+            <li>{{ service.service|default:"desconhecido"|title }} — {{ service.occurrences|length|default:0 }} ocorrência(s)</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </article>
+    </div>
+    {% if scan_findings %}
+    <div class="scan-findings">
+      <h3>Achados relevantes</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Título</th>
+            <th>Severidade</th>
+            <th>Host</th>
+            <th>Resumo</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for finding in scan_findings|slice:":8" %}
+          <tr>
+            <td>{{ finding.title|default:"—" }}</td>
+            <td>{{ finding.severity|default:"info"|upper }}</td>
+            <td>{{ finding.host|default:"—" }}</td>
+            <td>{{ finding.summary|default:"Sem descrição" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+    {% if scan_timeline %}
+    <div class="scan-timeline">
+      <h3>Linha do tempo</h3>
+      <ol>
+        {% for entry in scan_timeline %}
+        <li>
+          <div>
+            <strong>{{ entry.label|default:"Etapa" }}</strong>
+            <span class="muted">{{ entry.started_at|default:"—" }} → {{ entry.finished_at|default:"—" }}</span>
+          </div>
+          {% if entry.notes %}<p>{{ entry.notes }}</p>{% endif %}
+        </li>
+        {% endfor %}
+      </ol>
+    </div>
+    {% endif %}
+    {% if scan_attachments %}
+    <div class="scan-artifacts">
+      <h3>Artefatos anexos</h3>
+      <ul class="token-list">
+        {% for artifact in scan_attachments %}
+          {% if artifact.path %}
+            <li>{{ artifact.path }}{% if artifact.source %} <span class="muted">({{ artifact.source }})</span>{% endif %}</li>
+          {% endif %}
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+    {% else %}
+      <p class="empty">Nenhum relatório de scan consolidado.</p>
+    {% endif %}
+  </section>
+
+  <section class="vuln-section">
+    <header>
+      <h2>Vulnerabilidades</h2>
+      <p class="muted">Consolidado das últimas ingestões e correlações.</p>
+    </header>
+    {% if vuln_items %}
+    <div class="vuln-grid">
+      <article class="vuln-card">
+        <h3>Distribuição por severidade</h3>
+        {% if vuln_severity %}
+        <ul class="token-list">
+          {% for severity, count in vuln_severity.items %}
+            <li><strong>{{ severity|upper }}</strong> — {{ count }} registro(s)</li>
+          {% endfor %}
+        </ul>
+        {% else %}
+          <p class="empty">Sem distribuição registrada.</p>
+        {% endif %}
+        {% if vuln_cves %}
+        <h4>CVEs referenciadas</h4>
+        <ul class="token-list">
+          {% for cve in vuln_cves|slice:":12" %}<li>{{ cve }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+      </article>
+      <article class="vuln-card">
+        <h3>Resumo textual</h3>
+        <ul class="vuln-summary-list">
+          {% for item in vuln_items|slice:":3" %}
+            <li>
+              <strong>{{ item.title }}</strong>
+              <p class="muted">{{ item.summary|default:"Sem descrição." }}</p>
+            </li>
+          {% endfor %}
+        </ul>
+      </article>
+    </div>
+    {% if vuln_findings %}
+    <div class="vuln-table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Título</th>
+            <th>Severidade</th>
+            <th>Status</th>
+            <th>Host</th>
+            <th>CVEs</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for finding in vuln_findings|slice:":12" %}
+          <tr>
+            <td>{{ finding.title|default:"—" }}</td>
+            <td>{{ finding.severity|default:"—"|upper }}</td>
+            <td>{{ finding.status|default:"—"|title }}</td>
+            <td>{{ finding.host|default:"—" }}</td>
+            <td>
+              {% if finding.cves %}
+                {{ finding.cves|join:", " }}
+              {% elif finding.cve %}
+                {{ finding.cve }}
+              {% else %}
+                <span class="muted">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+    {% else %}
+      <p class="empty">Nenhum dado de vulnerabilidade consolidado.</p>
+    {% endif %}
+  </section>
+
+  <section class="hunt-section">
+    <header>
+      <h2>Threat Hunt & inteligência</h2>
+      <p class="muted">Evidências, indicadores e notas coletadas durante as atividades ofensivas.</p>
+    </header>
+    {% if hunt_items %}
+    <div class="hunt-grid">
+      <article class="hunt-card">
+        <h3>Indicadores</h3>
+        {% if hunt_indicators %}
+        <table>
+          <thead>
+            <tr>
+              <th>Indicador</th>
+              <th>Tipo</th>
+              <th>Fonte</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for indicator in hunt_indicators|slice:":12" %}
+            <tr>
+              <td>{{ indicator.value|default:indicator.indicator|default:"—" }}</td>
+              <td>{{ indicator.kind|default:indicator.type|default:"—" }}</td>
+              <td>{{ indicator.source|default:"—" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+          <p class="empty">Sem indicadores coletados.</p>
+        {% endif %}
+      </article>
+      <article class="hunt-card">
+        <h3>Notas de inteligência</h3>
+        {% if hunt_notes %}
+        <ul class="hunt-notes">
+          {% for note in hunt_notes %}
+            <li>{{ note }}</li>
+          {% endfor %}
+        </ul>
+        {% else %}
+          <p class="empty">Nenhuma nota registrada.</p>
+        {% endif %}
+      </article>
+    </div>
+    {% if hunt_artifacts %}
+    <div class="hunt-artifacts">
+      <h3>Artefatos anexos</h3>
+      <ul class="token-list">
+        {% for artifact in hunt_artifacts %}
+          {% if artifact.path %}
+            <li>{{ artifact.path }}{% if artifact.source %} <span class="muted">({{ artifact.source }})</span>{% endif %}</li>
+          {% endif %}
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+    {% else %}
+      <p class="empty">Nenhuma atividade de threat hunt documentada.</p>
+    {% endif %}
+  </section>
+
+  <footer class="report-footer">
+    <p>Relatório gerado automaticamente pela plataforma ARPIA. Utilize o botão "Exportar PDF" para compartilhar com o cliente.</p>
+    <p class="muted">Versão inicial sem módulo de pentest — próxima iteração integrará os achados de pentest.</p>
+  </footer>
+</section>
+
+<style>
+.consolidated-report{display:flex;flex-direction:column;gap:2rem;margin-bottom:3rem;}
+.report-heading{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:1.5rem;padding:1.5rem 1.3rem;border:1px solid rgba(255,255,255,0.08);border-radius:18px;background:rgba(5,18,36,0.85);box-shadow:0 20px 42px rgba(5,16,32,0.35);}
+.brand{display:flex;align-items:center;gap:1.2rem;}
+.brand-logo{width:88px;height:auto;filter:drop-shadow(0 8px 18px rgba(0,0,0,0.35));}
+.report-actions{display:flex;gap:.8rem;}
+.btn-primary,.btn-secondary{display:inline-flex;align-items:center;justify-content:center;padding:.65rem 1.2rem;border-radius:999px;font-weight:600;font-size:.9rem;text-decoration:none;border:1px solid transparent;cursor:pointer;}
+.btn-primary{background:rgba(118,221,174,0.22);border-color:rgba(118,221,174,0.32);color:#d8f6e9;}
+.btn-primary:hover{background:rgba(118,221,174,0.3);}
+.btn-secondary{background:rgba(76,148,255,0.18);border-color:rgba(76,148,255,0.32);color:#8bc5ff;}
+.btn-secondary:hover{background:rgba(76,148,255,0.26);}
+.status-pill{display:inline-flex;align-items:center;justify-content:center;padding:.35rem .9rem;border-radius:999px;font-weight:600;font-size:.85rem;background:rgba(255,255,255,0.1);}
+.status-active{background:rgba(118,221,174,0.25);}
+.status-draft{background:rgba(255,214,165,0.25);}
+.status-completed{background:rgba(118,221,174,0.35);}
+.status-paused{background:rgba(255,214,165,0.2);}
+.status-archived{background:rgba(160,160,160,0.25);}
+
+.project-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1.4rem;}
+.summary-card{background:rgba(8,23,43,0.82);border:1px solid rgba(255,255,255,0.05);border-radius:16px;padding:1.4rem;box-shadow:0 16px 34px rgba(5,16,32,0.28);display:flex;flex-direction:column;gap:1rem;}
+.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:0;}
+.summary-grid.two-columns{grid-template-columns:repeat(auto-fit,minmax(180px,1fr));}
+.summary-grid dt{font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.25rem;}
+.summary-grid dd{margin:0;font-weight:600;color:var(--text);}
+.team-block ul{margin:0;padding-left:1.1rem;display:flex;flex-direction:column;gap:.4rem;}
+.module-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;}
+.module-chip{background:rgba(255,255,255,0.04);border-radius:14px;padding:1rem 1.1rem;border:1px solid rgba(255,255,255,0.05);display:flex;flex-direction:column;gap:.3rem;}
+.module-chip.disabled{opacity:.6;align-items:flex-start;}
+.module-label{font-size:.85rem;color:var(--muted);}
+.module-value{font-size:1.8rem;font-weight:700;color:#8bc5ff;}
+.project-summary-text{margin:0;color:var(--muted);}
+
+.scope-section, .assets-section, .scan-section, .vuln-section, .hunt-section{display:flex;flex-direction:column;gap:1.2rem;background:rgba(8,23,43,0.78);border:1px solid rgba(255,255,255,0.05);border-radius:18px;padding:1.6rem;box-shadow:0 18px 40px rgba(5,16,32,0.3);}
+.scope-section header h2, .assets-section header h2, .scan-section header h2, .vuln-section header h2, .hunt-section header h2{margin:0;}
+.scope-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;}
+.scope-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);border-radius:14px;padding:1.2rem;display:flex;flex-direction:column;gap:.8rem;}
+.scope-card h4{margin:.4rem 0 0;font-size:.95rem;color:var(--muted);}
+.token-list{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:.5rem;}
+.token-list li{padding:.35rem .75rem;border-radius:999px;background:rgba(76,148,255,0.18);border:1px solid rgba(76,148,255,0.26);font-size:.85rem;}
+.empty{color:var(--muted);font-style:italic;}
+.credential-table{width:100%;border-collapse:collapse;font-size:.85rem;}
+.credential-table th,.credential-table td{border-bottom:1px solid rgba(255,255,255,0.08);padding:.45rem .6rem;text-align:left;}
+
+.assets-table{width:100%;border-collapse:collapse;font-size:.85rem;background:rgba(255,255,255,0.02);border-radius:12px;overflow:hidden;}
+.assets-table th,.assets-table td{padding:.6rem .75rem;border-bottom:1px solid rgba(255,255,255,0.06);text-align:left;}
+.assets-table th{font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
+
+.scan-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.2rem;}
+.scan-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);border-radius:14px;padding:1.2rem;display:flex;flex-direction:column;gap:1rem;}
+.metric-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.8rem;}
+.metric-row div{background:rgba(0,0,0,0.25);padding:.8rem;border-radius:12px;display:flex;flex-direction:column;gap:.3rem;border:1px solid rgba(255,255,255,0.05);}
+.metric-value{font-size:1.4rem;font-weight:700;color:#8bc5ff;}
+.metric-label{font-size:.75rem;color:var(--muted);}
+.highlight-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.6rem;}
+.highlight-list li{padding:.55rem .75rem;border-radius:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);}
+.scan-findings table,.vuln-table-wrapper table,.hunt-card table{width:100%;border-collapse:collapse;font-size:.9rem;background:rgba(255,255,255,0.02);border-radius:12px;overflow:hidden;}
+.scan-findings th,.scan-findings td,.vuln-table-wrapper th,.vuln-table-wrapper td,.hunt-card th,.hunt-card td{padding:.6rem .75rem;border-bottom:1px solid rgba(255,255,255,0.06);text-align:left;}
+.scan-timeline ol{margin:0;padding-left:1.2rem;display:flex;flex-direction:column;gap:.8rem;}
+.scan-timeline li{display:flex;flex-direction:column;gap:.3rem;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);border-radius:12px;padding:.8rem 1rem;}
+
+.vuln-grid,.hunt-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.2rem;}
+.vuln-card,.hunt-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);border-radius:14px;padding:1.2rem;display:flex;flex-direction:column;gap:.8rem;}
+.vuln-summary-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.7rem;}
+.vuln-summary-list li{background:rgba(255,255,255,0.03);border-radius:12px;padding:.7rem 1rem;border:1px solid rgba(255,255,255,0.05);}
+.hunt-notes{list-style:disc;margin:0;padding-left:1.6rem;display:flex;flex-direction:column;gap:.6rem;}
+
+.report-footer{padding:1.5rem;border:1px solid rgba(255,255,255,0.08);border-radius:18px;background:rgba(5,18,36,0.85);box-shadow:0 12px 28px rgba(5,16,32,0.35);text-align:center;line-height:1.6;}
+.report-footer p{margin:.5rem 0;}
+
+@media print{
+  body{background:#fff;color:#000;}
+  .no-print{display:none !important;}
+  .consolidated-report{box-shadow:none;gap:1.5rem;}
+  .report-heading,.summary-card,.scope-section,.assets-section,.scan-section,.vuln-section,.hunt-section,.report-footer{background:#fff !important;color:#000;border-color:#ccc;box-shadow:none;}
+  .summary-grid dd,.module-chip,.token-list li,.scope-card,.scan-card,.vuln-card,.hunt-card,.scan-findings table,.vuln-table-wrapper table,.hunt-card table, .assets-table{border-color:#ccc !important;color:#000;}
+  .module-chip{background:#f6f7f9;border-color:#d9d9d9;}
+  .token-list li{background:#f0f4ff;border-color:#d0dcff;color:#000;}
+  .highlight-list li{background:#f7f9fb;border-color:#d6e0ee;color:#000;}
+  .scan-timeline li{background:#f7f7f7;border-color:#d9d9d9;color:#000;}
+  .status-pill{background:#2d3648;color:#fff;}
+}
+</style>
+{% endblock %}

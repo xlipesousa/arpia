@@ -7,6 +7,8 @@ prometheus-client>=0.16
 python-gvm>=23.0.0
 graphene-django>=3.0
 pyattck>=7.1
+reportlab>=3.6
+gunicorn>=21.2
 
 # Imagens, static serving and template helpers
 Pillow>=10.0

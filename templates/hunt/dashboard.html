@@ -7,6 +7,15 @@
     <h1>Módulo Hunt</h1>
     <p class="page-subtitle">Fase atual: {{ phase }} · Snapshot base: {{ snapshot_label }}</p>
   </div>
+  <div class="heading-actions">
+    {% if request.GET.project %}
+      <a href="{% url 'arpia_hunt:dashboard' %}?project={{ request.GET.project }}&amp;format=json" class="btn-secondary" target="_blank" rel="noopener noreferrer">Exportar JSON</a>
+      <a href="{% url 'arpia_hunt:dashboard' %}?project={{ request.GET.project }}&amp;format=pdf" class="btn-secondary" target="_blank" rel="noopener noreferrer">Exportar PDF</a>
+    {% else %}
+      <a href="{% url 'arpia_hunt:dashboard' %}?format=json" class="btn-secondary" target="_blank" rel="noopener noreferrer">Exportar JSON</a>
+      <a href="{% url 'arpia_hunt:dashboard' %}?format=pdf" class="btn-secondary" target="_blank" rel="noopener noreferrer">Exportar PDF</a>
+    {% endif %}
+  </div>
 </section>
 
 <section class="panel alert-panel" data-tab-group="hunt-profiles">
@@ -422,6 +431,7 @@ document.addEventListener("DOMContentLoaded",function(){const group=document.que
 <style>
 .page-heading{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.6rem;gap:1rem;}
 .page-heading h1{margin:0;font-size:1.9rem;color:var(--text);}
+.heading-actions{display:flex;align-items:center;gap:.6rem;}
 .page-subtitle{margin:.25rem 0 0;font-size:.95rem;color:var(--muted);}
 .alert-panel{margin-bottom:1.8rem;}
 .alert-header{align-items:center;}
@@ -530,6 +540,8 @@ document.addEventListener("DOMContentLoaded",function(){const group=document.que
 .log-feed .severity-debug{background:rgba(255,255,255,0.08);color:#f0f6ff;}
 @media (max-width:960px){
   .page-heading{flex-direction:column;align-items:flex-start;}
+  .heading-actions{width:100%;}
+  .heading-actions .btn-secondary{width:100%;justify-content:center;}
 }
 </style>
 {% endblock %}

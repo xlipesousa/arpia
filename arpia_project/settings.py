@@ -50,7 +50,8 @@ SECRET_KEY = os.getenv("SECRET_KEY", "arpia-dev-placeholder-secret")
 DEBUG = os.getenv("DEBUG", "True").lower() in ("1", "true", "yes")
 TESTING = any(arg == "test" for arg in sys.argv)
 
-ALLOWED_HOSTS = [h.strip() for h in os.getenv("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",") if h.strip()]
+ALLOWED_HOSTS = _env_list("ALLOWED_HOSTS", "127.0.0.1,localhost")
+CSRF_TRUSTED_ORIGINS = _env_list("CSRF_TRUSTED_ORIGINS")
 
 
 # Application definition
@@ -81,6 +82,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -177,8 +179,7 @@ STATICFILES_DIRS = [
     BASE_DIR / "static",
 ]
 
-# (Opcional) storage para produção; pode manter o padrão durante desenvolvimento
-# STATICFILES_STORAGE = "django.contrib.staticfiles.storage.StaticFilesStorage"
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 
 # Default primary key field type

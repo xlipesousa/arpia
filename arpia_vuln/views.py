@@ -570,9 +570,12 @@ def _build_dashboard_links(project: Project | None) -> dict:
 	if project:
 		params["project"] = str(project.pk)
 	query = f"?{urlencode(params)}" if params else ""
+	report_url = reverse("arpia_report:report_home") + query
+	if project:
+		report_url = reverse("arpia_report:project_consolidated", args=[project.pk])
 	return {
 		"scan_dashboard": reverse("arpia_scan:dashboard") + query,
-		"report_home": reverse("arpia_report:report_home") + query,
+		"report_home": report_url,
 		"vuln_dashboard": reverse("arpia_vuln:dashboard") + query,
 	}
 

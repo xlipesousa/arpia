@@ -35,11 +35,89 @@
         <span class="muted">ID {{ project.pk }}</span>
       </div>
       <div class="header-actions">
+        {% if consolidated_report_url %}
+        <a href="{{ consolidated_report_url }}" class="btn-primary">Abrir relatório consolidado</a>
+        {% endif %}
         <a href="{% url 'arpia_report:api_project_report' project.id %}" class="btn-secondary" target="_blank" rel="noopener noreferrer">Exportar JSON</a>
       </div>
     {% endif %}
   </div>
 </section>
+
+{% if not project and not session %}
+<section class="project-listing">
+  <div class="listing-header">
+    <div class="listing-title">
+      <h2>Relatórios consolidados disponíveis</h2>
+      <span class="badge listing-count">{{ project_reports_total }} projeto(s)</span>
+    </div>
+    <p class="muted">Selecione um projeto para abrir o consolidado com dados de scan, vulnerabilidades, hunt e pentest.</p>
+  </div>
+  {% if project_reports_listing %}
+    <div class="project-grid">
+      {% for entry in project_reports_listing %}
+      <article class="card project-card">
+        <header>
+          <div class="project-heading">
+            <h3>{{ entry.project.name }}</h3>
+            <p class="muted">Atualizado {% if entry.generated_at %}{{ entry.generated_at|date:"d/m/Y H:i" }}{% else %}sem registro recente{% endif %}</p>
+          </div>
+          <a href="{{ entry.consolidated_url }}" class="btn-primary">Abrir relatório</a>
+        </header>
+        <dl class="project-meta">
+          <div>
+            <dt>Status do scan</dt>
+            <dd>
+              {% if entry.scan_status_label %}
+                {{ entry.scan_status_label }}
+              {% else %}
+                <span class="muted">Sem execuções recentes</span>
+              {% endif %}
+            </dd>
+          </div>
+          <div>
+            <dt>Achados do scan</dt>
+            <dd>{{ entry.scan_findings_total|default:0 }}</dd>
+          </div>
+          <div>
+            <dt>Vulns consolidadas</dt>
+            <dd>{{ entry.vuln_findings_total|default:0 }}</dd>
+          </div>
+          <div>
+            <dt>Indicadores hunt</dt>
+            <dd>{{ entry.hunt_indicators_total|default:0 }}</dd>
+          </div>
+        </dl>
+        <ul class="totals-list">
+          <li>
+            <strong>{{ entry.findings_totals.scan|default:0 }}</strong>
+            <span class="muted">itens de scan</span>
+          </li>
+          <li>
+            <strong>{{ entry.findings_totals.vuln|default:0 }}</strong>
+            <span class="muted">relatórios de vulnerabilidades</span>
+          </li>
+          <li>
+            <strong>{{ entry.findings_totals.hunt|default:0 }}</strong>
+            <span class="muted">registros de hunt</span>
+          </li>
+          <li>
+            <strong>{{ entry.findings_totals.pentest|default:0 }}</strong>
+            <span class="muted">entradas de pentest</span>
+          </li>
+        </ul>
+      </article>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="card note-card">
+      <h2>Nenhum relatório consolidado disponível</h2>
+      <p>Finalize uma sessão de scan ou ingestão de dados de vulnerabilidades, hunt ou pentest para liberar o relatório consolidado.</p>
+      <a href="{% url 'arpia_scan:dashboard' %}" class="btn-primary">Ir para sessões de scan</a>
+    </div>
+  {% endif %}
+</section>
+{% else %}
 
 <section class="report-overview">
   <article class="card final-report-card">
@@ -341,6 +419,8 @@
   </section>
 {% endif %}
 
+{% endif %}
+
 <style>
 .report-header{display:flex;flex-direction:column;gap:1.4rem;margin-bottom:1.8rem;}
 .header-info h1{margin:.2rem 0;font-size:2rem;color:var(--text);}
@@ -354,6 +434,22 @@
 .status-running{background:rgba(123,195,255,0.22);}
 .status-completed{background:rgba(118,221,174,0.25);}
 .status-failed{background:rgba(255,132,132,0.25);}
+.project-listing{display:flex;flex-direction:column;gap:1.6rem;margin-bottom:2rem;}
+.listing-header{display:flex;flex-direction:column;gap:.6rem;}
+.listing-title{display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;}
+.listing-title h2{margin:0;font-size:1.6rem;color:var(--text);}
+.listing-count{background:rgba(118,221,174,0.18);border-color:rgba(118,221,174,0.28);color:#d8f6e9;}
+.listing-header .muted{max-width:720px;}
+.project-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1.4rem;}
+.project-card header{align-items:flex-start;}
+.project-heading h3{margin:0;font-size:1.4rem;color:var(--text);}
+.project-heading .muted{margin:.15rem 0 0 0;}
+.project-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1rem;margin:0 0 1.2rem 0;}
+.project-meta dt{font-size:.72rem;text-transform:uppercase;color:var(--muted);letter-spacing:.08em;margin-bottom:.25rem;}
+.project-meta dd{margin:0;font-weight:600;color:var(--text);}
+.totals-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.8rem;}
+.totals-list li{display:flex;flex-direction:column;gap:.25rem;background:rgba(255,255,255,0.02);padding:.85rem 1rem;border-radius:12px;border:1px solid rgba(255,255,255,0.04);}
+.totals-list strong{font-size:1.3rem;color:#8bc5ff;}
 .header-actions{display:flex;gap:.6rem;}
 .btn-secondary,.btn-primary{display:inline-flex;align-items:center;justify-content:center;padding:.55rem 1.1rem;border-radius:999px;font-weight:600;font-size:.85rem;text-decoration:none;transition:.2s ease;}
 .btn-secondary{background:rgba(76,148,255,0.16);border:1px solid rgba(76,148,255,0.25);color:#8bc5ff;}

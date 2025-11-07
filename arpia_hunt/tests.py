@@ -949,6 +949,136 @@ class HuntDashboardViewTests(TestCase):
         self.assertContains(response, "Abrir detalhe")
 
 
+class HuntDashboardExportTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user("hunter", "hunter@example.com", "hunter")
+        self.project = Project.objects.create(owner=self.user, name="Projeto Hunt", slug="projeto-hunt")
+        self.session = VulnScanSession.objects.create(project=self.project, owner=self.user, title="Sessão Vuln")
+        self.finding = self._create_hunt_finding()
+        enrichment = HuntEnrichment.objects.create(
+            source=HuntEnrichment.Source.NVD,
+            status=HuntEnrichment.Status.FRESH,
+            payload={"sample": True},
+            fetched_at=timezone.now(),
+            expires_at=timezone.now() + timedelta(hours=6),
+        )
+        self.finding.enrichments.add(enrichment)
+        HuntRecommendation.objects.create(
+            finding=self.finding,
+            recommendation_type=HuntRecommendation.Type.BLUE,
+            title="Aplicar mitigação",
+            summary="Atualizar serviço vulnerável.",
+        )
+        HuntSyncLog.objects.create(
+            project=self.project,
+            status=HuntSyncLog.Status.SUCCESS,
+            started_at=timezone.now() - timedelta(minutes=5),
+            finished_at=timezone.now(),
+            duration_ms=3200,
+            total_processed=5,
+            created_count=3,
+            updated_count=1,
+            skipped_count=1,
+        )
+        LogEntry.objects.create(
+            source_app="arpia_hunt",
+            event_type="hunt.sync.completed",
+            severity=LogEntry.Severity.INFO,
+            message="Sincronização concluída",
+            details={"finding_id": str(self.finding.pk)},
+            timestamp=timezone.now(),
+            project_ref=str(self.project.pk),
+        )
+
+    def _create_hunt_finding(self) -> HuntFinding:
+        vuln = VulnerabilityFinding.objects.create(
+            session=self.session,
+            title="Apache HTTPD outdated",
+            summary="Servidor Apache vulnerável à execução remota.",
+            severity=VulnerabilityFinding.Severity.HIGH,
+            status=VulnerabilityFinding.Status.OPEN,
+            host="192.168.1.10",
+            service="http",
+            port=80,
+            protocol="tcp",
+            cve="CVE-2024-9999",
+            cvss_score=Decimal("8.5"),
+        )
+        synchronize_findings()
+        finding = HuntFinding.objects.get(vulnerability=vuln)
+        finding.blue_profile = {"summary": "Mitigações priorizadas."}
+        finding.red_profile = {"summary": "Caminhos ofensivos."}
+        finding.profile_version = 1
+        finding.last_profiled_at = timezone.now()
+        finding.save(update_fields=["blue_profile", "red_profile", "profile_version", "last_profiled_at", "updated_at"])
+        return finding
+
+    def test_export_returns_consolidated_payload(self):
+        self.client.force_login(self.user)
+        response = self.client.get(f"{reverse('arpia_hunt:dashboard')}?format=json")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("application/json", response["Content-Type"])
+        payload = response.json()
+        self.assertIn("metadata", payload)
+        self.assertEqual(payload["metadata"]["total_findings"], 1)
+        self.assertEqual(payload["metadata"]["returned_findings"], 1)
+        self.assertEqual(payload["stats"]["recommendations"][HuntRecommendation.Type.BLUE], 1)
+        self.assertEqual(len(payload["findings"]), 1)
+        finding_payload = payload["findings"][0]
+        self.assertEqual(finding_payload["project"]["id"], str(self.project.pk))
+        self.assertEqual(finding_payload["recommendations"]["total"], 1)
+        self.assertTrue(finding_payload["enrichments"])
+
+    def test_export_can_filter_by_project(self):
+        self.client.force_login(self.user)
+        url = f"{reverse('arpia_hunt:dashboard')}?project={self.project.pk}&format=json"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["metadata"]["project"]["id"], str(self.project.pk))
+        self.assertEqual(payload["metadata"]["total_findings"], 1)
+
+    def test_export_denies_inaccessible_project(self):
+        other_owner = get_user_model().objects.create_user("intruder", "intruder@example.com", "intruder")
+        foreign_project = Project.objects.create(owner=other_owner, name="Outro Projeto", slug="outro-projeto")
+        self.client.force_login(self.user)
+        url = f"{reverse('arpia_hunt:dashboard')}?project={foreign_project.pk}&format=json"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 404)
+
+    def test_export_pdf_returns_document(self):
+        self.client.force_login(self.user)
+        response = self.client.get(f"{reverse('arpia_hunt:dashboard')}?format=pdf")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        disposition = response.get("Content-Disposition", "")
+        self.assertIn("attachment; filename=", disposition)
+        self.assertGreater(len(response.content), 0)
+
+    def test_export_limit_is_respected(self):
+        for index in range(8):
+            vuln = VulnerabilityFinding.objects.create(
+                session=self.session,
+                title=f"Finding {index}",
+                summary="Resumo",
+                severity=VulnerabilityFinding.Severity.MEDIUM,
+                status=VulnerabilityFinding.Status.OPEN,
+                host="10.0.0.%d" % index,
+                service="http",
+                port=8080 + index,
+                protocol="tcp",
+                cve="CVE-2024-%04d" % index,
+            )
+            synchronize_findings()
+        self.client.force_login(self.user)
+        response = self.client.get(f"{reverse('arpia_hunt:dashboard')}?format=json&limit=3")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["metadata"]["returned_findings"], 3)
+        self.assertEqual(payload["metadata"]["limit"], 3)
+        self.assertGreaterEqual(payload["metadata"]["total_findings"], 1)
+
 @override_settings(ARPIA_HUNT_API_BETA=True)
 class HuntRecommendationDetailAPITests(APITestCase):
     def setUp(self):

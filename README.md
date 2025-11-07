@@ -2,6 +2,26 @@
 
 Este repositório contém o sistema ARPIA. Instruções para instalar e iniciar localmente em um ambiente de desenvolvimento.
 
+## Execução fora do modo de desenvolvimento
+
+Para publicar o ARPIA na rede interna expondo via HTTP pelo IP do host, utilize um `.env` específico (por exemplo `.env.production`) com as variáveis:
+
+```
+DEBUG=False
+SECRET_KEY=<gere-um-valor-único>
+ALLOWED_HOSTS=192.168.0.10,127.0.0.1,localhost  # ajuste para o IP/nome do host
+CSRF_TRUSTED_ORIGINS=http://192.168.0.10        # precisa conter o esquema (http:// ou https://)
+```
+
+Passos recomendados:
+- Ative o virtualenv `source .venv/bin/activate`
+- Carregue o arquivo de configuração: `set -a && source .env.production && set +a`
+- Atualize banco e assets: `python manage.py migrate --noinput` e `python manage.py collectstatic --noinput`
+- Faça uma checagem rápida de produção: `python manage.py check --deploy`
+- Suba o serviço escutando em todas as interfaces: `gunicorn --bind 0.0.0.0:8000 arpia_project.wsgi`
+
+Enquanto o serviço estiver rodando, o ARPIA ficará acessível em `http://<IP-do-host>:8000/`.
+
 Pré-requisitos
 - Git
 - Python 3.8+
