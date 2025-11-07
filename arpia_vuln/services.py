@@ -13,7 +13,7 @@ import socket
 import subprocess
 import tempfile
 import textwrap
-import threading
+import multiprocessing
 import time
 from contextlib import suppress
 from dataclasses import dataclass
@@ -1854,7 +1854,7 @@ def run_vulnerability_pipeline_async(
     *,
     triggered_by=None,
     pipeline: Optional[Sequence[Any]] = None,
-) -> threading.Thread:
+) -> multiprocessing.Process:
     if session.pk is None:
         raise ValidationError("Sessão precisa estar persistida antes de iniciar o pipeline.")
 
@@ -1872,15 +1872,15 @@ def run_vulnerability_pipeline_async(
     else:
         pipeline_copy = None
 
-    thread = threading.Thread(
+    process = multiprocessing.Process(
         target=_pipeline_async_worker,
         kwargs={
-            "session_id": session.pk,
+            "session_id": str(session.pk),
             "triggered_by_id": getattr(triggered_by, "pk", None),
             "pipeline": pipeline_copy,
         },
         name=f"vuln-session-{session.pk}",
         daemon=True,
     )
-    thread.start()
-    return thread
+    process.start()
+    return process

@@ -12,21 +12,21 @@
     <span class="label">Status</span>
     <span class="status-pill status-{{ session.status }}" id="session-status-pill">{{ session.get_status_display }}</span>
     <span class="live-indicator{% if session.is_terminal %} hidden{% endif %}" id="live-indicator">Atualizando em tempo real…</span>
-    {% if not session.is_terminal %}
-      {% if session.status != 'running' %}
-        <button class="btn-start" type="button" data-action="start-session" data-start-url="{% url 'arpia_vuln:api_session_start' session.pk %}">Iniciar agora</button>
-        <p id="session-start-feedback" class="start-feedback" hidden></p>
-      {% else %}
-        <p class="start-feedback muted">Sessão em execução.</p>
-        {% if can_cancel_session %}
-          <button class="btn-cancel" type="button" data-action="cancel-session" data-cancel-url="{{ cancel_session_url }}" data-confirm-message="Deseja cancelar a sessão em execução?" data-prompt-reason="1">Cancelar sessão</button>
-          <p id="session-cancel-feedback" class="start-feedback" hidden></p>
-        {% endif %}
+    <div id="session-action-start" class="session-action{% if session.is_terminal or session.status == 'running' %} hidden{% endif %}">
+      <button class="btn-start" type="button" data-action="start-session" data-start-url="{% url 'arpia_vuln:api_session_start' session.pk %}">Iniciar agora</button>
+      <p id="session-start-feedback" class="start-feedback" hidden></p>
+    </div>
+    <div id="session-action-running" class="session-action{% if session.status != 'running' or session.is_terminal %} hidden{% endif %}">
+      <p class="start-feedback muted" id="session-running-indicator">Sessão em execução.</p>
+      {% if can_cancel_session %}
+        <button class="btn-cancel" type="button" data-action="cancel-session" data-cancel-url="{{ cancel_session_url }}" data-confirm-message="Deseja cancelar a sessão em execução?" data-prompt-reason="1">Cancelar sessão</button>
+        <p id="session-cancel-feedback" class="start-feedback" hidden></p>
       {% endif %}
-    {% elif can_retry_greenbone %}
+    </div>
+    <div id="session-action-retry" class="session-action{% if not can_retry_greenbone %} hidden{% endif %}">
       <button class="btn-retry" type="button" data-action="retry-greenbone" data-retry-url="{{ retry_greenbone_url }}">Tentar novamente o Greenbone</button>
       <p id="greenbone-retry-feedback" class="start-feedback" hidden></p>
-    {% endif %}
+    </div>
     {% if report_url %}
       <a href="{{ report_url }}" class="report-link" target="_blank" rel="noopener noreferrer">Ver relatório provisório</a>
     {% endif %}
@@ -260,6 +260,7 @@
 .back-link{text-decoration:none;color:var(--muted);font-size:.9rem;}
 .back-link:hover{color:var(--text);}
 .session-status{display:flex;flex-direction:column;gap:.4rem;align-items:flex-end;}
+.session-status .session-action{display:flex;flex-direction:column;gap:.4rem;align-items:flex-end;width:100%;}
 .session-status .label{font-size:.75rem;text-transform:uppercase;color:var(--muted);letter-spacing:.08em;}
 .status-pill{display:inline-flex;align-items:center;padding:.28rem .75rem;border-radius:999px;font-weight:600;font-size:.85rem;color:var(--text);background:rgba(255,255,255,0.08);}
 .live-indicator{font-size:.82rem;color:#8bc5ff;}
@@ -399,6 +400,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const sessionFinishedAt = document.getElementById("session-finished-at");
   const sessionNotes = document.getElementById("session-notes");
   const sessionLastError = document.getElementById("session-last-error");
+  const startActionContainer = document.getElementById("session-action-start");
+  const runningActionContainer = document.getElementById("session-action-running");
+  const retryActionContainer = document.getElementById("session-action-retry");
+  const runningIndicator = document.getElementById("session-running-indicator");
   const metricsGrid = document.getElementById("metrics-grid");
   const insightsList = document.getElementById("insights-list");
   const insightsEmpty = document.getElementById("insights-empty");
@@ -555,6 +560,83 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     executionTaskLabel.textContent = descriptor;
+  }
+
+  function shouldShowRetry(sessionPayload, tasks = []) {
+    if (!sessionPayload || !Array.isArray(tasks) || !tasks.length) {
+      return false;
+    }
+    const status = sessionPayload.status || "";
+    if (status === "running") {
+      return false;
+    }
+    const hasGreenbone = tasks.some(task => String(task.kind || "").toLowerCase() === "greenbone_scan");
+    if (!hasGreenbone) {
+      return false;
+    }
+    const failedGreenbone = tasks.some(
+      task => String(task.kind || "").toLowerCase() === "greenbone_scan" && task.status === "failed",
+    );
+    const failureRelated =
+      status === "failed" && typeof sessionPayload.last_error === "string"
+        ? sessionPayload.last_error.toLowerCase().includes("greenbone")
+        : false;
+    return failedGreenbone || failureRelated;
+  }
+
+  function updateActionControls(sessionPayload, tasks = []) {
+    const status = sessionPayload?.status || "";
+    const isTerminal = Boolean(sessionPayload?.is_terminal);
+    const showStart = !isTerminal && status !== "running";
+    const showRunning = !isTerminal && status === "running";
+    const showRetry = shouldShowRetry(sessionPayload, tasks);
+
+    if (startActionContainer) {
+      startActionContainer.classList.toggle("hidden", !showStart);
+    }
+    if (runningActionContainer) {
+      runningActionContainer.classList.toggle("hidden", !showRunning);
+    }
+    if (retryActionContainer) {
+      retryActionContainer.classList.toggle("hidden", !showRetry);
+    }
+
+    const startBtn = startActionContainer?.querySelector('[data-action="start-session"]');
+    const startFeedback = document.getElementById("session-start-feedback");
+    if (startBtn && !showStart) {
+      startBtn.disabled = false;
+      startBtn.textContent = "Iniciar agora";
+    }
+    if (startFeedback) {
+      const hasMessage = Boolean(startFeedback.textContent && startFeedback.textContent.trim());
+      startFeedback.hidden = !showStart || !hasMessage;
+    }
+
+    const cancelBtn = runningActionContainer?.querySelector('[data-action="cancel-session"]') || document.querySelector('[data-action="cancel-session"]');
+    const cancelFeedback = document.getElementById("session-cancel-feedback");
+    if (cancelBtn && !showRunning) {
+      cancelBtn.disabled = false;
+      cancelBtn.textContent = "Cancelar sessão";
+    }
+    if (cancelFeedback) {
+      const hasMessage = Boolean(cancelFeedback.textContent && cancelFeedback.textContent.trim());
+      cancelFeedback.hidden = !showRunning || !hasMessage;
+    }
+    if (runningIndicator) {
+      runningIndicator.textContent = showRunning ? "Sessão em execução." : "";
+      runningIndicator.classList.toggle("hidden", !showRunning);
+    }
+
+    const retryBtn = retryActionContainer?.querySelector('[data-action="retry-greenbone"]');
+    const retryFeedback = document.getElementById("greenbone-retry-feedback");
+    if (retryBtn && !showRetry) {
+      retryBtn.disabled = false;
+      retryBtn.textContent = "Tentar novamente o Greenbone";
+    }
+    if (retryFeedback) {
+      const hasMessage = Boolean(retryFeedback.textContent && retryFeedback.textContent.trim());
+      retryFeedback.hidden = !showRetry || !hasMessage;
+    }
   }
 
   function resetConsole() {
@@ -753,6 +835,10 @@ document.addEventListener("DOMContentLoaded", () => {
     renderMetrics(state.overview_metrics || [], state.report_insights || []);
     renderTasks(state.tasks || []);
     renderFindings(state.findings || []);
+    updateActionControls(state.session, state.tasks || []);
+    if (root && state.session && state.session.status) {
+      root.dataset.status = state.session.status;
+    }
   }
 
   function showToast({ title, message, tone = "info", timeout = 5000 }) {
