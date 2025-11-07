@@ -369,10 +369,22 @@ def _serialize_finding_for_live(finding: VulnerabilityFinding) -> dict:
 		cvss_value = float(finding.cvss_score) if finding.cvss_score is not None else None
 	except (TypeError, ValueError):
 		cvss_value = None
+	calculated_summary = finding.summary or data.get("summary_hint") or ""
+	summary_info = _prepare_dashboard_summary(calculated_summary)
+	top_cves = data.get("top_cves") if isinstance(data.get("top_cves"), list) else []
+	cvss_samples = data.get("cvss_samples") if isinstance(data.get("cvss_samples"), list) else []
+	raw_output = data.get("raw_output") if isinstance(data.get("raw_output"), str) else ""
+	source_kind = data.get("source_kind") or data.get("source") or ""
+	scanner = data.get("scanner") or ""
+	file_path = data.get("file_path") or ""
 	return {
 		"id": str(finding.pk),
 		"title": finding.title,
 		"summary": finding.summary or "",
+		"summary_preview": summary_info["preview"],
+		"summary_full": summary_info["full"],
+		"summary_collapsible": summary_info["collapsible"],
+		"summary_hint": data.get("summary_hint") or "",
 		"severity": finding.severity,
 		"severity_display": finding.get_severity_display(),
 		"status": finding.status,
@@ -395,6 +407,12 @@ def _serialize_finding_for_live(finding: VulnerabilityFinding) -> dict:
 			"status_display": finding.source_task.get_status_display() if finding.source_task else "",
 		},
 		"references": data.get("references") if isinstance(data.get("references"), list) else [],
+		"top_cves": top_cves,
+		"cvss_samples": cvss_samples,
+		"raw_output": raw_output,
+		"source_label": source_kind,
+		"scanner": scanner,
+		"artifact_path": file_path,
 		"data": data,
 	}
 

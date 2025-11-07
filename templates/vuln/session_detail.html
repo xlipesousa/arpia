@@ -205,13 +205,50 @@
             {% if finding.cvss_display %}<span class="badge score">CVSS {{ finding.cvss_display }}</span>{% endif %}
           </div>
           <h3>{{ finding.title }}</h3>
-          <p class="muted">{{ finding.summary|default:"Sem descrição adicional." }}</p>
+          <div class="finding-summary">
+            {% if finding.summary_preview %}
+              <div class="summary-preview">{{ finding.summary_preview|linebreaksbr }}</div>
+              {% if finding.summary_collapsible %}
+                <details class="summary-details">
+                  <summary>Ver resumo completo</summary>
+                  <pre>{{ finding.summary_full }}</pre>
+                </details>
+              {% endif %}
+            {% else %}
+              <p class="muted">Sem descrição adicional.</p>
+            {% endif %}
+          </div>
+          {% if finding.top_cves %}
+            <div class="chip-group" role="list">
+              <span class="chip chip-label" role="listitem">CVEs em destaque</span>
+              {% for cve in finding.top_cves|slice:":6" %}
+                <span class="chip" role="listitem">{{ cve }}</span>
+              {% endfor %}
+              {% if finding.top_cves|length > 6 %}
+                <span class="chip chip-muted" role="listitem">+{{ finding.top_cves|length|add:"-6" }}</span>
+              {% endif %}
+            </div>
+          {% endif %}
+          {% if finding.cvss_samples %}
+            <div class="chip-group" role="list">
+              <span class="chip chip-label" role="listitem">Amostras CVSS</span>
+              {% for score in finding.cvss_samples|slice:":5" %}
+                <span class="chip chip-score" role="listitem">{{ score }}</span>
+              {% endfor %}
+              {% if finding.cvss_samples|length > 5 %}
+                <span class="chip chip-muted" role="listitem">+{{ finding.cvss_samples|length|add:"-5" }}</span>
+              {% endif %}
+            </div>
+          {% endif %}
           <dl class="finding-meta">
             {% if finding.host %}<div><dt>Host</dt><dd>{{ finding.host }}</dd></div>{% endif %}
             {% if finding.service %}<div><dt>Serviço</dt><dd>{{ finding.service }}</dd></div>{% endif %}
             {% if finding.port_display %}<div><dt>Porta</dt><dd>{{ finding.port_display }}</dd></div>{% endif %}
             {% if finding.detected_at_display %}<div><dt>Detectada</dt><dd>{{ finding.detected_at_display }}</dd></div>{% endif %}
             {% if finding.source_task.name %}<div><dt>Etapa</dt><dd>{{ finding.source_task.name }}</dd></div>{% endif %}
+            {% if finding.source_label %}<div><dt>Fonte</dt><dd>{{ finding.source_label }}</dd></div>{% endif %}
+            {% if finding.scanner %}<div><dt>Scanner</dt><dd>{{ finding.scanner }}</dd></div>{% endif %}
+            {% if finding.artifact_path %}<div><dt>Artefato</dt><dd title="{{ finding.artifact_path }}">{{ finding.artifact_path }}</dd></div>{% endif %}
           </dl>
           {% if finding.cves|length > 1 %}
             <p class="muted cve-list">CVEs correlacionadas: {{ finding.cves|join:", " }}</p>
@@ -222,6 +259,12 @@
                 <a href="{{ ref }}" target="_blank" rel="noopener noreferrer">Referência {{ forloop.counter }}</a>
               {% endfor %}
             </div>
+          {% endif %}
+          {% if finding.raw_output %}
+            <details class="raw-output">
+              <summary>Ver saída bruta</summary>
+              <pre>{{ finding.raw_output }}</pre>
+            </details>
           {% endif %}
         </li>
       {% endfor %}
@@ -343,6 +386,17 @@
 .finding-meta div{display:flex;flex-direction:column;gap:.15rem;font-size:.8rem;color:var(--muted);}
 .finding-meta dt{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
 .finding-meta dd{margin:0;color:var(--text);font-weight:600;}
+.finding-summary{display:flex;flex-direction:column;gap:.6rem;margin:.6rem 0 .8rem;}
+.finding-summary .summary-preview{font-size:.9rem;color:var(--muted);line-height:1.5;}
+.finding-summary .summary-details summary{cursor:pointer;color:#8bc5ff;font-weight:600;margin-bottom:.3rem;}
+.finding-summary .summary-details pre{margin:0;background:rgba(0,0,0,0.45);padding:.8rem;border-radius:8px;max-height:260px;overflow:auto;font-family:"Fira Code",monospace;font-size:.78rem;color:#e8f2ff;}
+.chip-group{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.75rem;align-items:center;}
+.chip{display:inline-flex;align-items:center;padding:.25rem .65rem;border-radius:999px;font-size:.75rem;font-weight:600;background:rgba(255,255,255,0.06);color:#d5ecff;border:1px solid rgba(255,255,255,0.08);}
+.chip-label{background:rgba(127,181,255,0.18);color:#e0f1ff;}
+.chip-score{background:rgba(118,221,174,0.16);color:#daf7e7;}
+.chip-muted{background:rgba(255,255,255,0.04);color:#a9b9d1;font-weight:500;}
+.raw-output summary{cursor:pointer;color:#8bc5ff;font-weight:600;margin-top:.6rem;}
+.raw-output pre{margin:.4rem 0 0;background:rgba(0,0,0,0.45);padding:.8rem;border-radius:8px;max-height:320px;overflow:auto;font-family:"Fira Code",monospace;font-size:.78rem;color:#e8f2ff;}
 .reference-list{display:flex;flex-wrap:wrap;gap:.45rem;}
 .reference-list a{font-size:.78rem;color:#8bc5ff;text-decoration:none;background:rgba(76,148,255,0.18);padding:.28rem .6rem;border-radius:999px;border:1px solid rgba(76,148,255,0.28);}
 .reference-list a:hover{background:rgba(76,148,255,0.24);}
@@ -449,6 +503,10 @@ document.addEventListener("DOMContentLoaded", () => {
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#39;");
+  }
+
+  function formatMultiline(value) {
+    return escapeHtml(value).replace(/\n/g, "<br>");
   }
 
   function formatDate(isoString) {
@@ -762,11 +820,52 @@ document.addEventListener("DOMContentLoaded", () => {
         const portBlock = finding.port_display ? `<div><dt>Porta</dt><dd>${escapeHtml(finding.port_display)}</dd></div>` : "";
         const detectedBlock = finding.detected_at_display ? `<div><dt>Detectada</dt><dd>${escapeHtml(finding.detected_at_display)}</dd></div>` : "";
         const taskBlock = finding.source_task && finding.source_task.name ? `<div><dt>Etapa</dt><dd>${escapeHtml(finding.source_task.name)}</dd></div>` : "";
+        const sourceBlock = finding.source_label ? `<div><dt>Fonte</dt><dd>${escapeHtml(finding.source_label)}</dd></div>` : "";
+        const scannerBlock = finding.scanner ? `<div><dt>Scanner</dt><dd>${escapeHtml(finding.scanner)}</dd></div>` : "";
+        const artifactBlock = finding.artifact_path
+          ? `<div><dt>Artefato</dt><dd title="${escapeHtml(finding.artifact_path)}">${escapeHtml(finding.artifact_path)}</dd></div>`
+          : "";
         const referencesBlock = references.length
           ? `<div class="reference-list">${references.map((ref, idx) => `<a href="${escapeHtml(ref)}" target="_blank" rel="noopener noreferrer">Referência ${idx + 1}</a>`).join("")}</div>`
           : "";
         const cvesExtra = Array.isArray(finding.cves) && finding.cves.length > 1
           ? `<p class="muted cve-list">CVEs correlacionadas: ${finding.cves.map(escapeHtml).join(", ")}</p>`
+          : "";
+        const summaryPreview = finding.summary_preview || finding.summary || "";
+        const summaryFull = finding.summary_full || finding.summary || "";
+        const hasSummary = Boolean(summaryPreview && summaryPreview.trim());
+        const summaryBlock = hasSummary
+          ? `
+            <div class="finding-summary">
+              <div class="summary-preview">${formatMultiline(summaryPreview)}</div>
+              ${finding.summary_collapsible && summaryFull
+                ? `<details class="summary-details"><summary>Ver resumo completo</summary><pre>${escapeHtml(summaryFull)}</pre></details>`
+                : ""}
+            </div>
+          `
+          : '<p class="muted">Sem descrição adicional.</p>';
+        const topCves = Array.isArray(finding.top_cves) ? finding.top_cves : [];
+        const topCvesBlock = topCves.length
+          ? `
+            <div class="chip-group" role="list">
+              <span class="chip chip-label" role="listitem">CVEs em destaque</span>
+              ${topCves.slice(0, 6).map(cve => `<span class="chip" role="listitem">${escapeHtml(cve)}</span>`).join("")}
+              ${topCves.length > 6 ? `<span class="chip chip-muted" role="listitem">+${escapeHtml(topCves.length - 6)}</span>` : ""}
+            </div>
+          `
+          : "";
+        const cvssSamples = Array.isArray(finding.cvss_samples) ? finding.cvss_samples : [];
+        const cvssSamplesBlock = cvssSamples.length
+          ? `
+            <div class="chip-group" role="list">
+              <span class="chip chip-label" role="listitem">Amostras CVSS</span>
+              ${cvssSamples.slice(0, 5).map(score => `<span class="chip chip-score" role="listitem">${escapeHtml(score)}</span>`).join("")}
+              ${cvssSamples.length > 5 ? `<span class="chip chip-muted" role="listitem">+${escapeHtml(cvssSamples.length - 5)}</span>` : ""}
+            </div>
+          `
+          : "";
+        const rawOutputBlock = finding.raw_output
+          ? `<details class="raw-output"><summary>Ver saída bruta</summary><pre>${escapeHtml(finding.raw_output)}</pre></details>`
           : "";
         const li = document.createElement("li");
         li.innerHTML = `
@@ -777,12 +876,15 @@ document.addEventListener("DOMContentLoaded", () => {
             ${cvssBadge}
           </div>
           <h3>${escapeHtml(finding.title || "Achado")}</h3>
-          <p class="muted">${escapeHtml(finding.summary || "Sem descrição adicional.")}</p>
+          ${summaryBlock}
+          ${topCvesBlock}
+          ${cvssSamplesBlock}
           <dl class="finding-meta">
-            ${hostBlock}${serviceBlock}${portBlock}${detectedBlock}${taskBlock}
+            ${hostBlock}${serviceBlock}${portBlock}${detectedBlock}${taskBlock}${sourceBlock}${scannerBlock}${artifactBlock}
           </dl>
           ${cvesExtra}
           ${referencesBlock}
+          ${rawOutputBlock}
         `;
         findingsList.appendChild(li);
       });
