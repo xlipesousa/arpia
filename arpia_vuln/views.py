@@ -21,10 +21,11 @@ from arpia_log.models import LogEntry
 
 from .models import VulnerabilityFinding, VulnScanSession, VulnTask
 from .services import (
+	cancel_vulnerability_session,
 	VulnGreenboneExecutionError,
 	plan_vulnerability_session,
 	run_greenbone_scan,
-	run_vulnerability_pipeline,
+	run_vulnerability_pipeline_async,
 )
 
 
@@ -748,6 +749,7 @@ class VulnSessionDetailView(LoginRequiredMixin, TemplateView):
 		)
 		status_api_url = reverse("arpia_vuln:api_session_status", args=[self.session.pk])
 		logs_api_url = reverse("arpia_vuln:api_session_logs", args=[self.session.pk])
+		can_cancel_session = self.session.status == VulnScanSession.Status.RUNNING
 		context.update(
 			{
 				"session": self.session,
@@ -767,6 +769,8 @@ class VulnSessionDetailView(LoginRequiredMixin, TemplateView):
 				"report_url": reverse("arpia_vuln:session_report_preview", args=[self.session.pk]),
 				"can_retry_greenbone": can_retry_greenbone,
 				"retry_greenbone_url": reverse("arpia_vuln:api_session_retry", args=[self.session.pk]),
+				"can_cancel_session": can_cancel_session,
+				"cancel_session_url": reverse("arpia_vuln:api_session_cancel", args=[self.session.pk]) if can_cancel_session else "",
 			}
 		)
 		return context
@@ -1141,11 +1145,44 @@ def api_session_start(request, pk):
 		return JsonResponse({"error": "Sessão já está em execução."}, status=409)
 
 	try:
-		run_vulnerability_pipeline(session, triggered_by=request.user)
+		run_vulnerability_pipeline_async(session, triggered_by=request.user)
 	except ValidationError as exc:
 		return JsonResponse({"error": exc.message}, status=400)
 	except Exception as exc:  # pragma: no cover - captura para UI
 		session.refresh_from_db()
+		return JsonResponse({"error": str(exc)}, status=500)
+
+	session.refresh_from_db()
+	return JsonResponse(_serialize_session_for_api(session), status=200, json_dumps_params={"ensure_ascii": False})
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_session_cancel(request, pk):
+	session = get_object_or_404(
+		VulnScanSession.objects.select_related("project", "owner"),
+		pk=pk,
+	)
+
+	if not _user_has_access(request.user, session.project):
+		return JsonResponse({"error": "Usuário não possui acesso a este projeto."}, status=403)
+
+	if session.status != VulnScanSession.Status.RUNNING:
+		if session.is_terminal:
+			return JsonResponse({"error": "Sessão já foi finalizada."}, status=409)
+		return JsonResponse({"error": "Sessão não está em execução."}, status=409)
+
+	try:
+		payload = json.loads(request.body or "{}")
+	except json.JSONDecodeError:
+		payload = {}
+	reason = str(payload.get("reason") or "").strip()
+
+	try:
+		cancel_vulnerability_session(session, triggered_by=request.user, reason=reason)
+	except ValidationError as exc:
+		return JsonResponse({"error": exc.message}, status=400)
+	except Exception as exc:  # pragma: no cover - captura genérica para UI
 		return JsonResponse({"error": str(exc)}, status=500)
 
 	session.refresh_from_db()

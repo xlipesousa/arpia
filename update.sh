@@ -5,6 +5,10 @@
 
 set -euo pipefail
 
+TARGET_BRANCH="${TARGET_BRANCH:-main}"
+VENV_DIR="${VENV_DIR:-.venv}"
+PYTHON=""
+
 REPO_EXPECTED="https://github.com/xlipesousa/arpia.git"
 CWD="$(pwd)"
 
@@ -45,6 +49,49 @@ install_rustscan() {
   fi
 }
 
+ensure_python_env() {
+  if [ -n "$PYTHON" ] && [ -x "$PYTHON" ]; then
+    return
+  fi
+
+  if [ -n "${VIRTUAL_ENV:-}" ]; then
+    PYTHON="${VIRTUAL_ENV}/bin/python"
+    if [ -x "$PYTHON" ]; then
+      info "Virtualenv ativo detectado: $VIRTUAL_ENV"
+      return
+    fi
+  fi
+
+  local base_python
+  base_python="$(command -v python3 || command -v python || true)"
+  if [ -z "$base_python" ]; then
+    warn "Interpreter Python não encontrado no PATH."
+    PYTHON=""
+    return
+  fi
+
+  if [ ! -d "$VENV_DIR" ]; then
+    info "Virtualenv não encontrado em $VENV_DIR — criando..."
+    if ! "$base_python" -m venv "$VENV_DIR"; then
+      warn "Falha ao criar virtualenv em $VENV_DIR. Prosseguindo com Python do sistema."
+      PYTHON="$base_python"
+      return
+    fi
+  fi
+
+  local activate_file
+  activate_file="$VENV_DIR/bin/activate"
+  if [ -f "$activate_file" ]; then
+    info "Ativando virtualenv $VENV_DIR"
+    # shellcheck disable=SC1090
+    source "$activate_file"
+    PYTHON="$VENV_DIR/bin/python"
+  else
+    warn "Arquivo de ativação $activate_file ausente — utilizando Python do sistema."
+    PYTHON="$base_python"
+  fi
+}
+
 info(){ echo "[INFO] $*"; }
 warn(){ echo "[WARN] $*"; }
 err(){ echo "[ERROR] $*" >&2; exit 1; }
@@ -72,14 +119,13 @@ if [ "$REMOTE_URL" != "$REPO_EXPECTED" ]; then
 fi
 
 # detectar branch atual
-BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-info "Branch atual: $BRANCH"
+CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo HEAD)"
+info "Branch atual: $CURRENT_BRANCH"
 
-# detectar branch remoto padrão se branch atual for HEAD detached
-if [ "$BRANCH" = "HEAD" ]; then
-  BRANCH="$(git remote show origin | awk -F': ' '/HEAD branch/ {print $2}')"
-  BRANCH="${BRANCH:-main}"
-  info "Detached HEAD — usando branch remoto padrão: $BRANCH"
+if [ "$CURRENT_BRANCH" = "HEAD" ]; then
+  CURRENT_BRANCH="$(git remote show origin | awk -F': ' '/HEAD branch/ {print $2}')"
+  CURRENT_BRANCH="${CURRENT_BRANCH:-$TARGET_BRANCH}"
+  info "Detached HEAD detectado — assumindo branch '$CURRENT_BRANCH'."
 fi
 
 # buscar e limpar refs obsoletas
@@ -114,6 +160,25 @@ if [ "$DIRTY" -eq 1 ]; then
   fi
 fi
 
+# garantir que a branch alvo existe localmente depois de lidar com alterações locais
+if ! git show-ref --verify --quiet "refs/heads/$TARGET_BRANCH"; then
+  info "Branch local '$TARGET_BRANCH' inexistente — criando a partir de origin/$TARGET_BRANCH..."
+  if git show-ref --verify --quiet "refs/remotes/origin/$TARGET_BRANCH"; then
+    git checkout -B "$TARGET_BRANCH" "origin/$TARGET_BRANCH"
+  else
+    err "origin/$TARGET_BRANCH não encontrado. Verifique se o remoto possui a branch desejada."
+  fi
+  CURRENT_BRANCH="$TARGET_BRANCH"
+fi
+
+if [ "$CURRENT_BRANCH" != "$TARGET_BRANCH" ]; then
+  info "Alternando para branch '$TARGET_BRANCH'..."
+  git checkout "$TARGET_BRANCH"
+  CURRENT_BRANCH="$TARGET_BRANCH"
+fi
+
+BRANCH="$CURRENT_BRANCH"
+
 # pull com rebase para integrar mudanças remotas
 info "Atualizando branch '$BRANCH' a partir de origin/$BRANCH..."
 # garantir que existe origin/$BRANCH
@@ -122,6 +187,12 @@ if git show-ref --verify --quiet "refs/remotes/origin/$BRANCH"; then
 else
   warn "origin/$BRANCH não existe — tentando 'git pull --rebase origin HEAD'"
   git pull --rebase origin HEAD || true
+fi
+
+if [ "${FORCE_RESET:-0}" = "1" ]; then
+  info "FORCE_RESET=1 — aplicando 'git reset --hard origin/$BRANCH' e limpando arquivos não rastreados."
+  git reset --hard "origin/$BRANCH"
+  git clean -fd
 fi
 
 # atualizar submódulos, se houver
@@ -135,14 +206,7 @@ fi
 if [ -f "requirements.txt" ]; then
   info "requirements.txt encontrado — instalando dependências..."
 
-  # detectar intérprete / virtualenv preferencial
-  if [ -n "${VIRTUAL_ENV:-}" ]; then
-    PYTHON="${VIRTUAL_ENV}/bin/python"
-  elif [ -x "./.venv/bin/python" ]; then
-    PYTHON="./.venv/bin/python"
-  else
-    PYTHON="$(command -v python3 || command -v python || true)"
-  fi
+  ensure_python_env
 
   if [ -z "$PYTHON" ] || [ ! -x "$PYTHON" ]; then
     warn "Não foi possível localizar um interpretador Python executável. Pulando instalação de dependências."
@@ -164,18 +228,11 @@ else
 fi
 
 install_rustscan
-# --- aplicar migrações automaticamente ---
-if [ -z "${PYTHON:-}" ]; then
-  if [ -n "${VIRTUAL_ENV:-}" ]; then
-    PYTHON="${VIRTUAL_ENV}/bin/python"
-  elif [ -x "./.venv/bin/python" ]; then
-    PYTHON="./.venv/bin/python"
-  else
-    PYTHON="$(command -v python3 || command -v python || true)"
-  fi
-fi
 
-if [ -n "${PYTHON:-}" ] && [ -x "${PYTHON:-}" ] && [ -f "manage.py" ]; then
+# --- aplicar migrações automaticamente ---
+ensure_python_env
+
+if [ -n "$PYTHON" ] && [ -x "$PYTHON" ] && [ -f "manage.py" ]; then
   info "Aplicando migrações do Django (manage.py migrate --noinput)..."
   if ! "$PYTHON" manage.py migrate --noinput; then
     warn "Falha ao aplicar migrações automaticamente. Execute manualmente: $PYTHON manage.py migrate"

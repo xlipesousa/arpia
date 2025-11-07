@@ -4,6 +4,7 @@ import base64
 import getpass
 import html
 import json
+import logging
 import os
 import re
 import shlex
@@ -12,6 +13,7 @@ import socket
 import subprocess
 import tempfile
 import textwrap
+import threading
 import time
 from contextlib import suppress
 from dataclasses import dataclass
@@ -20,6 +22,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 from xml.etree import ElementTree as ET
 
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
@@ -39,11 +42,18 @@ __all__ = [
     "GreenboneConfig",
     "VulnGreenboneExecutionError",
     "VulnScriptExecutionError",
+    "VulnSessionCanceled",
     "plan_vulnerability_session",
+    "cancel_vulnerability_session",
     "run_greenbone_scan",
     "run_targeted_nmap_scans",
     "run_vulnerability_pipeline",
+    "run_vulnerability_pipeline_async",
+    "ensure_session_is_active",
 ]
+
+
+logger = logging.getLogger(__name__)
 
 
 class VulnScriptExecutionError(Exception):
@@ -56,6 +66,10 @@ class GreenboneCliError(Exception):
 
 class VulnGreenboneExecutionError(VulnScriptExecutionError):
     """Erro fatal na execução do fluxo Greenbone."""
+
+
+class VulnSessionCanceled(Exception):
+    """Sessão de vulnerabilidades cancelada pelo usuário."""
 
 
 TARGETED_ACTION = "targeted"
@@ -96,6 +110,15 @@ EOF
         "required_tool_slug": "nmap",
     },
 }
+
+
+def ensure_session_is_active(session: VulnScanSession) -> None:
+    """Atualiza o estado da sessão e interrompe o fluxo se estiver cancelada."""
+    if not isinstance(session, VulnScanSession) or session.pk is None:
+        return
+    session.refresh_from_db(fields=["status", "finished_at", "last_error", "updated_at"])
+    if session.status == VulnScanSession.Status.CANCELED:
+        raise VulnSessionCanceled("Sessão cancelada pelo usuário.")
 
 
 def _ensure_project_access(user, project: Project) -> None:
@@ -581,6 +604,7 @@ class _BaseTargetedExecutor:
     def run(self) -> VulnTask:
         sync_vuln_default_scripts()
         sync_default_tools_for_user(self.user)
+        ensure_session_is_active(self.session)
 
         script = _ensure_script(self.SCRIPT_SLUG)
         tool_slug = script.required_tool_slug or "nmap"
@@ -599,7 +623,12 @@ class _BaseTargetedExecutor:
             details={"task_id": str(task.pk), "script": script.slug},
         )
 
-        stdout, stderr, returncode = self._execute_script(script)
+        try:
+            ensure_session_is_active(self.session)
+            stdout, stderr, returncode = self._execute_script(script)
+        except VulnSessionCanceled:
+            self._mark_task_canceled(task)
+            raise
         if returncode == 0:
             self._handle_success(task, stdout, stderr)
         else:
@@ -738,6 +767,38 @@ class _BaseTargetedExecutor:
             details={"task_id": str(task.pk), "returncode": returncode, "stderr": stderr[:1000]},
         )
         raise VulnScriptExecutionError(message)
+
+    def _mark_task_canceled(self, task: VulnTask) -> None:
+        reason_text = (self.session.last_error or "").strip()
+        addition = "Tarefa cancelada pelo usuário."
+        if reason_text:
+            addition = f"{addition} Motivo: {reason_text}"
+        task.status = VulnTask.Status.CANCELED
+        task.finished_at = timezone.now()
+        if not task.started_at:
+            task.started_at = task.finished_at
+        task.stderr = self._merge_message(task.stderr, addition)
+        task.save(update_fields=["status", "finished_at", "stderr", "started_at"])
+        _record_log(
+            session=self.session,
+            component="nmap",
+            event_type="vuln.targeted.canceled",
+            message=f"{self.TASK_NAME} cancelada pelo usuário.",
+            severity=LogEntry.Severity.WARN,
+            details={"task_id": str(task.pk)},
+        )
+
+    @staticmethod
+    def _merge_message(current: Optional[str], addition: str) -> str:
+        addition_text = (addition or "").strip()
+        current_text = (current or "").strip()
+        if not addition_text:
+            return current_text
+        if not current_text:
+            return addition_text
+        if addition_text in current_text:
+            return current_text
+        return f"{current_text}\n{addition_text}"
 
     def _update_targets_snapshot(self, parsed: List[Dict[str, Any]]) -> Dict[str, Any]:
         data = _deepcopy_payload(self.targets_data)
@@ -1028,14 +1089,23 @@ class GreenboneScanExecutor:
         )
 
         try:
+            ensure_session_is_active(self.session)
             self._ensure_service_available()
+            ensure_session_is_active(self.session)
             if not self.targets_data.get("hosts"):
                 raise VulnGreenboneExecutionError("Nenhum alvo disponível para Greenbone.")
             target_id = self._create_target(runner)
+            ensure_session_is_active(self.session)
             task_id = self._create_task(runner, target_id)
+            ensure_session_is_active(self.session)
             report_id = self._start_task(runner, task_id)
+            ensure_session_is_active(self.session)
             status, summary = self._wait_for_completion(runner, task_id)
+            ensure_session_is_active(self.session)
             report_path, severity_counts = self._download_report(runner, report_id)
+        except VulnSessionCanceled:
+            self._mark_task_canceled(task)
+            raise
         except VulnGreenboneExecutionError as exc:
             self._handle_failure(task, exc)
             raise
@@ -1185,6 +1255,7 @@ class GreenboneScanExecutor:
         attempts = 0
         deadline = time.time() + self.config.task_timeout if self.config.task_timeout else None
         while attempts < self.config.max_attempts:
+            ensure_session_is_active(self.session)
             if deadline and time.time() >= deadline:
                 raise GreenboneCliError("Tempo limite excedido aguardando tarefa Greenbone.")
             xml_payload = textwrap.dedent(
@@ -1214,6 +1285,26 @@ class GreenboneScanExecutor:
             if self.config.poll_interval:
                 time.sleep(self.config.poll_interval)
         raise GreenboneCliError("Número máximo de tentativas excedido aguardando tarefa Greenbone.")
+
+    def _mark_task_canceled(self, task: VulnTask) -> None:
+        reason_text = (self.session.last_error or "").strip()
+        addition = "Execução Greenbone cancelada pelo usuário."
+        if reason_text:
+            addition = f"{addition} Motivo: {reason_text}"
+        task.status = VulnTask.Status.CANCELED
+        task.finished_at = timezone.now()
+        if not task.started_at:
+            task.started_at = task.finished_at
+        task.stderr = _BaseTargetedExecutor._merge_message(task.stderr, addition)
+        task.save(update_fields=["status", "finished_at", "stderr", "started_at"])
+        _record_log(
+            session=self.session,
+            component="greenbone",
+            event_type="vuln.greenbone.canceled",
+            message="Execução Greenbone cancelada pelo usuário.",
+            severity=LogEntry.Severity.WARN,
+            details={"task_id": str(task.pk)},
+        )
 
     def _download_report(self, runner: GreenboneCliRunner, report_id: str) -> Tuple[Path, Dict[str, Any]]:
         xml_payload = f"<get_reports report_id=\"{html.escape(report_id)}\" format_id=\"{html.escape(self.config.report_format_id)}\"/>"
@@ -1581,6 +1672,78 @@ def plan_vulnerability_session(
     return session
 
 
+@transaction.atomic
+def cancel_vulnerability_session(
+    session: VulnScanSession,
+    *,
+    triggered_by=None,
+    reason: str | None = None,
+) -> VulnScanSession:
+    """Cancela uma sessão em execução, marcando tarefas pendentes como canceladas."""
+    if session.pk is None:
+        raise ValidationError("Sessão inválida.")
+    locked_session = (
+        VulnScanSession.objects.select_for_update()
+        .select_related("project", "owner")
+        .get(pk=session.pk)
+    )
+    if locked_session.status == VulnScanSession.Status.CANCELED:
+        return locked_session
+    if locked_session.is_terminal and locked_session.status != VulnScanSession.Status.RUNNING:
+        raise ValidationError("Sessão já foi finalizada.")
+
+    reason_text = (reason or "").strip()
+    now = timezone.now()
+
+    active_statuses = [
+        VulnTask.Status.PENDING,
+        VulnTask.Status.QUEUED,
+        VulnTask.Status.RUNNING,
+    ]
+    canceled_tasks = []
+    for task in locked_session.tasks.filter(status__in=active_statuses):
+        task.status = VulnTask.Status.CANCELED
+        task.finished_at = now
+        if not task.started_at:
+            task.started_at = now
+        addition = "Tarefa cancelada pelo usuário."
+        if reason_text:
+            addition = f"{addition} Motivo: {reason_text}"
+        existing = (task.stderr or "").strip()
+        task.stderr = f"{existing}\n{addition}".strip() if existing else addition
+        task.save(update_fields=["status", "finished_at", "stderr", "started_at"])
+        canceled_tasks.append(task)
+
+    locked_session.status = VulnScanSession.Status.CANCELED
+    locked_session.finished_at = locked_session.finished_at or now
+    if reason_text:
+        locked_session.last_error = reason_text
+    elif not (locked_session.last_error or "").strip():
+        locked_session.last_error = "Sessão cancelada pelo usuário."
+    locked_session.save(update_fields=["status", "finished_at", "last_error", "updated_at"])
+
+    details = {
+        "tasks_canceled": len(canceled_tasks),
+        "reason": reason_text or None,
+    }
+    if triggered_by and getattr(triggered_by, "username", None):
+        details["triggered_by"] = getattr(triggered_by, "username")
+
+    _record_log(
+        session=locked_session,
+        component="session",
+        event_type="vuln.session.canceled",
+        message="Sessão cancelada pelo usuário.",
+        severity=LogEntry.Severity.WARN,
+        details=details,
+    )
+
+    with suppress(Exception):
+        session.refresh_from_db(fields=["status", "finished_at", "last_error", "updated_at"])
+
+    return locked_session
+
+
 def run_targeted_nmap_scans(
     session: VulnScanSession,
     *,
@@ -1588,6 +1751,7 @@ def run_targeted_nmap_scans(
     include_nse: bool = True,
     auto_finalize: bool = True,
 ) -> List[VulnTask]:
+    ensure_session_is_active(session)
     targets_data = _ensure_targets_snapshot(session)
     tasks: List[VulnTask] = []
     ports_executor = VulnTargetedPortsExecutor(
@@ -1598,8 +1762,10 @@ def run_targeted_nmap_scans(
     )
     first_task = ports_executor.run()
     tasks.append(first_task)
+    ensure_session_is_active(session)
 
     if include_nse:
+        ensure_session_is_active(session)
         nse_executor = VulnTargetedNseExecutor(
             session,
             triggered_by=triggered_by,
@@ -1617,6 +1783,7 @@ def run_greenbone_scan(
     triggered_by=None,
     auto_finalize: bool = True,
 ) -> VulnTask:
+    ensure_session_is_active(session)
     targets_data = _ensure_targets_snapshot(session)
     executor = GreenboneScanExecutor(
         session,
@@ -1632,8 +1799,88 @@ def run_vulnerability_pipeline(
     *,
     triggered_by=None,
     pipeline: Optional[Sequence[Any]] = None,
+    allow_prestarted: bool = False,
 ) -> VulnScanSession:
     from .orchestrator import VulnOrchestrator
 
-    orchestrator = VulnOrchestrator(session, run_as_user=triggered_by, pipeline=pipeline)
+    orchestrator = VulnOrchestrator(
+        session,
+        run_as_user=triggered_by,
+        pipeline=pipeline,
+        allow_prestarted=allow_prestarted,
+    )
     return orchestrator.run()
+
+
+def _pipeline_async_worker(
+    *,
+    session_id,
+    triggered_by_id: Optional[int],
+    pipeline: Optional[Sequence[Any]],
+) -> None:
+    from django.db import close_old_connections
+
+    close_old_connections()
+    try:
+        session = (
+            VulnScanSession.objects.select_related("project", "owner")
+            .get(pk=session_id)
+        )
+    except VulnScanSession.DoesNotExist:
+        logger.warning("Sessão de vulnerabilidade %s não encontrada para execução assíncrona.", session_id)
+        close_old_connections()
+        return
+
+    triggered_by = None
+    if triggered_by_id is not None:
+        UserModel = get_user_model()
+        triggered_by = UserModel.objects.filter(pk=triggered_by_id).first()
+
+    try:
+        run_vulnerability_pipeline(
+            session,
+            triggered_by=triggered_by,
+            pipeline=pipeline,
+            allow_prestarted=True,
+        )
+    except Exception:
+        logger.exception("Falha ao executar pipeline da sessão %s em segundo plano.", session_id)
+    finally:
+        close_old_connections()
+
+
+def run_vulnerability_pipeline_async(
+    session: VulnScanSession,
+    *,
+    triggered_by=None,
+    pipeline: Optional[Sequence[Any]] = None,
+) -> threading.Thread:
+    if session.pk is None:
+        raise ValidationError("Sessão precisa estar persistida antes de iniciar o pipeline.")
+
+    session.refresh_from_db(fields=["status", "finished_at", "updated_at"])
+    if session.is_terminal:
+        raise ValidationError("Sessão já foi finalizada.")
+    if session.status == VulnScanSession.Status.RUNNING:
+        raise ValidationError("Sessão já está em execução.")
+
+    session.mark_started()
+
+    pipeline_copy: Optional[Sequence[Any]]
+    if pipeline is not None:
+        pipeline_copy = list(pipeline)
+    else:
+        pipeline_copy = None
+
+    thread = threading.Thread(
+        target=_pipeline_async_worker,
+        kwargs={
+            "session_id": session.pk,
+            "triggered_by_id": getattr(triggered_by, "pk", None),
+            "pipeline": pipeline_copy,
+        },
+        name=f"vuln-session-{session.pk}",
+        daemon=True,
+    )
+    thread.start()
+    return thread

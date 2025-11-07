@@ -38,5 +38,5 @@ python "${PROJECT_DIR}/manage.py" check --deploy
 # Inicia o Gunicorn
 exec gunicorn --bind "${ARPIA_BIND_ADDRESS:-0.0.0.0:8000}" \
   --workers "${ARPIA_WORKERS:-3}" \
-  --timeout "${ARPIA_TIMEOUT:-60}" \
+  --timeout "${ARPIA_TIMEOUT:-900}" \
   arpia_project.wsgi

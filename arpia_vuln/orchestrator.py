@@ -13,6 +13,8 @@ from .finding_collector import VulnerabilityFindingCollector
 from .models import VulnScanSession, VulnTask
 from .reporting import upsert_vulnerability_report_entry
 from .services import (
+	VulnSessionCanceled,
+	ensure_session_is_active,
 	run_greenbone_scan,
 	run_targeted_nmap_scans,
 )
@@ -29,6 +31,7 @@ class PipelineStep:
 DEFAULT_PIPELINE: Sequence[str] = ("targeted", "greenbone")
 
 
+
 class VulnOrchestrator:
 	"""Executa pipeline de vulnerabilidades para uma sessão."""
 
@@ -38,9 +41,11 @@ class VulnOrchestrator:
 		*,
 		run_as_user=None,
 		pipeline: Optional[Iterable[object]] = None,
+		allow_prestarted: bool = False,
 	) -> None:
 		self.session = session
 		self.user = run_as_user or session.owner
+		self.allow_prestarted = bool(allow_prestarted)
 		self.pipeline_steps = self._resolve_pipeline(pipeline)
 		self.summary: Dict[str, object] = {
 			"pipeline": [step.action for step in self.pipeline_steps],
@@ -49,7 +54,9 @@ class VulnOrchestrator:
 
 	def run(self) -> VulnScanSession:
 		self._ensure_ready()
-		self.session.mark_started()
+		prestarted = self.allow_prestarted and self.session.status == VulnScanSession.Status.RUNNING
+		if not prestarted:
+			self.session.mark_started()
 		self._log_session_event(
 			"vuln.session.started",
 			f"Sessão {self.session.reference} iniciada",
@@ -57,7 +64,11 @@ class VulnOrchestrator:
 
 		try:
 			for step in self.pipeline_steps:
+				ensure_session_is_active(self.session)
 				self._execute_step(step)
+		except VulnSessionCanceled as exc:
+			self._handle_cancellation(str(exc))
+			return self.session
 		except Exception as exc:  # pragma: no cover - caminhos de erro inesperados
 			error_message = str(exc)
 			self.session.mark_finished(success=False, error=error_message)
@@ -102,7 +113,9 @@ class VulnOrchestrator:
 
 	def _ensure_ready(self) -> None:
 		if self.session.status == VulnScanSession.Status.RUNNING:
-			raise ValidationError("Sessão já está em execução.")
+			if not self.allow_prestarted:
+				raise ValidationError("Sessão já está em execução.")
+			return
 		if self.session.is_terminal:
 			raise ValidationError("Sessão já foi finalizada.")
 
@@ -209,7 +222,19 @@ class VulnOrchestrator:
 		)
 
 		try:
+			ensure_session_is_active(self.session)
 			result = step.handler()
+		except VulnSessionCanceled:
+			entry["status"] = "canceled"
+			entry["finished_at"] = timezone.now().isoformat()
+			self.summary.setdefault("steps", []).append(entry)
+			self._record_step_event(
+				step,
+				"vuln.step.canceled",
+				f"Etapa '{step.label}' cancelada.",
+				severity=LogEntry.Severity.WARN,
+			)
+			raise
 		except Exception as exc:
 			entry["status"] = "failed"
 			entry["error"] = str(exc)
@@ -323,6 +348,25 @@ class VulnOrchestrator:
 				}
 			)
 		return context
+
+	def _handle_cancellation(self, reason: Optional[str] = None) -> None:
+		self.session.refresh_from_db(fields=["status", "finished_at", "last_error", "updated_at"])
+		if self.session.status != VulnScanSession.Status.CANCELED:
+			self.session.status = VulnScanSession.Status.CANCELED
+			if not self.session.finished_at:
+				self.session.finished_at = timezone.now()
+			if reason and not (self.session.last_error or "").strip():
+				self.session.last_error = reason
+			self.session.save(update_fields=["status", "finished_at", "last_error", "updated_at"])
+		self.summary.setdefault("status", "canceled")
+		self.summary["generated_at"] = timezone.now().isoformat()
+		self._store_summary()
+		self._log_session_event(
+			"vuln.session.canceled",
+			f"Sessão {self.session.reference} cancelada",
+			severity=LogEntry.Severity.WARN,
+			details={"reason": reason} if reason else None,
+		)
 
 	def _log_correlation(self, *, step: Optional[PipelineStep] = None) -> Dict[str, object]:
 		correlation: Dict[str, object] = {
