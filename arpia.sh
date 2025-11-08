@@ -3,13 +3,16 @@
 # Uso: ./arpia.sh {start|stop|status|restart}
 set -euo pipefail
 
-detect_host_ip(){
-  local ip
-  ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
-  if [ -z "$ip" ]; then
-    ip="$(ip route get 1.1.1.1 2>/dev/null | awk 'NR==1 {for(i=1;i<=NF;i++) if ($i=="src") {print $(i+1); exit}}')"
+detect_host_ips(){
+  local output
+  output="$(hostname -I 2>/dev/null | tr -s ' ' '\n' | grep -E '^[0-9]+(\.[0-9]+){3}$')"
+  if [ -z "$output" ]; then
+    output="$(ip route get 1.1.1.1 2>/dev/null | awk 'NR==1 {for(i=1;i<=NF;i++) if ($i=="src") {print $(i+1); exit}}')"
   fi
-  echo "${ip:-127.0.0.1}"
+  if [ -z "$output" ]; then
+    output="127.0.0.1"
+  fi
+  printf '%s\n' "$output" | awk '!seen[$0]++'
 }
 
 append_unique(){
@@ -47,8 +50,9 @@ PIDFILE=".arpia_gunicorn.pid"
 LOGDIR="logs"
 LOGFILE="$LOGDIR/gunicorn.log"
 ENV_FILE="${ENV_FILE:-.env.production}"
-DEFAULT_HOST_IP="$(detect_host_ip)"
-DEFAULT_BIND="${DEFAULT_HOST_IP}:8000"
+mapfile -t HOST_IPS < <(detect_host_ips)
+DEFAULT_HOST_IP="${HOST_IPS[0]:-127.0.0.1}"
+DEFAULT_BIND="0.0.0.0:8000"
 BIND="${BIND:-$DEFAULT_BIND}"
 WORKERS="${WORKERS:-3}"
 RUN_MIGRATIONS="${RUN_MIGRATIONS:-true}"
@@ -75,32 +79,48 @@ load_env(){
 ensure_runtime_env(){
   local ip="$DEFAULT_HOST_IP"
   local previous_bind="${BIND:-}"
+  local port_part="8000"
 
   if [ -z "$previous_bind" ] || [[ "${previous_bind,,}" == "auto" ]]; then
     BIND="$DEFAULT_BIND"
     echo "[info] BIND configurado automaticamente para $BIND."
   elif [[ "$previous_bind" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}(:[0-9]{1,5})?$ ]]; then
     local host_part="${previous_bind%%:*}"
-    local port_part="${previous_bind##*:}"
+    port_part="${previous_bind##*:}"
     if [ "$port_part" = "$previous_bind" ]; then
       port_part="8000"
     fi
-    if [ "$host_part" != "$ip" ] && [ "$host_part" != "0.0.0.0" ]; then
-      BIND="$ip:$port_part"
-      echo "[info] BIND ajustado automaticamente para $BIND (anterior: $previous_bind)."
+    if [ "$host_part" != "0.0.0.0" ]; then
+      local known=false
+      local addr
+      for addr in "${HOST_IPS[@]}"; do
+        if [ "$addr" = "$host_part" ]; then
+          known=true
+          break
+        fi
+      done
+      if [ "$known" = false ]; then
+        BIND="0.0.0.0:$port_part"
+        echo "[info] BIND ajustado automaticamente para $BIND (anterior: $previous_bind)."
+      fi
     fi
   fi
   export BIND
 
   local before_allowed="${ALLOWED_HOSTS:-}"
-  ensure_list_contains ALLOWED_HOSTS "$ip" "127.0.0.1" "localhost"
+  ensure_list_contains ALLOWED_HOSTS "127.0.0.1" "localhost" "${HOST_IPS[@]}"
   export ALLOWED_HOSTS
   if [ "$before_allowed" != "$ALLOWED_HOSTS" ]; then
     echo "[info] ALLOWED_HOSTS atualizado: $ALLOWED_HOSTS"
   fi
 
   local before_csrf="${CSRF_TRUSTED_ORIGINS:-}"
-  ensure_list_contains CSRF_TRUSTED_ORIGINS "http://$ip" "https://$ip"
+  local csrf_values=("http://127.0.0.1" "https://127.0.0.1" "http://localhost" "https://localhost")
+  local addr
+  for addr in "${HOST_IPS[@]}"; do
+    csrf_values+=("http://$addr" "https://$addr")
+  done
+  ensure_list_contains CSRF_TRUSTED_ORIGINS "${csrf_values[@]}"
   export CSRF_TRUSTED_ORIGINS
   if [ "$before_csrf" != "$CSRF_TRUSTED_ORIGINS" ]; then
     echo "[info] CSRF_TRUSTED_ORIGINS atualizado: $CSRF_TRUSTED_ORIGINS"

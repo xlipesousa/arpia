@@ -19,7 +19,7 @@ Passos recomendados (com o novo orquestrador `arpia.sh`):
 - Inicie o serviço com `./arpia.sh start` (opções abaixo). O script carrega o `.env`, executa `migrate` por padrão e sobe o Gunicorn em segundo plano.
 
 Detalhes do script de produção `arpia.sh`:
-- Detecta automaticamente o IP principal do host e, se nenhuma configuração for passada, inicia o serviço em `<ip_detectado>:8000`.
+- Detecta automaticamente todos os IPs do host e, por padrão, expõe o serviço em `0.0.0.0:8000` (acessível por qualquer IP local).
 - `ENV_FILE=.env.custom ./arpia.sh start` — usa um arquivo `.env` alternativo.
 - `BIND="0.0.0.0:9000" WORKERS=4 ./arpia.sh restart` — customiza bind e quantidade de workers.
 - `RUN_MIGRATIONS=false ./arpia.sh start` — pula `migrate`; útil se a step já foi executada previamente.
@@ -74,7 +74,7 @@ Scripts úteis
   - Torne executável: `chmod +x arpia.sh`
   - Uso básico: `./arpia.sh start` (carrega `.env.production`, aplica migrações e sobe Gunicorn).
   - `./arpia.sh stop` encerra o processo; `./arpia.sh status` exibe o PID/log; `./arpia.sh restart` aplica stop/start.
-  - Garante que `BIND` utilize o IP atual (mesmo se o `.env` tiver outro valor) e que o IP detectado esteja presente em `ALLOWED_HOSTS` e `CSRF_TRUSTED_ORIGINS`.
+  - Garante que `BIND` permaneça válido (ajustando para `0.0.0.0` quando necessário) e acrescenta todos os IPs detectados em `ALLOWED_HOSTS` e `CSRF_TRUSTED_ORIGINS`.
 
 Parâmetros e logs (desenvolvimento)
 - HOST (opcional) — define host:porta para `runserver`; por padrão usa `<ip_detectado>:8000`.
@@ -82,7 +82,7 @@ Parâmetros e logs (desenvolvimento)
 - PID do processo fica em `.arpia_runserver.pid`
 
 Parâmetros e logs (produção)
-- `BIND` e `WORKERS` controlam bind e número de workers (`./arpia.sh start`). Use `BIND=auto` (ou deixe vazio) para deixar o script apontar para `<ip_detectado>:8000` automaticamente.
+- `BIND` e `WORKERS` controlam bind e número de workers (`./arpia.sh start`). Use `BIND=auto` (ou deixe vazio) para manter o padrão `0.0.0.0:8000`; se definir um IP estático que não pertença mais ao host, o script o ajusta automaticamente.
 - Logs do Gunicorn ficam em `logs/gunicorn.log`.
 - PID do Gunicorn fica em `.arpia_gunicorn.pid`.
 
