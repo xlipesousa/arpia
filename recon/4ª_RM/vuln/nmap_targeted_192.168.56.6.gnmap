@@ -1,0 +1,4 @@
+# Nmap 7.95 scan initiated Fri Oct 31 17:44:23 2025 as: /usr/lib/nmap/nmap --privileged -Pn -sS -sV --reason -p 22,80 -oA ./recon/4ª_RM/vuln/nmap_targeted_192.168.56.6 192.168.56.6
+Host: 192.168.56.6 ()	Status: Up
+Host: 192.168.56.6 ()	Ports: 22/closed/tcp//ssh///, 80/closed/tcp//http///
+# Nmap done at Fri Oct 31 17:44:24 2025 -- 1 IP address (1 host up) scanned in 0.38 seconds

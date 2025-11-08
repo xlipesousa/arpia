@@ -5,14 +5,11 @@ __pycache__/
 .venv/
 env/
 # Django
-*.sqlite3
+#*.sqlite3
 /staticfiles/
 /media/
-.env
+.env*
 # editor
 .vscode/
 .idea/
-/tmp/
-/recon/
 /arpia_project/settings.py
-.env.production

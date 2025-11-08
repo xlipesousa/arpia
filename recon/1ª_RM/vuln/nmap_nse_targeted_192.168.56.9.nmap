@@ -1,0 +1,1335 @@
+# Nmap 7.95 scan initiated Fri Nov  7 18:08:39 2025 as: /usr/lib/nmap/nmap --privileged -Pn -sV --reason --script default,safe,vuln -p 22,80 -oA ./recon/1ª_RM/vuln/nmap_nse_targeted_192.168.56.9 192.168.56.9
+Pre-scan script results:
+|_eap-info: please specify an interface with -e
+| broadcast-dhcp-discover: 
+|   Response 1 of 1: 
+|     Interface: eth0
+|     IP Offered: 192.168.56.10
+|     Server Identifier: 192.168.56.3
+|     Subnet Mask: 255.255.255.0
+|     Router: 192.168.56.1
+|     Domain Name Server: 192.168.56.1
+|_    Domain Name: .
+|_hostmap-robtex: *TEMPORARILY DISABLED* due to changes in Robtex's API. See https://www.robtex.com/api/
+| targets-asn: 
+|_  targets-asn.asn is a mandatory parameter
+| broadcast-netbios-master-browser: 
+|_ip  server  domain
+|_multicast-profinet-discovery: 0
+|_http-robtex-shared-ns: *TEMPORARILY DISABLED* due to changes in Robtex's API. See https://www.robtex.com/api/
+Nmap scan report for 192.168.56.9
+Host is up, received arp-response (0.00071s latency).
+
+Bug in http-security-headers: no string output.
+PORT   STATE SERVICE REASON         VERSION
+22/tcp open  ssh     syn-ack ttl 64 OpenSSH 4.7p1 Debian 8ubuntu1 (protocol 2.0)
+|_banner: SSH-2.0-OpenSSH_4.7p1 Debian-8ubuntu1
+| ssh-hostkey: 
+|   1024 60:0f:cf:e1:c0:5f:6a:74:d6:90:24:fa:c4:d5:6c:cd (DSA)
+|_  2048 56:56:24:0f:21:1d:de:a7:2b:ae:61:b1:24:3d:e8:f3 (RSA)
+| vulners: 
+|   cpe:/a:openbsd:openssh:4.7p1: 
+|     	DF059135-2CF5-5441-8F22-E6EF1DEE5F6E	10.0	https://vulners.com/gitee/DF059135-2CF5-5441-8F22-E6EF1DEE5F6E	*EXPLOIT*
+|     	PACKETSTORM:173661	9.8	https://vulners.com/packetstorm/PACKETSTORM:173661	*EXPLOIT*
+|     	F0979183-AE88-53B4-86CF-3AF0523F3807	9.8	https://vulners.com/githubexploit/F0979183-AE88-53B4-86CF-3AF0523F3807	*EXPLOIT*
+|     	CVE-2023-38408	9.8	https://vulners.com/cve/CVE-2023-38408
+|     	CVE-2016-1908	9.8	https://vulners.com/cve/CVE-2016-1908
+|     	B8190CDB-3EB9-5631-9828-8064A1575B23	9.8	https://vulners.com/githubexploit/B8190CDB-3EB9-5631-9828-8064A1575B23	*EXPLOIT*
+|     	8FC9C5AB-3968-5F3C-825E-E8DB5379A623	9.8	https://vulners.com/githubexploit/8FC9C5AB-3968-5F3C-825E-E8DB5379A623	*EXPLOIT*
+|     	8AD01159-548E-546E-AA87-2DE89F3927EC	9.8	https://vulners.com/githubexploit/8AD01159-548E-546E-AA87-2DE89F3927EC	*EXPLOIT*
+|     	2227729D-6700-5C8F-8930-1EEAFD4B9FF0	9.8	https://vulners.com/githubexploit/2227729D-6700-5C8F-8930-1EEAFD4B9FF0	*EXPLOIT*
+|     	0221525F-07F5-5790-912D-F4B9E2D1B587	9.8	https://vulners.com/githubexploit/0221525F-07F5-5790-912D-F4B9E2D1B587	*EXPLOIT*
+|     	CVE-2015-5600	8.5	https://vulners.com/cve/CVE-2015-5600
+|     	BA3887BD-F579-53B1-A4A4-FF49E953E1C0	8.1	https://vulners.com/githubexploit/BA3887BD-F579-53B1-A4A4-FF49E953E1C0	*EXPLOIT*
+|     	4FB01B00-F993-5CAF-BD57-D7E290D10C1F	8.1	https://vulners.com/githubexploit/4FB01B00-F993-5CAF-BD57-D7E290D10C1F	*EXPLOIT*
+|     	SSV:78173	7.8	https://vulners.com/seebug/SSV:78173	*EXPLOIT*
+|     	SSV:69983	7.8	https://vulners.com/seebug/SSV:69983	*EXPLOIT*
+|     	PACKETSTORM:98796	7.8	https://vulners.com/packetstorm/PACKETSTORM:98796	*EXPLOIT*
+|     	PACKETSTORM:94556	7.8	https://vulners.com/packetstorm/PACKETSTORM:94556	*EXPLOIT*
+|     	PACKETSTORM:140070	7.8	https://vulners.com/packetstorm/PACKETSTORM:140070	*EXPLOIT*
+|     	PACKETSTORM:101052	7.8	https://vulners.com/packetstorm/PACKETSTORM:101052	*EXPLOIT*
+|     	EXPLOITPACK:71D51B69AA2D3A74753D7A921EE79985	7.8	https://vulners.com/exploitpack/EXPLOITPACK:71D51B69AA2D3A74753D7A921EE79985	*EXPLOIT*
+|     	EXPLOITPACK:67F6569F63A082199721C069C852BBD7	7.8	https://vulners.com/exploitpack/EXPLOITPACK:67F6569F63A082199721C069C852BBD7	*EXPLOIT*
+|     	EXPLOITPACK:5BCA798C6BA71FAE29334297EC0B6A09	7.8	https://vulners.com/exploitpack/EXPLOITPACK:5BCA798C6BA71FAE29334297EC0B6A09	*EXPLOIT*
+|     	EDB-ID:40888	7.8	https://vulners.com/exploitdb/EDB-ID:40888	*EXPLOIT*
+|     	EDB-ID:24450	7.8	https://vulners.com/exploitdb/EDB-ID:24450	*EXPLOIT*
+|     	EDB-ID:15215	7.8	https://vulners.com/exploitdb/EDB-ID:15215	*EXPLOIT*
+|     	CVE-2020-15778	7.8	https://vulners.com/cve/CVE-2020-15778
+|     	CVE-2016-6515	7.8	https://vulners.com/cve/CVE-2016-6515
+|     	CVE-2016-10012	7.8	https://vulners.com/cve/CVE-2016-10012
+|     	CVE-2015-8325	7.8	https://vulners.com/cve/CVE-2015-8325
+|     	C94132FD-1FA5-5342-B6EE-0DAF45EEFFE3	7.8	https://vulners.com/githubexploit/C94132FD-1FA5-5342-B6EE-0DAF45EEFFE3	*EXPLOIT*
+|     	312165E3-7FD9-5769-BDA3-4129BE9114D6	7.8	https://vulners.com/githubexploit/312165E3-7FD9-5769-BDA3-4129BE9114D6	*EXPLOIT*
+|     	2E719186-2FED-58A8-A150-762EFBAAA523	7.8	https://vulners.com/gitee/2E719186-2FED-58A8-A150-762EFBAAA523	*EXPLOIT*
+|     	23CC97BE-7C95-513B-9E73-298C48D74432	7.8	https://vulners.com/githubexploit/23CC97BE-7C95-513B-9E73-298C48D74432	*EXPLOIT*
+|     	1337DAY-ID-26494	7.8	https://vulners.com/zdt/1337DAY-ID-26494	*EXPLOIT*
+|     	10213DBE-F683-58BB-B6D3-353173626207	7.8	https://vulners.com/githubexploit/10213DBE-F683-58BB-B6D3-353173626207	*EXPLOIT*
+|     	SSV:92579	7.5	https://vulners.com/seebug/SSV:92579	*EXPLOIT*
+|     	SSV:61450	7.5	https://vulners.com/seebug/SSV:61450	*EXPLOIT*
+|     	CVE-2016-10708	7.5	https://vulners.com/cve/CVE-2016-10708
+|     	CVE-2016-10009	7.5	https://vulners.com/cve/CVE-2016-10009
+|     	CVE-2014-1692	7.5	https://vulners.com/cve/CVE-2014-1692
+|     	CVE-2010-4478	7.5	https://vulners.com/cve/CVE-2010-4478
+|     	CF52FA19-B5DB-5D14-B50F-2411851976E2	7.5	https://vulners.com/githubexploit/CF52FA19-B5DB-5D14-B50F-2411851976E2	*EXPLOIT*
+|     	1337DAY-ID-26576	7.5	https://vulners.com/zdt/1337DAY-ID-26576	*EXPLOIT*
+|     	SSV:92582	7.2	https://vulners.com/seebug/SSV:92582	*EXPLOIT*
+|     	CVE-2016-10010	7.0	https://vulners.com/cve/CVE-2016-10010
+|     	SSV:92580	6.9	https://vulners.com/seebug/SSV:92580	*EXPLOIT*
+|     	CVE-2015-6564	6.9	https://vulners.com/cve/CVE-2015-6564
+|     	1337DAY-ID-26577	6.9	https://vulners.com/zdt/1337DAY-ID-26577	*EXPLOIT*
+|     	EDB-ID:46516	6.8	https://vulners.com/exploitdb/EDB-ID:46516	*EXPLOIT*
+|     	EDB-ID:46193	6.8	https://vulners.com/exploitdb/EDB-ID:46193	*EXPLOIT*
+|     	CVE-2019-6110	6.8	https://vulners.com/cve/CVE-2019-6110
+|     	CVE-2019-6109	6.8	https://vulners.com/cve/CVE-2019-6109
+|     	1337DAY-ID-32328	6.8	https://vulners.com/zdt/1337DAY-ID-32328	*EXPLOIT*
+|     	1337DAY-ID-32009	6.8	https://vulners.com/zdt/1337DAY-ID-32009	*EXPLOIT*
+|     	D104D2BF-ED22-588B-A9B2-3CCC562FE8C0	6.5	https://vulners.com/githubexploit/D104D2BF-ED22-588B-A9B2-3CCC562FE8C0	*EXPLOIT*
+|     	CVE-2023-51385	6.5	https://vulners.com/cve/CVE-2023-51385
+|     	CVE-2008-1657	6.5	https://vulners.com/cve/CVE-2008-1657
+|     	C07ADB46-24B8-57B7-B375-9C761F4750A2	6.5	https://vulners.com/githubexploit/C07ADB46-24B8-57B7-B375-9C761F4750A2	*EXPLOIT*
+|     	A88CDD3E-67CC-51CC-97FB-AB0CACB6B08C	6.5	https://vulners.com/githubexploit/A88CDD3E-67CC-51CC-97FB-AB0CACB6B08C	*EXPLOIT*
+|     	65B15AA1-2A8D-53C1-9499-69EBA3619F1C	6.5	https://vulners.com/githubexploit/65B15AA1-2A8D-53C1-9499-69EBA3619F1C	*EXPLOIT*
+|     	5325A9D6-132B-590C-BDEF-0CB105252732	6.5	https://vulners.com/gitee/5325A9D6-132B-590C-BDEF-0CB105252732	*EXPLOIT*
+|     	530326CF-6AB3-5643-AA16-73DC8CB44742	6.5	https://vulners.com/githubexploit/530326CF-6AB3-5643-AA16-73DC8CB44742	*EXPLOIT*
+|     	EDB-ID:40858	6.4	https://vulners.com/exploitdb/EDB-ID:40858	*EXPLOIT*
+|     	EDB-ID:40119	6.4	https://vulners.com/exploitdb/EDB-ID:40119	*EXPLOIT*
+|     	EDB-ID:39569	6.4	https://vulners.com/exploitdb/EDB-ID:39569	*EXPLOIT*
+|     	CVE-2016-3115	6.4	https://vulners.com/cve/CVE-2016-3115
+|     	PACKETSTORM:181223	5.9	https://vulners.com/packetstorm/PACKETSTORM:181223	*EXPLOIT*
+|     	MSF:AUXILIARY-SCANNER-SSH-SSH_ENUMUSERS-	5.9	https://vulners.com/metasploit/MSF:AUXILIARY-SCANNER-SSH-SSH_ENUMUSERS-	*EXPLOIT*
+|     	EDB-ID:40136	5.9	https://vulners.com/exploitdb/EDB-ID:40136	*EXPLOIT*
+|     	EDB-ID:40113	5.9	https://vulners.com/exploitdb/EDB-ID:40113	*EXPLOIT*
+|     	CVE-2023-48795	5.9	https://vulners.com/cve/CVE-2023-48795
+|     	CVE-2019-6111	5.9	https://vulners.com/cve/CVE-2019-6111
+|     	CVE-2016-6210	5.9	https://vulners.com/cve/CVE-2016-6210
+|     	A02ABE85-E4E3-5852-A59D-DF288CB8160A	5.9	https://vulners.com/githubexploit/A02ABE85-E4E3-5852-A59D-DF288CB8160A	*EXPLOIT*
+|     	SSV:61911	5.8	https://vulners.com/seebug/SSV:61911	*EXPLOIT*
+|     	EXPLOITPACK:98FE96309F9524B8C84C508837551A19	5.8	https://vulners.com/exploitpack/EXPLOITPACK:98FE96309F9524B8C84C508837551A19	*EXPLOIT*
+|     	EXPLOITPACK:5330EA02EBDE345BFC9D6DDDD97F9E97	5.8	https://vulners.com/exploitpack/EXPLOITPACK:5330EA02EBDE345BFC9D6DDDD97F9E97	*EXPLOIT*
+|     	CVE-2014-2653	5.8	https://vulners.com/cve/CVE-2014-2653
+|     	CVE-2014-2532	5.8	https://vulners.com/cve/CVE-2014-2532
+|     	SSV:91041	5.5	https://vulners.com/seebug/SSV:91041	*EXPLOIT*
+|     	PACKETSTORM:140019	5.5	https://vulners.com/packetstorm/PACKETSTORM:140019	*EXPLOIT*
+|     	PACKETSTORM:136251	5.5	https://vulners.com/packetstorm/PACKETSTORM:136251	*EXPLOIT*
+|     	PACKETSTORM:136234	5.5	https://vulners.com/packetstorm/PACKETSTORM:136234	*EXPLOIT*
+|     	EXPLOITPACK:F92411A645D85F05BDBD274FD222226F	5.5	https://vulners.com/exploitpack/EXPLOITPACK:F92411A645D85F05BDBD274FD222226F	*EXPLOIT*
+|     	EXPLOITPACK:9F2E746846C3C623A27A441281EAD138	5.5	https://vulners.com/exploitpack/EXPLOITPACK:9F2E746846C3C623A27A441281EAD138	*EXPLOIT*
+|     	EXPLOITPACK:1902C998CBF9154396911926B4C3B330	5.5	https://vulners.com/exploitpack/EXPLOITPACK:1902C998CBF9154396911926B4C3B330	*EXPLOIT*
+|     	CVE-2016-10011	5.5	https://vulners.com/cve/CVE-2016-10011
+|     	1337DAY-ID-25388	5.5	https://vulners.com/zdt/1337DAY-ID-25388	*EXPLOIT*
+|     	FD18B68B-C0A6-562E-A8C8-781B225F15B0	5.3	https://vulners.com/githubexploit/FD18B68B-C0A6-562E-A8C8-781B225F15B0	*EXPLOIT*
+|     	EDB-ID:45939	5.3	https://vulners.com/exploitdb/EDB-ID:45939	*EXPLOIT*
+|     	EDB-ID:45233	5.3	https://vulners.com/exploitdb/EDB-ID:45233	*EXPLOIT*
+|     	E9EC0911-E2E1-52A7-B2F4-D0065C6A3057	5.3	https://vulners.com/githubexploit/E9EC0911-E2E1-52A7-B2F4-D0065C6A3057	*EXPLOIT*
+|     	CVE-2018-20685	5.3	https://vulners.com/cve/CVE-2018-20685
+|     	CVE-2018-15473	5.3	https://vulners.com/cve/CVE-2018-15473
+|     	CVE-2017-15906	5.3	https://vulners.com/cve/CVE-2017-15906
+|     	CVE-2016-20012	5.3	https://vulners.com/cve/CVE-2016-20012
+|     	CNVD-2018-20962	5.3	https://vulners.com/cnvd/CNVD-2018-20962
+|     	CNVD-2018-20960	5.3	https://vulners.com/cnvd/CNVD-2018-20960
+|     	A9E6F50E-E7FC-51D0-9C93-A43461469FA2	5.3	https://vulners.com/githubexploit/A9E6F50E-E7FC-51D0-9C93-A43461469FA2	*EXPLOIT*
+|     	A801235B-9835-5BA8-B8FE-23B7FFCABD66	5.3	https://vulners.com/githubexploit/A801235B-9835-5BA8-B8FE-23B7FFCABD66	*EXPLOIT*
+|     	8DD1D813-FD5A-5B26-867A-CE7CAC9FEEDF	5.3	https://vulners.com/gitee/8DD1D813-FD5A-5B26-867A-CE7CAC9FEEDF	*EXPLOIT*
+|     	4F2FBB06-E601-5EAD-9679-3395D24057DD	5.3	https://vulners.com/githubexploit/4F2FBB06-E601-5EAD-9679-3395D24057DD	*EXPLOIT*
+|     	486BB6BC-9C26-597F-B865-D0E904FDA984	5.3	https://vulners.com/githubexploit/486BB6BC-9C26-597F-B865-D0E904FDA984	*EXPLOIT*
+|     	2385176A-820F-5469-AB09-C340264F2B2F	5.3	https://vulners.com/gitee/2385176A-820F-5469-AB09-C340264F2B2F	*EXPLOIT*
+|     	1337DAY-ID-31730	5.3	https://vulners.com/zdt/1337DAY-ID-31730	*EXPLOIT*
+|     	SSV:60656	5.0	https://vulners.com/seebug/SSV:60656	*EXPLOIT*
+|     	SSH_ENUM	5.0	https://vulners.com/canvas/SSH_ENUM	*EXPLOIT*
+|     	PACKETSTORM:150621	5.0	https://vulners.com/packetstorm/PACKETSTORM:150621	*EXPLOIT*
+|     	EXPLOITPACK:F957D7E8A0CC1E23C3C649B764E13FB0	5.0	https://vulners.com/exploitpack/EXPLOITPACK:F957D7E8A0CC1E23C3C649B764E13FB0	*EXPLOIT*
+|     	EXPLOITPACK:EBDBC5685E3276D648B4D14B75563283	5.0	https://vulners.com/exploitpack/EXPLOITPACK:EBDBC5685E3276D648B4D14B75563283	*EXPLOIT*
+|     	CVE-2010-5107	5.0	https://vulners.com/cve/CVE-2010-5107
+|     	EXPLOITPACK:802AF3229492E147A5F09C7F2B27C6DF	4.3	https://vulners.com/exploitpack/EXPLOITPACK:802AF3229492E147A5F09C7F2B27C6DF	*EXPLOIT*
+|     	EXPLOITPACK:5652DDAA7FE452E19AC0DC1CD97BA3EF	4.3	https://vulners.com/exploitpack/EXPLOITPACK:5652DDAA7FE452E19AC0DC1CD97BA3EF	*EXPLOIT*
+|     	CVE-2015-5352	4.3	https://vulners.com/cve/CVE-2015-5352
+|     	1337DAY-ID-25440	4.3	https://vulners.com/zdt/1337DAY-ID-25440	*EXPLOIT*
+|     	1337DAY-ID-25438	4.3	https://vulners.com/zdt/1337DAY-ID-25438	*EXPLOIT*
+|     	CVE-2010-4755	4.0	https://vulners.com/cve/CVE-2010-4755
+|     	CVE-2021-36368	3.7	https://vulners.com/cve/CVE-2021-36368
+|     	CVE-2025-61985	3.6	https://vulners.com/cve/CVE-2025-61985
+|     	CVE-2025-61984	3.6	https://vulners.com/cve/CVE-2025-61984
+|     	B7EACB4F-A5CF-5C5A-809F-E03CCE2AB150	3.6	https://vulners.com/githubexploit/B7EACB4F-A5CF-5C5A-809F-E03CCE2AB150	*EXPLOIT*
+|     	4C6E2182-0E99-5626-83F6-1646DD648C57	3.6	https://vulners.com/githubexploit/4C6E2182-0E99-5626-83F6-1646DD648C57	*EXPLOIT*
+|     	CVE-2012-0814	3.5	https://vulners.com/cve/CVE-2012-0814
+|     	CVE-2011-5000	3.5	https://vulners.com/cve/CVE-2011-5000
+|     	SSV:92581	2.1	https://vulners.com/seebug/SSV:92581	*EXPLOIT*
+|     	CVE-2011-4327	2.1	https://vulners.com/cve/CVE-2011-4327
+|     	CVE-2015-6563	1.9	https://vulners.com/cve/CVE-2015-6563
+|     	CVE-2008-3259	1.2	https://vulners.com/cve/CVE-2008-3259
+|     	PACKETSTORM:151227	0.0	https://vulners.com/packetstorm/PACKETSTORM:151227	*EXPLOIT*
+|     	PACKETSTORM:140261	0.0	https://vulners.com/packetstorm/PACKETSTORM:140261	*EXPLOIT*
+|     	PACKETSTORM:138006	0.0	https://vulners.com/packetstorm/PACKETSTORM:138006	*EXPLOIT*
+|     	PACKETSTORM:137942	0.0	https://vulners.com/packetstorm/PACKETSTORM:137942	*EXPLOIT*
+|     	1337DAY-ID-30937	0.0	https://vulners.com/zdt/1337DAY-ID-30937	*EXPLOIT*
+|     	1337DAY-ID-26468	0.0	https://vulners.com/zdt/1337DAY-ID-26468	*EXPLOIT*
+|     	1337DAY-ID-25391	0.0	https://vulners.com/zdt/1337DAY-ID-25391	*EXPLOIT*
+|     	1337DAY-ID-20301	0.0	https://vulners.com/zdt/1337DAY-ID-20301	*EXPLOIT*
+|_    	1337DAY-ID-14373	0.0	https://vulners.com/zdt/1337DAY-ID-14373	*EXPLOIT*
+| ssh2-enum-algos: 
+|   kex_algorithms: (4)
+|   server_host_key_algorithms: (2)
+|   encryption_algorithms: (13)
+|   mac_algorithms: (7)
+|_  compression_algorithms: (2)
+80/tcp open  http    syn-ack ttl 64 Apache httpd 2.2.8 ((Ubuntu) DAV/2)
+|_http-dombased-xss: Couldn't find any DOM based XSS.
+| http-slowloris-check: 
+|   VULNERABLE:
+|   Slowloris DOS attack
+|     State: LIKELY VULNERABLE
+|     IDs:  CVE:CVE-2007-6750
+|       Slowloris tries to keep many connections to the target web server open and hold
+|       them open as long as possible.  It accomplishes this by opening connections to
+|       the target web server and sending a partial request. By doing so, it starves
+|       the http server's resources causing Denial Of Service.
+|       
+|     Disclosure date: 2009-09-17
+|     References:
+|       http://ha.ckers.org/slowloris/
+|_      https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2007-6750
+| vulners: 
+|   cpe:/a:apache:http_server:2.2.8: 
+|     	SSV:69341	10.0	https://vulners.com/seebug/SSV:69341	*EXPLOIT*
+|     	SSV:19282	10.0	https://vulners.com/seebug/SSV:19282	*EXPLOIT*
+|     	SSV:19236	10.0	https://vulners.com/seebug/SSV:19236	*EXPLOIT*
+|     	SSV:11999	10.0	https://vulners.com/seebug/SSV:11999	*EXPLOIT*
+|     	PACKETSTORM:86964	10.0	https://vulners.com/packetstorm/PACKETSTORM:86964	*EXPLOIT*
+|     	PACKETSTORM:180533	10.0	https://vulners.com/packetstorm/PACKETSTORM:180533	*EXPLOIT*
+|     	MSF:AUXILIARY-DOS-HTTP-APACHE_MOD_ISAPI-	10.0	https://vulners.com/metasploit/MSF:AUXILIARY-DOS-HTTP-APACHE_MOD_ISAPI-	*EXPLOIT*
+|     	HTTPD:E74B6F3660D13C4DD05DF3A83EA61631	10.0	https://vulners.com/httpd/HTTPD:E74B6F3660D13C4DD05DF3A83EA61631
+|     	HTTPD:81180E4E634CDECC9784146016B4A949	10.0	https://vulners.com/httpd/HTTPD:81180E4E634CDECC9784146016B4A949
+|     	EXPLOITPACK:30ED468EC8BD5B71B2CB93825A852B80	10.0	https://vulners.com/exploitpack/EXPLOITPACK:30ED468EC8BD5B71B2CB93825A852B80	*EXPLOIT*
+|     	EDB-ID:14288	10.0	https://vulners.com/exploitdb/EDB-ID:14288	*EXPLOIT*
+|     	EDB-ID:11650	10.0	https://vulners.com/exploitdb/EDB-ID:11650	*EXPLOIT*
+|     	CVE-2010-0425	10.0	https://vulners.com/cve/CVE-2010-0425
+|     	3E6BA608-776F-5B1F-9BA5-589CD2A5A351	10.0	https://vulners.com/gitee/3E6BA608-776F-5B1F-9BA5-589CD2A5A351	*EXPLOIT*
+|     	PACKETSTORM:171631	9.8	https://vulners.com/packetstorm/PACKETSTORM:171631	*EXPLOIT*
+|     	HTTPD:E69E9574251973D5AF93FA9D04997FC1	9.8	https://vulners.com/httpd/HTTPD:E69E9574251973D5AF93FA9D04997FC1
+|     	HTTPD:E162D3AE025639FEE2A89D5AF40ABF2F	9.8	https://vulners.com/httpd/HTTPD:E162D3AE025639FEE2A89D5AF40ABF2F
+|     	HTTPD:C072933AA965A86DA3E2C9172FFC1569	9.8	https://vulners.com/httpd/HTTPD:C072933AA965A86DA3E2C9172FFC1569
+|     	HTTPD:A1BBCE110E077FFBF4469D4F06DB9293	9.8	https://vulners.com/httpd/HTTPD:A1BBCE110E077FFBF4469D4F06DB9293
+|     	HTTPD:A09F9CEBE0B7C39EDA0480FEAEF4FE9D	9.8	https://vulners.com/httpd/HTTPD:A09F9CEBE0B7C39EDA0480FEAEF4FE9D
+|     	HTTPD:9F5406E0F4A0B007A0A4C9C92EF9813B	9.8	https://vulners.com/httpd/HTTPD:9F5406E0F4A0B007A0A4C9C92EF9813B
+|     	HTTPD:9BCBE3C14201AFC4B0F36F15CB40C0F8	9.8	https://vulners.com/httpd/HTTPD:9BCBE3C14201AFC4B0F36F15CB40C0F8
+|     	HTTPD:2BE0032A6ABE7CC52906DBAAFE0E448E	9.8	https://vulners.com/httpd/HTTPD:2BE0032A6ABE7CC52906DBAAFE0E448E
+|     	EDB-ID:51193	9.8	https://vulners.com/exploitdb/EDB-ID:51193	*EXPLOIT*
+|     	ECC3E825-EE29-59D3-BE28-1B30DB15940E	9.8	https://vulners.com/githubexploit/ECC3E825-EE29-59D3-BE28-1B30DB15940E	*EXPLOIT*
+|     	D5084D51-C8DF-5CBA-BC26-ACF2E33F8E52	9.8	https://vulners.com/githubexploit/D5084D51-C8DF-5CBA-BC26-ACF2E33F8E52	*EXPLOIT*
+|     	CVE-2022-31813	9.8	https://vulners.com/cve/CVE-2022-31813
+|     	CVE-2022-22720	9.8	https://vulners.com/cve/CVE-2022-22720
+|     	CVE-2021-44790	9.8	https://vulners.com/cve/CVE-2021-44790
+|     	CVE-2021-39275	9.8	https://vulners.com/cve/CVE-2021-39275
+|     	CVE-2018-1312	9.8	https://vulners.com/cve/CVE-2018-1312
+|     	CVE-2017-7679	9.8	https://vulners.com/cve/CVE-2017-7679
+|     	CVE-2017-3169	9.8	https://vulners.com/cve/CVE-2017-3169
+|     	CVE-2017-3167	9.8	https://vulners.com/cve/CVE-2017-3167
+|     	CNVD-2022-51061	9.8	https://vulners.com/cnvd/CNVD-2022-51061
+|     	CNVD-2022-03225	9.8	https://vulners.com/cnvd/CNVD-2022-03225
+|     	CNVD-2021-102386	9.8	https://vulners.com/cnvd/CNVD-2021-102386
+|     	B6297446-2DDD-52BA-B508-29A748A5D2CC	9.8	https://vulners.com/githubexploit/B6297446-2DDD-52BA-B508-29A748A5D2CC	*EXPLOIT*
+|     	1337DAY-ID-38427	9.8	https://vulners.com/zdt/1337DAY-ID-38427	*EXPLOIT*
+|     	0DB60346-03B6-5FEE-93D7-FF5757D225AA	9.8	https://vulners.com/gitee/0DB60346-03B6-5FEE-93D7-FF5757D225AA	*EXPLOIT*
+|     	HTTPD:509B04B8CC51879DD0A561AC4FDBE0A6	9.1	https://vulners.com/httpd/HTTPD:509B04B8CC51879DD0A561AC4FDBE0A6
+|     	HTTPD:459EB8D98503A2460C9445C5B224979E	9.1	https://vulners.com/httpd/HTTPD:459EB8D98503A2460C9445C5B224979E
+|     	HTTPD:2C227652EE0B3B961706AAFCACA3D1E1	9.1	https://vulners.com/httpd/HTTPD:2C227652EE0B3B961706AAFCACA3D1E1
+|     	FD2EE3A5-BAEA-5845-BA35-E6889992214F	9.1	https://vulners.com/githubexploit/FD2EE3A5-BAEA-5845-BA35-E6889992214F	*EXPLOIT*
+|     	FBC8A8BE-F00A-5B6D-832E-F99A72E7A3F7	9.1	https://vulners.com/githubexploit/FBC8A8BE-F00A-5B6D-832E-F99A72E7A3F7	*EXPLOIT*
+|     	E606D7F4-5FA2-5907-B30E-367D6FFECD89	9.1	https://vulners.com/githubexploit/E606D7F4-5FA2-5907-B30E-367D6FFECD89	*EXPLOIT*
+|     	D8A19443-2A37-5592-8955-F614504AAF45	9.1	https://vulners.com/githubexploit/D8A19443-2A37-5592-8955-F614504AAF45	*EXPLOIT*
+|     	CVE-2024-40898	9.1	https://vulners.com/cve/CVE-2024-40898
+|     	CVE-2022-28615	9.1	https://vulners.com/cve/CVE-2022-28615
+|     	CVE-2022-22721	9.1	https://vulners.com/cve/CVE-2022-22721
+|     	CVE-2017-9788	9.1	https://vulners.com/cve/CVE-2017-9788
+|     	CNVD-2022-51060	9.1	https://vulners.com/cnvd/CNVD-2022-51060
+|     	CNVD-2022-41638	9.1	https://vulners.com/cnvd/CNVD-2022-41638
+|     	B5E74010-A082-5ECE-AB37-623A5B33FE7D	9.1	https://vulners.com/githubexploit/B5E74010-A082-5ECE-AB37-623A5B33FE7D	*EXPLOIT*
+|     	HTTPD:1B3D546A8500818AAC5B1359FE11A7E4	9.0	https://vulners.com/httpd/HTTPD:1B3D546A8500818AAC5B1359FE11A7E4
+|     	FDF3DFA1-ED74-5EE2-BF5C-BA752CA34AE8	9.0	https://vulners.com/githubexploit/FDF3DFA1-ED74-5EE2-BF5C-BA752CA34AE8	*EXPLOIT*
+|     	CVE-2021-40438	9.0	https://vulners.com/cve/CVE-2021-40438
+|     	CNVD-2022-03224	9.0	https://vulners.com/cnvd/CNVD-2022-03224
+|     	AE3EF1CC-A0C3-5CB7-A6EF-4DAAAFA59C8C	9.0	https://vulners.com/githubexploit/AE3EF1CC-A0C3-5CB7-A6EF-4DAAAFA59C8C	*EXPLOIT*
+|     	8AFB43C5-ABD4-52AD-BB19-24D7884FF2A2	9.0	https://vulners.com/githubexploit/8AFB43C5-ABD4-52AD-BB19-24D7884FF2A2	*EXPLOIT*
+|     	7F48C6CF-47B2-5AF9-B6FD-1735FB2A95B2	9.0	https://vulners.com/githubexploit/7F48C6CF-47B2-5AF9-B6FD-1735FB2A95B2	*EXPLOIT*
+|     	36618CA8-9316-59CA-B748-82F15F407C4F	9.0	https://vulners.com/githubexploit/36618CA8-9316-59CA-B748-82F15F407C4F	*EXPLOIT*
+|     	B0A9E5E8-7CCC-5984-9922-A89F11D6BF38	8.2	https://vulners.com/githubexploit/B0A9E5E8-7CCC-5984-9922-A89F11D6BF38	*EXPLOIT*
+|     	HTTPD:30E0EE442FF4843665FED4FBCA25406A	8.1	https://vulners.com/httpd/HTTPD:30E0EE442FF4843665FED4FBCA25406A
+|     	CVE-2016-5387	8.1	https://vulners.com/cve/CVE-2016-5387
+|     	CNVD-2016-04948	8.1	https://vulners.com/cnvd/CNVD-2016-04948
+|     	SSV:72403	7.8	https://vulners.com/seebug/SSV:72403	*EXPLOIT*
+|     	SSV:2820	7.8	https://vulners.com/seebug/SSV:2820	*EXPLOIT*
+|     	SSV:26043	7.8	https://vulners.com/seebug/SSV:26043	*EXPLOIT*
+|     	SSV:20899	7.8	https://vulners.com/seebug/SSV:20899	*EXPLOIT*
+|     	SSV:11569	7.8	https://vulners.com/seebug/SSV:11569	*EXPLOIT*
+|     	PACKETSTORM:180517	7.8	https://vulners.com/packetstorm/PACKETSTORM:180517	*EXPLOIT*
+|     	PACKETSTORM:126851	7.8	https://vulners.com/packetstorm/PACKETSTORM:126851	*EXPLOIT*
+|     	PACKETSTORM:123527	7.8	https://vulners.com/packetstorm/PACKETSTORM:123527	*EXPLOIT*
+|     	PACKETSTORM:122962	7.8	https://vulners.com/packetstorm/PACKETSTORM:122962	*EXPLOIT*
+|     	MSF:AUXILIARY-DOS-HTTP-APACHE_RANGE_DOS-	7.8	https://vulners.com/metasploit/MSF:AUXILIARY-DOS-HTTP-APACHE_RANGE_DOS-	*EXPLOIT*
+|     	HTTPD:556E7FA885F1BEDB6E3D9AAB5665198F	7.8	https://vulners.com/httpd/HTTPD:556E7FA885F1BEDB6E3D9AAB5665198F
+|     	EXPLOITPACK:186B5FCF5C57B52642E62C06BABC6F83	7.8	https://vulners.com/exploitpack/EXPLOITPACK:186B5FCF5C57B52642E62C06BABC6F83	*EXPLOIT*
+|     	EDB-ID:18221	7.8	https://vulners.com/exploitdb/EDB-ID:18221	*EXPLOIT*
+|     	CVE-2011-3192	7.8	https://vulners.com/cve/CVE-2011-3192
+|     	C76F17FD-A21F-5E67-97D8-51A53B9594C1	7.8	https://vulners.com/githubexploit/C76F17FD-A21F-5E67-97D8-51A53B9594C1	*EXPLOIT*
+|     	952369B3-F757-55D6-B0C6-9F72C04294A3	7.8	https://vulners.com/githubexploit/952369B3-F757-55D6-B0C6-9F72C04294A3	*EXPLOIT*
+|     	1337DAY-ID-21170	7.8	https://vulners.com/zdt/1337DAY-ID-21170	*EXPLOIT*
+|     	SSV:12673	7.5	https://vulners.com/seebug/SSV:12673	*EXPLOIT*
+|     	SSV:12626	7.5	https://vulners.com/seebug/SSV:12626	*EXPLOIT*
+|     	PACKETSTORM:181038	7.5	https://vulners.com/packetstorm/PACKETSTORM:181038	*EXPLOIT*
+|     	MSF:AUXILIARY-SCANNER-HTTP-APACHE_OPTIONSBLEED-	7.5	https://vulners.com/metasploit/MSF:AUXILIARY-SCANNER-HTTP-APACHE_OPTIONSBLEED-	*EXPLOIT*
+|     	HTTPD:F1CFBC9B54DFAD0499179863D36830BB	7.5	https://vulners.com/httpd/HTTPD:F1CFBC9B54DFAD0499179863D36830BB
+|     	HTTPD:C317C7138B4A8BBD54A901D6DDDCB837	7.5	https://vulners.com/httpd/HTTPD:C317C7138B4A8BBD54A901D6DDDCB837
+|     	HTTPD:C1F57FDC580B58497A5EC5B7D3749F2F	7.5	https://vulners.com/httpd/HTTPD:C1F57FDC580B58497A5EC5B7D3749F2F
+|     	HTTPD:C0856723C0FBF5502E1378536B484C09	7.5	https://vulners.com/httpd/HTTPD:C0856723C0FBF5502E1378536B484C09
+|     	HTTPD:BEF84406F2FB3CB90F1C555BEFF774E2	7.5	https://vulners.com/httpd/HTTPD:BEF84406F2FB3CB90F1C555BEFF774E2
+|     	HTTPD:B1B0A31C4AD388CC6C575931414173E2	7.5	https://vulners.com/httpd/HTTPD:B1B0A31C4AD388CC6C575931414173E2
+|     	HTTPD:7DDAAFDB1FD8B2E7FD36ADABA5DB6DAA	7.5	https://vulners.com/httpd/HTTPD:7DDAAFDB1FD8B2E7FD36ADABA5DB6DAA
+|     	HTTPD:5E6BCDB2F7C53E4EDCE844709D930AF5	7.5	https://vulners.com/httpd/HTTPD:5E6BCDB2F7C53E4EDCE844709D930AF5
+|     	HTTPD:5227799CC4172DBFA895A4F581F74C11	7.5	https://vulners.com/httpd/HTTPD:5227799CC4172DBFA895A4F581F74C11
+|     	EDB-ID:42745	7.5	https://vulners.com/exploitdb/EDB-ID:42745	*EXPLOIT*
+|     	CVE-2023-31122	7.5	https://vulners.com/cve/CVE-2023-31122
+|     	CVE-2022-30556	7.5	https://vulners.com/cve/CVE-2022-30556
+|     	CVE-2022-29404	7.5	https://vulners.com/cve/CVE-2022-29404
+|     	CVE-2022-22719	7.5	https://vulners.com/cve/CVE-2022-22719
+|     	CVE-2021-34798	7.5	https://vulners.com/cve/CVE-2021-34798
+|     	CVE-2018-8011	7.5	https://vulners.com/cve/CVE-2018-8011
+|     	CVE-2018-1303	7.5	https://vulners.com/cve/CVE-2018-1303
+|     	CVE-2017-9798	7.5	https://vulners.com/cve/CVE-2017-9798
+|     	CVE-2017-15710	7.5	https://vulners.com/cve/CVE-2017-15710
+|     	CVE-2016-8743	7.5	https://vulners.com/cve/CVE-2016-8743
+|     	CVE-2009-2699	7.5	https://vulners.com/cve/CVE-2009-2699
+|     	CVE-2009-1955	7.5	https://vulners.com/cve/CVE-2009-1955
+|     	CVE-2006-20001	7.5	https://vulners.com/cve/CVE-2006-20001
+|     	CNVD-2025-16614	7.5	https://vulners.com/cnvd/CNVD-2025-16614
+|     	CNVD-2024-20839	7.5	https://vulners.com/cnvd/CNVD-2024-20839
+|     	CNVD-2023-93320	7.5	https://vulners.com/cnvd/CNVD-2023-93320
+|     	CNVD-2023-80558	7.5	https://vulners.com/cnvd/CNVD-2023-80558
+|     	CNVD-2022-53584	7.5	https://vulners.com/cnvd/CNVD-2022-53584
+|     	CNVD-2022-41639	7.5	https://vulners.com/cnvd/CNVD-2022-41639
+|     	CNVD-2022-03223	7.5	https://vulners.com/cnvd/CNVD-2022-03223
+|     	CNVD-2019-41283	7.5	https://vulners.com/cnvd/CNVD-2019-41283
+|     	CNVD-2017-13906	7.5	https://vulners.com/cnvd/CNVD-2017-13906
+|     	CNVD-2016-13233	7.5	https://vulners.com/cnvd/CNVD-2016-13233
+|     	CNVD-2016-13232	7.5	https://vulners.com/cnvd/CNVD-2016-13232
+|     	A0F268C8-7319-5637-82F7-8DAF72D14629	7.5	https://vulners.com/githubexploit/A0F268C8-7319-5637-82F7-8DAF72D14629	*EXPLOIT*
+|     	56EC26AF-7FB6-5CF0-B179-6151B1D53BA5	7.5	https://vulners.com/githubexploit/56EC26AF-7FB6-5CF0-B179-6151B1D53BA5	*EXPLOIT*
+|     	45D138AD-BEC6-552A-91EA-8816914CA7F4	7.5	https://vulners.com/githubexploit/45D138AD-BEC6-552A-91EA-8816914CA7F4	*EXPLOIT*
+|     	CVE-2025-49812	7.4	https://vulners.com/cve/CVE-2025-49812
+|     	CVE-2023-38709	7.3	https://vulners.com/cve/CVE-2023-38709
+|     	CNVD-2024-36395	7.3	https://vulners.com/cnvd/CNVD-2024-36395
+|     	SSV:11802	7.1	https://vulners.com/seebug/SSV:11802	*EXPLOIT*
+|     	SSV:11762	7.1	https://vulners.com/seebug/SSV:11762	*EXPLOIT*
+|     	HTTPD:B44AEE5F83602723E751B3341D72C01D	7.1	https://vulners.com/httpd/HTTPD:B44AEE5F83602723E751B3341D72C01D
+|     	HTTPD:4D420BA542C9357A7F064936250DAEFF	7.1	https://vulners.com/httpd/HTTPD:4D420BA542C9357A7F064936250DAEFF
+|     	CVE-2009-1891	7.1	https://vulners.com/cve/CVE-2009-1891
+|     	CVE-2009-1890	7.1	https://vulners.com/cve/CVE-2009-1890
+|     	SSV:60427	6.9	https://vulners.com/seebug/SSV:60427	*EXPLOIT*
+|     	SSV:60386	6.9	https://vulners.com/seebug/SSV:60386	*EXPLOIT*
+|     	SSV:60069	6.9	https://vulners.com/seebug/SSV:60069	*EXPLOIT*
+|     	HTTPD:D4C114070B5E7C4AA3E92FF94A57C659	6.9	https://vulners.com/httpd/HTTPD:D4C114070B5E7C4AA3E92FF94A57C659
+|     	CVE-2012-0883	6.9	https://vulners.com/cve/CVE-2012-0883
+|     	SSV:12447	6.8	https://vulners.com/seebug/SSV:12447	*EXPLOIT*
+|     	PACKETSTORM:127546	6.8	https://vulners.com/packetstorm/PACKETSTORM:127546	*EXPLOIT*
+|     	HTTPD:0A13DEC03E87AF57C14487550B086B51	6.8	https://vulners.com/httpd/HTTPD:0A13DEC03E87AF57C14487550B086B51
+|     	CVE-2014-0226	6.8	https://vulners.com/cve/CVE-2014-0226
+|     	1337DAY-ID-22451	6.8	https://vulners.com/zdt/1337DAY-ID-22451	*EXPLOIT*
+|     	SSV:11568	6.4	https://vulners.com/seebug/SSV:11568	*EXPLOIT*
+|     	HTTPD:AFA6B3F6376C54842BAFBBF24C7F44C4	6.4	https://vulners.com/httpd/HTTPD:AFA6B3F6376C54842BAFBBF24C7F44C4
+|     	CVE-2009-1956	6.4	https://vulners.com/cve/CVE-2009-1956
+|     	HTTPD:3E4CF20C0CAD918E98C98926264946F2	6.1	https://vulners.com/httpd/HTTPD:3E4CF20C0CAD918E98C98926264946F2
+|     	CVE-2016-4975	6.1	https://vulners.com/cve/CVE-2016-4975
+|     	CVE-2018-1302	5.9	https://vulners.com/cve/CVE-2018-1302
+|     	CVE-2018-1301	5.9	https://vulners.com/cve/CVE-2018-1301
+|     	CNVD-2018-06536	5.9	https://vulners.com/cnvd/CNVD-2018-06536
+|     	CNVD-2018-06535	5.9	https://vulners.com/cnvd/CNVD-2018-06535
+|     	VULNERLAB:967	5.8	https://vulners.com/vulnerlab/VULNERLAB:967	*EXPLOIT*
+|     	VULNERABLE:967	5.8	https://vulners.com/vulnerlab/VULNERABLE:967	*EXPLOIT*
+|     	SSV:67231	5.8	https://vulners.com/seebug/SSV:67231	*EXPLOIT*
+|     	SSV:18637	5.8	https://vulners.com/seebug/SSV:18637	*EXPLOIT*
+|     	SSV:15088	5.8	https://vulners.com/seebug/SSV:15088	*EXPLOIT*
+|     	SSV:12600	5.8	https://vulners.com/seebug/SSV:12600	*EXPLOIT*
+|     	PACKETSTORM:84112	5.8	https://vulners.com/packetstorm/PACKETSTORM:84112	*EXPLOIT*
+|     	EXPLOITPACK:8B4E7E8DAE5A13C8250C6C33307CD66C	5.8	https://vulners.com/exploitpack/EXPLOITPACK:8B4E7E8DAE5A13C8250C6C33307CD66C	*EXPLOIT*
+|     	EDB-ID:10579	5.8	https://vulners.com/exploitdb/EDB-ID:10579	*EXPLOIT*
+|     	CVE-2009-3555	5.8	https://vulners.com/cve/CVE-2009-3555
+|     	HTTPD:BAAB4065D254D64A717E8A5C847C7BCA	5.3	https://vulners.com/httpd/HTTPD:BAAB4065D254D64A717E8A5C847C7BCA
+|     	HTTPD:8806CE4EFAA6A567C7FAD62778B6A46F	5.3	https://vulners.com/httpd/HTTPD:8806CE4EFAA6A567C7FAD62778B6A46F
+|     	CVE-2022-37436	5.3	https://vulners.com/cve/CVE-2022-37436
+|     	CVE-2022-28614	5.3	https://vulners.com/cve/CVE-2022-28614
+|     	CVE-2022-28330	5.3	https://vulners.com/cve/CVE-2022-28330
+|     	CNVD-2023-30859	5.3	https://vulners.com/cnvd/CNVD-2023-30859
+|     	CNVD-2022-53582	5.3	https://vulners.com/cnvd/CNVD-2022-53582
+|     	CNVD-2022-51059	5.3	https://vulners.com/cnvd/CNVD-2022-51059
+|     	CNVD-2020-46278	5.3	https://vulners.com/cnvd/CNVD-2020-46278
+|     	SSV:60788	5.1	https://vulners.com/seebug/SSV:60788	*EXPLOIT*
+|     	HTTPD:96CCBB8B74890DC94A45CD0955D35015	5.1	https://vulners.com/httpd/HTTPD:96CCBB8B74890DC94A45CD0955D35015
+|     	CVE-2013-1862	5.1	https://vulners.com/cve/CVE-2013-1862
+|     	SSV:96537	5.0	https://vulners.com/seebug/SSV:96537	*EXPLOIT*
+|     	SSV:62058	5.0	https://vulners.com/seebug/SSV:62058	*EXPLOIT*
+|     	SSV:61874	5.0	https://vulners.com/seebug/SSV:61874	*EXPLOIT*
+|     	SSV:20993	5.0	https://vulners.com/seebug/SSV:20993	*EXPLOIT*
+|     	SSV:20979	5.0	https://vulners.com/seebug/SSV:20979	*EXPLOIT*
+|     	SSV:20969	5.0	https://vulners.com/seebug/SSV:20969	*EXPLOIT*
+|     	SSV:19592	5.0	https://vulners.com/seebug/SSV:19592	*EXPLOIT*
+|     	SSV:15137	5.0	https://vulners.com/seebug/SSV:15137	*EXPLOIT*
+|     	SSV:12005	5.0	https://vulners.com/seebug/SSV:12005	*EXPLOIT*
+|     	PACKETSTORM:181059	5.0	https://vulners.com/packetstorm/PACKETSTORM:181059	*EXPLOIT*
+|     	PACKETSTORM:105672	5.0	https://vulners.com/packetstorm/PACKETSTORM:105672	*EXPLOIT*
+|     	PACKETSTORM:105591	5.0	https://vulners.com/packetstorm/PACKETSTORM:105591	*EXPLOIT*
+|     	MSF:AUXILIARY-SCANNER-HTTP-REWRITE_PROXY_BYPASS-	5.0	https://vulners.com/metasploit/MSF:AUXILIARY-SCANNER-HTTP-REWRITE_PROXY_BYPASS-	*EXPLOIT*
+|     	HTTPD:FF76CF8F03BE59B7AD0119034B0022DB	5.0	https://vulners.com/httpd/HTTPD:FF76CF8F03BE59B7AD0119034B0022DB
+|     	HTTPD:DD1BEF13C172D3E8CA5D3F3906101EC9	5.0	https://vulners.com/httpd/HTTPD:DD1BEF13C172D3E8CA5D3F3906101EC9
+|     	HTTPD:D1C855645E1630AE37C6F642C1D0F213	5.0	https://vulners.com/httpd/HTTPD:D1C855645E1630AE37C6F642C1D0F213
+|     	HTTPD:85C24937CF85C2E1DBF78F9954817A28	5.0	https://vulners.com/httpd/HTTPD:85C24937CF85C2E1DBF78F9954817A28
+|     	HTTPD:6D37F924288E2D149DC3C52135232B6E	5.0	https://vulners.com/httpd/HTTPD:6D37F924288E2D149DC3C52135232B6E
+|     	HTTPD:6CA43FB8E8332E715522C8A6C24EC31E	5.0	https://vulners.com/httpd/HTTPD:6CA43FB8E8332E715522C8A6C24EC31E
+|     	HTTPD:60BF8A7CCF62E24F92B3DCCA0E53F1F8	5.0	https://vulners.com/httpd/HTTPD:60BF8A7CCF62E24F92B3DCCA0E53F1F8
+|     	HTTPD:423307886E19F2012B809EEB1E9C6846	5.0	https://vulners.com/httpd/HTTPD:423307886E19F2012B809EEB1E9C6846
+|     	HTTPD:371AA87DEAE292D8E6ACC01309CA723A	5.0	https://vulners.com/httpd/HTTPD:371AA87DEAE292D8E6ACC01309CA723A
+|     	HTTPD:2E324CC4C6C61757E316E26EF4DCB945	5.0	https://vulners.com/httpd/HTTPD:2E324CC4C6C61757E316E26EF4DCB945
+|     	HTTPD:2C06F6E938AADE21D7C59CED65A985E6	5.0	https://vulners.com/httpd/HTTPD:2C06F6E938AADE21D7C59CED65A985E6
+|     	HTTPD:1DC50F4C723B9143E9713B27031C6043	5.0	https://vulners.com/httpd/HTTPD:1DC50F4C723B9143E9713B27031C6043
+|     	HTTPD:1069F9C369A2B2B1C4F8A1AC73589169	5.0	https://vulners.com/httpd/HTTPD:1069F9C369A2B2B1C4F8A1AC73589169
+|     	EXPLOITPACK:C8C256BE0BFF5FE1C0405CB0AA9C075D	5.0	https://vulners.com/exploitpack/EXPLOITPACK:C8C256BE0BFF5FE1C0405CB0AA9C075D	*EXPLOIT*
+|     	EXPLOITPACK:460143F0ACAE117DD79BD75EDFDA154B	5.0	https://vulners.com/exploitpack/EXPLOITPACK:460143F0ACAE117DD79BD75EDFDA154B	*EXPLOIT*
+|     	EDB-ID:17969	5.0	https://vulners.com/exploitdb/EDB-ID:17969	*EXPLOIT*
+|     	CVE-2015-3183	5.0	https://vulners.com/cve/CVE-2015-3183
+|     	CVE-2015-0228	5.0	https://vulners.com/cve/CVE-2015-0228
+|     	CVE-2014-0231	5.0	https://vulners.com/cve/CVE-2014-0231
+|     	CVE-2014-0098	5.0	https://vulners.com/cve/CVE-2014-0098
+|     	CVE-2013-6438	5.0	https://vulners.com/cve/CVE-2013-6438
+|     	CVE-2013-5704	5.0	https://vulners.com/cve/CVE-2013-5704
+|     	CVE-2011-3368	5.0	https://vulners.com/cve/CVE-2011-3368
+|     	CVE-2010-1623	5.0	https://vulners.com/cve/CVE-2010-1623
+|     	CVE-2010-1452	5.0	https://vulners.com/cve/CVE-2010-1452
+|     	CVE-2010-0408	5.0	https://vulners.com/cve/CVE-2010-0408
+|     	CVE-2009-3720	5.0	https://vulners.com/cve/CVE-2009-3720
+|     	CVE-2009-3560	5.0	https://vulners.com/cve/CVE-2009-3560
+|     	CVE-2009-3095	5.0	https://vulners.com/cve/CVE-2009-3095
+|     	CVE-2008-2364	5.0	https://vulners.com/cve/CVE-2008-2364
+|     	CVE-2007-6750	5.0	https://vulners.com/cve/CVE-2007-6750
+|     	CNVD-2015-01691	5.0	https://vulners.com/cnvd/CNVD-2015-01691
+|     	1337DAY-ID-28573	5.0	https://vulners.com/zdt/1337DAY-ID-28573	*EXPLOIT*
+|     	SSV:11668	4.9	https://vulners.com/seebug/SSV:11668	*EXPLOIT*
+|     	SSV:11501	4.9	https://vulners.com/seebug/SSV:11501	*EXPLOIT*
+|     	HTTPD:05AF7B1B11654BC6892C02003A12DE06	4.9	https://vulners.com/httpd/HTTPD:05AF7B1B11654BC6892C02003A12DE06
+|     	CVE-2009-1195	4.9	https://vulners.com/cve/CVE-2009-1195
+|     	SSV:30024	4.6	https://vulners.com/seebug/SSV:30024	*EXPLOIT*
+|     	HTTPD:FB0DB72A0946D2AA25FA9FA21ADB2CE1	4.6	https://vulners.com/httpd/HTTPD:FB0DB72A0946D2AA25FA9FA21ADB2CE1
+|     	CVE-2012-0031	4.6	https://vulners.com/cve/CVE-2012-0031
+|     	1337DAY-ID-27465	4.6	https://vulners.com/zdt/1337DAY-ID-27465	*EXPLOIT*
+|     	SSV:23169	4.4	https://vulners.com/seebug/SSV:23169	*EXPLOIT*
+|     	HTTPD:6309ABD03BB1B29C82E941636515010E	4.4	https://vulners.com/httpd/HTTPD:6309ABD03BB1B29C82E941636515010E
+|     	CVE-2011-3607	4.4	https://vulners.com/cve/CVE-2011-3607
+|     	1337DAY-ID-27473	4.4	https://vulners.com/zdt/1337DAY-ID-27473	*EXPLOIT*
+|     	SSV:60905	4.3	https://vulners.com/seebug/SSV:60905	*EXPLOIT*
+|     	SSV:60657	4.3	https://vulners.com/seebug/SSV:60657	*EXPLOIT*
+|     	SSV:60653	4.3	https://vulners.com/seebug/SSV:60653	*EXPLOIT*
+|     	SSV:60345	4.3	https://vulners.com/seebug/SSV:60345	*EXPLOIT*
+|     	SSV:4786	4.3	https://vulners.com/seebug/SSV:4786	*EXPLOIT*
+|     	SSV:3804	4.3	https://vulners.com/seebug/SSV:3804	*EXPLOIT*
+|     	SSV:30094	4.3	https://vulners.com/seebug/SSV:30094	*EXPLOIT*
+|     	SSV:30056	4.3	https://vulners.com/seebug/SSV:30056	*EXPLOIT*
+|     	SSV:24250	4.3	https://vulners.com/seebug/SSV:24250	*EXPLOIT*
+|     	SSV:20555	4.3	https://vulners.com/seebug/SSV:20555	*EXPLOIT*
+|     	SSV:19320	4.3	https://vulners.com/seebug/SSV:19320	*EXPLOIT*
+|     	SSV:11558	4.3	https://vulners.com/seebug/SSV:11558	*EXPLOIT*
+|     	PACKETSTORM:109284	4.3	https://vulners.com/packetstorm/PACKETSTORM:109284	*EXPLOIT*
+|     	HTTPD:FD1CC7EACBC758C451BA5B8D25FCB6DD	4.3	https://vulners.com/httpd/HTTPD:FD1CC7EACBC758C451BA5B8D25FCB6DD
+|     	HTTPD:C730B9155CAC64B44A77E253B3135FE5	4.3	https://vulners.com/httpd/HTTPD:C730B9155CAC64B44A77E253B3135FE5
+|     	HTTPD:B90E2A3B47C473DD04F25ECBDA96D6CE	4.3	https://vulners.com/httpd/HTTPD:B90E2A3B47C473DD04F25ECBDA96D6CE
+|     	HTTPD:B07D6585013819446B5017BD7E358E6F	4.3	https://vulners.com/httpd/HTTPD:B07D6585013819446B5017BD7E358E6F
+|     	HTTPD:AC5C28237AB3E52EF4D366EB0CD6D4AF	4.3	https://vulners.com/httpd/HTTPD:AC5C28237AB3E52EF4D366EB0CD6D4AF
+|     	HTTPD:A49ADFA68FCEB939DA0E2BE13CA74CB9	4.3	https://vulners.com/httpd/HTTPD:A49ADFA68FCEB939DA0E2BE13CA74CB9
+|     	HTTPD:49F10A242AB057B651259425C3E680F4	4.3	https://vulners.com/httpd/HTTPD:49F10A242AB057B651259425C3E680F4
+|     	HTTPD:3D474EEBC8F5BC66AE37F523DD259829	4.3	https://vulners.com/httpd/HTTPD:3D474EEBC8F5BC66AE37F523DD259829
+|     	HTTPD:2A661E9492CCEF999508BD8503884E30	4.3	https://vulners.com/httpd/HTTPD:2A661E9492CCEF999508BD8503884E30
+|     	HTTPD:1E858A305C3DEA1B5E9A23EE1352B1B3	4.3	https://vulners.com/httpd/HTTPD:1E858A305C3DEA1B5E9A23EE1352B1B3
+|     	HTTPD:0F6B8D022A5D1C68540812E406264625	4.3	https://vulners.com/httpd/HTTPD:0F6B8D022A5D1C68540812E406264625
+|     	HTTPD:0D2952537BF45B77447EF90EAD31D8C9	4.3	https://vulners.com/httpd/HTTPD:0D2952537BF45B77447EF90EAD31D8C9
+|     	EXPLOITPACK:FDCB3D93694E48CD5EE27CE55D6801DE	4.3	https://vulners.com/exploitpack/EXPLOITPACK:FDCB3D93694E48CD5EE27CE55D6801DE	*EXPLOIT*
+|     	EDB-ID:35738	4.3	https://vulners.com/exploitdb/EDB-ID:35738	*EXPLOIT*
+|     	CVE-2016-8612	4.3	https://vulners.com/cve/CVE-2016-8612
+|     	CVE-2014-0118	4.3	https://vulners.com/cve/CVE-2014-0118
+|     	CVE-2013-1896	4.3	https://vulners.com/cve/CVE-2013-1896
+|     	CVE-2012-4558	4.3	https://vulners.com/cve/CVE-2012-4558
+|     	CVE-2012-3499	4.3	https://vulners.com/cve/CVE-2012-3499
+|     	CVE-2012-0053	4.3	https://vulners.com/cve/CVE-2012-0053
+|     	CVE-2011-4317	4.3	https://vulners.com/cve/CVE-2011-4317
+|     	CVE-2011-3639	4.3	https://vulners.com/cve/CVE-2011-3639
+|     	CVE-2011-0419	4.3	https://vulners.com/cve/CVE-2011-0419
+|     	CVE-2010-0434	4.3	https://vulners.com/cve/CVE-2010-0434
+|     	CVE-2009-0023	4.3	https://vulners.com/cve/CVE-2009-0023
+|     	CVE-2008-2939	4.3	https://vulners.com/cve/CVE-2008-2939
+|     	CVE-2008-0455	4.3	https://vulners.com/cve/CVE-2008-0455
+|     	CVE-2007-6420	4.3	https://vulners.com/cve/CVE-2007-6420
+|     	67D5C133-2D28-56DF-B3FF-FA397606547D	4.3	https://vulners.com/gitee/67D5C133-2D28-56DF-B3FF-FA397606547D	*EXPLOIT*
+|     	SSV:12628	2.6	https://vulners.com/seebug/SSV:12628	*EXPLOIT*
+|     	HTTPD:AA860ED739944CC66DCA320985CEC190	2.6	https://vulners.com/httpd/HTTPD:AA860ED739944CC66DCA320985CEC190
+|     	HTTPD:A79620D4A49D1F0D9BE6A18FD0CA234C	2.6	https://vulners.com/httpd/HTTPD:A79620D4A49D1F0D9BE6A18FD0CA234C
+|     	CVE-2012-2687	2.6	https://vulners.com/cve/CVE-2012-2687
+|     	CVE-2009-3094	2.6	https://vulners.com/cve/CVE-2009-3094
+|     	CVE-2008-0456	2.6	https://vulners.com/cve/CVE-2008-0456
+|     	SSV:60250	1.2	https://vulners.com/seebug/SSV:60250	*EXPLOIT*
+|     	CVE-2011-4415	1.2	https://vulners.com/cve/CVE-2011-4415
+|     	1337DAY-ID-9602	0.0	https://vulners.com/zdt/1337DAY-ID-9602	*EXPLOIT*
+|     	1337DAY-ID-21346	0.0	https://vulners.com/zdt/1337DAY-ID-21346	*EXPLOIT*
+|     	1337DAY-ID-17257	0.0	https://vulners.com/zdt/1337DAY-ID-17257	*EXPLOIT*
+|     	1337DAY-ID-16843	0.0	https://vulners.com/zdt/1337DAY-ID-16843	*EXPLOIT*
+|     	1337DAY-ID-13268	0.0	https://vulners.com/zdt/1337DAY-ID-13268	*EXPLOIT*
+|_    	1337DAY-ID-11185	0.0	https://vulners.com/zdt/1337DAY-ID-11185	*EXPLOIT*
+| http-comments-displayer: 
+| Spidering limited to: maxdepth=3; maxpagecount=20; withinhost=192.168.56.9
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/index.php
+|     Line number: 66
+|     Comment: 
+|         
+|         // <![CDATA[
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 188
+|     Comment: 
+|         /* odd items 1,3,5,7,... */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 892
+|     Comment: 
+|         /* height: 12em; */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 231
+|     Comment: 
+|         /**
+|          * marks table rows/cells if the db field is in a where condition
+|          */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 30
+|     Comment: 
+|         /******************************************************************************/
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 245
+|     Comment: 
+|         /* IE doesnt handles 'pre' right */
+|     
+|     Path: http://192.168.56.9:80/mutillidae/index.php?page=pen-test-tool-lookup.php
+|     Line number: 488
+|     Comment: 
+|         <!-- Begin Content -->
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 706
+|     Comment: 
+|         /* Heading */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 208
+|     Comment: 
+|         /* marked table rows */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 897
+|     Comment: 
+|         /* height: 100%; */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 131
+|     Comment: 
+|         /* buttons in some browsers (eg. Konqueror) are block elements,
+|            this breaks design */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 215
+|     Comment: 
+|         /* hovered items */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 579
+|     Comment: 
+|         /* disabled tabs */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 367
+|     Comment: 
+|         /* message boxes: warning, error, confirmation */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 903
+|     Comment: 
+|         /* end querybox */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 929
+|     Comment: 
+|         /* iconic view for ul items */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 856
+|     Comment: 
+|         /* querywindow */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 696
+|     Comment: 
+|         /* server privileges */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 174
+|     Comment: 
+|         /* IE */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 631
+|     Comment: 
+|         /* to be able to cancel the bottom border, use <li class="active"> */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/index.php
+|     Line number: 79
+|     Comment: 
+|         
+|         // ]]>
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 522
+|     Comment: 
+|         /**
+|          * login form
+|          */
+|     
+|     Path: http://192.168.56.9:80/mutillidae/index.php?page=pen-test-tool-lookup.php
+|     Line number: 584
+|     Comment: 
+|         /*Exception*/
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 357
+|     Comment: 
+|         /* no extra space in table cells */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 876
+|     Comment: 
+|         /* querybox */
+|     
+|     Path: http://192.168.56.9:80/mutillidae/index.php?page=pen-test-tool-lookup.php
+|     Line number: 35
+|     Comment: 
+|         
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 589
+|     Comment: 
+|         /* enabled drop/empty tabs */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 645
+|     Comment: 
+|         /* Calendar */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 31
+|     Comment: 
+|         /* general tags */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 290
+|     Comment: 
+|         /* MySQL Parser */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 642
+|     Comment: 
+|         /* end topmenu */
+|     
+|     Path: http://192.168.56.9:80/mutillidae/index.php?page=pen-test-tool-lookup.php
+|     Line number: 23
+|     Comment: 
+|         
+|         
+|         
+|         
+|         		***********************************************/
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/index.php
+|     Line number: 13
+|     Comment: 
+|         
+|         //<![CDATA[
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 223
+|     Comment: 
+|         /* hovered table rows */
+|     
+|     Path: http://192.168.56.9:80/dvwa/
+|     Line number: 57
+|     Comment: 
+|         <!-- <img src="dvwa/images/RandomStorm.png" /> -->
+|     
+|     Path: http://192.168.56.9:80/mutillidae/index.php?page=framing.php
+|     Line number: 537
+|     Comment: 
+|         <!-- End Content -->
+|     
+|     Path: http://192.168.56.9:80/mutillidae/javascript/bookmark-site.js
+|     Line number: 2
+|     Comment: 
+|         
+|         
+|         
+|         
+|         	***********************************************/
+|     
+|     Path: http://192.168.56.9:80/mutillidae/javascript/bookmark-site.js
+|     Line number: 8
+|     Comment: 
+|         /* Modified heavily by Jeremy Druin */
+|     
+|     Path: http://192.168.56.9:80/mutillidae/index.php?page=pen-test-tool-lookup.php
+|     Line number: 536
+|     Comment: 
+|         <!-- BEGIN HTML OUTPUT  -->
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 616
+|     Comment: 
+|         /* enabled hover/active tabs */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 1024
+|     Comment: 
+|         /* END iconic view for ul items */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 953
+|     Comment: 
+|         /* list-style-image: url(./themes/original/img/s_rights.png); */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 812
+|     Comment: 
+|         /* serverstatus */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 905
+|     Comment: 
+|         /* main page */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 351
+|     Comment: 
+|         /* leave some space between icons and text */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 881
+|     Comment: 
+|         /* height: 15em; */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 194
+|     Comment: 
+|         /* even items 2,4,6,8,... */
+|     
+|     Path: http://192.168.56.9:80/mutillidae/index.php?page=pen-test-tool-lookup.php
+|     Line number: 2
+|     Comment: 
+|         
+|         
+|         
+|         
+|         
+|         
+|         
+|         			security instructors are just making all this up. -->
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 702
+|     Comment: 
+|         /* END server privileges */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/index.php
+|     Line number: 18
+|     Comment: 
+|         
+|         //]]>
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 154
+|     Comment: 
+|         /* classes */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 693
+|     Comment: 
+|         /* END table stats */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 178
+|     Comment: 
+|         /* revert for Gecko */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 747
+|     Comment: 
+|         /* user privileges */
+|     
+|     Path: http://192.168.56.9:80/mutillidae/index.php?page=pen-test-tool-lookup.php
+|     Line number: 31
+|     Comment: 
+|         
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 551
+|     Comment: 
+|         /* topmenu */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 200
+|     Comment: 
+|         /* odd table rows 1,3,5,7,... */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 504
+|     Comment: 
+|         /* disabled text */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/index.php
+|     Line number: 44
+|     Comment: 
+|         <!-- Login form -->
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 677
+|     Comment: 
+|         /* table stats */
+|     
+|     Path: http://192.168.56.9:80/mutillidae/index.php?page=pen-test-tool-lookup.php
+|     Line number: 32
+|     Comment: 
+|         
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 809
+|     Comment: 
+|         /* END user privileges */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 873
+|     Comment: 
+|         /* END querywindow */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 498
+|     Comment: 
+|         /* forbidden, no privilegs */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 549
+|     Comment: 
+|         /* specific elements */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 164
+|     Comment: 
+|         /* avoid a thick line since this should be used under another fieldset */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 926
+|     Comment: 
+|         /* END main page */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 674
+|     Comment: 
+|         /* end Calendar */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 458
+|     Comment: 
+|         /* end messageboxes */
+|     
+|     Path: http://192.168.56.9:80/mutillidae/index.php?page=pen-test-tool-lookup.php
+|     Line number: 33
+|     Comment: 
+|         
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 854
+|     Comment: 
+|         /* end serverstatus */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 571
+|     Comment: 
+|         /* default tab styles */
+|     
+|     Path: http://192.168.56.9:80/phpMyAdmin/phpmyadmin.css.php?lang=en-utf-8&amp;convcharset=utf-8&amp;token=71020fa70b56c7cb6fc3a363572a2710&amp;js_frame=right&amp;nocache=2457687151
+|     Line number: 584
+|     Comment: 
+|         /* disabled drop/empty tabs */
+|     
+|     Path: http://192.168.56.9:80/dvwa/
+|     Line number: 61
+|     Comment: 
+|_        <!-- end align div -->
+|_http-trace: TRACE is enabled
+|_http-referer-checker: Couldn't find any cross-domain scripts.
+|_http-date: Fri, 07 Nov 2025 21:09:52 GMT; +22s from local time.
+|_http-xssed: No previously reported XSS vuln.
+|_http-fetch: Please enter the complete path of the directory to save data in.
+|_http-stored-xss: Couldn't find any stored XSS vulnerabilities.
+| http-php-version: Versions from logo query (less accurate): 5.1.3 - 5.1.6, 5.2.0 - 5.2.17
+| Versions from credits query (more accurate): 5.2.3 - 5.2.5, 5.2.6RC3
+|_Version from header x-powered-by: PHP/5.2.4-2ubuntu5.10
+| http-headers: 
+|   Date: Fri, 07 Nov 2025 21:09:53 GMT
+|   Server: Apache/2.2.8 (Ubuntu) DAV/2
+|   X-Powered-By: PHP/5.2.4-2ubuntu5.10
+|   Connection: close
+|   Content-Type: text/html
+|   
+|_  (Request type: HEAD)
+| http-sql-injection: 
+|   Possible sqli for queries:
+|     http://192.168.56.9:80/mutillidae/index.php?page=home.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=notes.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=arbitrary-file-inclusion.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=credits.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=show-log.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=user-poll.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=framing.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=pen-test-tool-lookup.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=text-file-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=browser-info.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=source-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=home.php&do=toggle-security%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=dns-lookup.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=html5-storage.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=usage-instructions.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=installation.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=home.php&do=toggle-hints%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=php-errors.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=user-info.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=documentation%2Fhow-to-access-Mutillidae-over-Virtual-Box-network.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=password-generator.php%27%20OR%20sqlspider&username=anonymous
+|     http://192.168.56.9:80/mutillidae/?page=login.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=documentation%2Fvulnerabilities.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=view-someones-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=change-log.htm%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=show-log.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=view-someones-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=credits.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=text-file-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=source-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=add-to-your-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=login.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=register.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=user-info.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=secret-administrative-pages.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=site-footer-xss-discussion.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=add-to-your-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=capture-data.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=captured-data.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=set-background-color.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/dav/?C=N%3BO%3DD%27%20OR%20sqlspider
+|     http://192.168.56.9:80/dav/?C=S%3BO%3DA%27%20OR%20sqlspider
+|     http://192.168.56.9:80/dav/?C=M%3BO%3DA%27%20OR%20sqlspider
+|     http://192.168.56.9:80/dav/?C=D%3BO%3DA%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=home.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=notes.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=arbitrary-file-inclusion.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=credits.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=show-log.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=user-poll.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=framing.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=pen-test-tool-lookup.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=text-file-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=browser-info.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=source-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=home.php&do=toggle-security%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=dns-lookup.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=html5-storage.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=usage-instructions.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=installation.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=home.php&do=toggle-hints%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=php-errors.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=user-info.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=documentation%2Fhow-to-access-Mutillidae-over-Virtual-Box-network.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=password-generator.php%27%20OR%20sqlspider&username=anonymous
+|     http://192.168.56.9:80/mutillidae/?page=login.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=documentation%2Fvulnerabilities.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=view-someones-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=change-log.htm%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=show-log.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=view-someones-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=credits.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=text-file-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=source-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=add-to-your-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=login.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=register.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=user-info.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=secret-administrative-pages.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=site-footer-xss-discussion.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=add-to-your-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=capture-data.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=captured-data.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=set-background-color.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=home.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=arbitrary-file-inclusion.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=credits.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=show-log.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=user-poll.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=framing.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=pen-test-tool-lookup.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=text-file-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=browser-info.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=source-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=dns-lookup.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=html5-storage.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=installation.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=user-info.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=register.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=capture-data.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=login.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=documentation%2Fhow-to-access-Mutillidae-over-Virtual-Box-network.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=view-someones-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=documentation%2Fvulnerabilities.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=show-log.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=change-log.htm%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=credits.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=text-file-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=add-to-your-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=source-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=view-someones-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=captured-data.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=user-info.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=secret-administrative-pages.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=site-footer-xss-discussion.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=add-to-your-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=set-background-color.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=login.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=password-generator.php%27%20OR%20sqlspider&username=anonymous
+|     http://192.168.56.9:80/mutillidae/index.php?page=home.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=arbitrary-file-inclusion.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=credits.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=show-log.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=user-poll.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=framing.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=pen-test-tool-lookup.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=text-file-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=browser-info.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=source-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=dns-lookup.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=html5-storage.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=installation.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=register.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=user-info.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=documentation%2Fhow-to-access-Mutillidae-over-Virtual-Box-network.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=login.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=documentation%2Fvulnerabilities.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=view-someones-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=change-log.htm%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=show-log.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=text-file-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=credits.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=source-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=add-to-your-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=add-to-your-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=captured-data.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=view-someones-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=user-info.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=secret-administrative-pages.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=site-footer-xss-discussion.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=capture-data.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=set-background-color.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=login.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=password-generator.php%27%20OR%20sqlspider&username=anonymous
+|     http://192.168.56.9:80/mutillidae/index.php?page=redirectandlog.php%27%20OR%20sqlspider&forwardurl=http%3A%2F%2Fpauldotcom.com%2F
+|     http://192.168.56.9:80/mutillidae/index.php?page=redirectandlog.php%27%20OR%20sqlspider&forwardurl=http%3A%2F%2Fwww.owasp.org
+|     http://192.168.56.9:80/mutillidae/index.php?page=home.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=redirectandlog.php%27%20OR%20sqlspider&forwardurl=http%3A%2F%2Fwww.owasp.org%2Findex.php%2FLouisville
+|     http://192.168.56.9:80/mutillidae/index.php?page=arbitrary-file-inclusion.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=credits.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=show-log.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=redirectandlog.php%27%20OR%20sqlspider&forwardurl=http%3A%2F%2Fwww.pocodoy.com%2Fblog%2F
+|     http://192.168.56.9:80/mutillidae/index.php?page=framing.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=pen-test-tool-lookup.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=text-file-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=capture-data.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=browser-info.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=source-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=redirectandlog.php%27%20OR%20sqlspider&forwardurl=https%3A%2F%2Faddons.mozilla.org%2Fen-US%2Ffirefox%2Fcollections%2Fjdruin%2Fpr%2F
+|     http://192.168.56.9:80/mutillidae/index.php?page=redirectandlog.php%27%20OR%20sqlspider&forwardurl=http%3A%2F%2Fwww.php.net%2F
+|     http://192.168.56.9:80/mutillidae/index.php?page=dns-lookup.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=html5-storage.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=redirectandlog.php%27%20OR%20sqlspider&forwardurl=http%3A%2F%2Fwww.isd-podcast.com%2F
+|     http://192.168.56.9:80/mutillidae/index.php?page=redirectandlog.php%27%20OR%20sqlspider&forwardurl=http%3A%2F%2Fwww.room362.com%2F
+|     http://192.168.56.9:80/mutillidae/index.php?page=redirectandlog.php%27%20OR%20sqlspider&forwardurl=http%3A%2F%2Fwww.issa-kentuckiana.org%2F
+|     http://192.168.56.9:80/mutillidae/index.php?page=installation.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=redirectandlog.php%27%20OR%20sqlspider&forwardurl=http%3A%2F%2Fwww.irongeek.com%2F
+|     http://192.168.56.9:80/mutillidae/index.php?page=documentation%2Fhow-to-access-Mutillidae-over-Virtual-Box-network.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=user-info.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=documentation%2Fvulnerabilities.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=password-generator.php%27%20OR%20sqlspider&username=anonymous
+|     http://192.168.56.9:80/mutillidae/?page=login.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=change-log.htm%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=view-someones-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=user-poll.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=show-log.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=source-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=credits.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=text-file-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=add-to-your-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=login.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=set-background-color.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=user-info.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=secret-administrative-pages.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=site-footer-xss-discussion.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=add-to-your-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=register.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=captured-data.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=view-someones-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=home.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=arbitrary-file-inclusion.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=credits.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=show-log.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=framing.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=pen-test-tool-lookup.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=text-file-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=browser-info.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=source-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=dns-lookup.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=html5-storage.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=installation.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=password-generator.php%27%20OR%20sqlspider&username=anonymous
+|     http://192.168.56.9:80/mutillidae/index.php?page=documentation%2Fhow-to-access-Mutillidae-over-Virtual-Box-network.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=user-info.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=documentation%2Fvulnerabilities.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=capture-data.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=login.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=change-log.htm%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=view-someones-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=show-log.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=source-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=credits.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=text-file-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=add-to-your-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=login.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=view-someones-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=add-to-your-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=user-info.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=secret-administrative-pages.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=site-footer-xss-discussion.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=register.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=set-background-color.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=captured-data.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=user-poll.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=home.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=arbitrary-file-inclusion.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=credits.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=show-log.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=user-poll.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=framing.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=pen-test-tool-lookup.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=text-file-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=browser-info.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=source-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=dns-lookup.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=html5-storage.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=installation.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=register.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=documentation%2Fhow-to-access-Mutillidae-over-Virtual-Box-network.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=user-info.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=documentation%2Fvulnerabilities.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=login.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=change-log.htm%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=view-someones-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=text-file-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=show-log.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=source-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=credits.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=add-to-your-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=captured-data.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=view-someones-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=add-to-your-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=user-info.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=secret-administrative-pages.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=site-footer-xss-discussion.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=capture-data.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=set-background-color.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=login.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=password-generator.php%27%20OR%20sqlspider&username=anonymous
+|     http://192.168.56.9:80/mutillidae/index.php?page=home.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=arbitrary-file-inclusion.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=credits.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=show-log.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=user-poll.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=framing.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=pen-test-tool-lookup.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=text-file-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=browser-info.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=source-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=dns-lookup.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=html5-storage.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=view-someones-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=password-generator.php%27%20OR%20sqlspider&username=anonymous
+|     http://192.168.56.9:80/mutillidae/index.php?page=installation.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=add-to-your-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=documentation%2Fhow-to-access-Mutillidae-over-Virtual-Box-network.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=user-info.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=documentation%2Fvulnerabilities.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=capture-data.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=login.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=change-log.htm%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=view-someones-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=set-background-color.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=show-log.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=source-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=credits.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=text-file-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=add-to-your-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=captured-data.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=user-info.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=secret-administrative-pages.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=site-footer-xss-discussion.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=register.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=login.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=rene-magritte.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=home.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=pen-test-tool-lookup.php&do=toggle-hints%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=credits.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=show-log.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=user-poll.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=framing.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=pen-test-tool-lookup.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=text-file-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=browser-info.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=source-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=dns-lookup.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=html5-storage.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=installation.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=register.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=documentation%2Fhow-to-access-Mutillidae-over-Virtual-Box-network.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=user-info.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=documentation%2Fvulnerabilities.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=capture-data.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=login.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=change-log.htm%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=view-someones-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=show-log.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=source-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=credits.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=text-file-viewer.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=add-to-your-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=arbitrary-file-inclusion.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=login.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=set-background-color.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=pen-test-tool-lookup.php&do=toggle-security%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=user-info.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=secret-administrative-pages.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=site-footer-xss-discussion.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/?page=add-to-your-blog.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=password-generator.php%27%20OR%20sqlspider&username=anonymous
+|     http://192.168.56.9:80/mutillidae/index.php?page=captured-data.php%27%20OR%20sqlspider
+|     http://192.168.56.9:80/mutillidae/index.php?page=view-someones-blog.php%27%20OR%20sqlspider
+|   Possible sqli for forms:
+|     Form at path: /mutillidae/index.php, form's action: index.php. Fields that might be vulnerable:
+|       choice
+|       choice
+|       choice
+|       choice
+|       choice
+|       choice
+|       choice
+|       choice
+|       choice
+|       choice
+|       choice
+|       choice
+|_      initials
+|_http-apache-negotiation: mod_negotiation enabled.
+| http-useragent-tester: 
+|   Status for browser useragent: 200
+|   Allowed User Agents: 
+|     Mozilla/5.0 (compatible; Nmap Scripting Engine; https://nmap.org/book/nse.html)
+|     libwww
+|     lwp-trivial
+|     libcurl-agent/1.0
+|     PHP/
+|     Python-urllib/2.5
+|     GT::WWW
+|     Snoopy
+|     MFC_Tear_Sample
+|     HTTP::Lite
+|     PHPCrawl
+|     URI::Fetch
+|     Zend_Http_Client
+|     http client
+|     PECL::HTTP
+|     Wget/1.13.4 (linux-gnu)
+|_    WWW-Mechanize/1.34
+|_http-title: Metasploitable2 - Linux
+| http-grep: 
+|   (1) http://192.168.56.9:80/dav/: 
+|     (1) ip: 
+|       + 192.168.56.9
+|   (1) http://192.168.56.9:80/mutillidae/?page=credits.php: 
+|     (1) email: 
+|_      + mutillidae-development@gmail.com
+|_http-vuln-cve2017-1001000: ERROR: Script execution failed (use -d to debug)
+| http-csrf: 
+| Spidering limited to: maxdepth=3; maxpagecount=20; withinhost=192.168.56.9
+|   Found the following possible CSRF vulnerabilities: 
+|     
+|     Path: http://192.168.56.9:80/dvwa/
+|     Form id: 
+|     Form action: login.php
+|     
+|     Path: http://192.168.56.9:80/mutillidae/index.php?page=user-poll.php
+|     Form id: idpollform
+|_    Form action: index.php
+|_http-server-header: Apache/2.2.8 (Ubuntu) DAV/2
+| http-auth-finder: 
+| Spidering limited to: maxdepth=3; maxpagecount=20; withinhost=192.168.56.9
+|   url                                          method
+|   http://192.168.56.9:80/phpMyAdmin/           FORM
+|   http://192.168.56.9:80/dvwa/                 FORM
+|_  http://192.168.56.9:80/phpMyAdmin/index.php  FORM
+|_http-mobileversion-checker: No mobile version detected.
+| http-enum: 
+|   /tikiwiki/: Tikiwiki
+|   /test/: Test page
+|   /phpinfo.php: Possible information file
+|   /phpMyAdmin/: phpMyAdmin
+|   /doc/: Potentially interesting directory w/ listing on 'apache/2.2.8 (ubuntu) dav/2'
+|   /icons/: Potentially interesting folder w/ directory listing
+|_  /index/: Potentially interesting folder
+MAC Address: 08:00:27:3E:26:5C (PCS Systemtechnik/Oracle VirtualBox virtual NIC)
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+Host script results:
+|_clock-skew: 21s
+| port-states: 
+|   tcp: 
+|_    open: 22,80
+|_path-mtu: PMTU == 1500
+|_fcrdns: FAIL (No PTR record)
+|_ipidseq: All zeros
+| qscan: 
+| PORT  FAMILY  MEAN (us)  STDDEV  LOSS (%)
+| 22    0       473.40     90.00   0.0%
+|_80    0       493.90     120.60  0.0%
+| dns-blacklist: 
+|   SPAM
+|     l2.apews.org - FAIL
+|_    list.quorum.to - SPAM
+
+Post-scan script results:
+| reverse-index: 
+|   22/tcp: 192.168.56.9
+|_  80/tcp: 192.168.56.9
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+# Nmap done at Fri Nov  7 18:14:45 2025 -- 1 IP address (1 host up) scanned in 366.18 seconds

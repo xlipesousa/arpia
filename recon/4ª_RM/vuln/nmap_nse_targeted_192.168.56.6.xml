@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE nmaprun>
+<?xml-stylesheet href="file:///usr/share/nmap/nmap.xsl" type="text/xsl"?>
+<!-- Nmap 7.95 scan initiated Fri Oct 31 17:45:15 2025 as: /usr/lib/nmap/nmap -&#45;privileged -Pn -sV -&#45;reason -&#45;script default,safe,vuln -p 22,80 -oA ./recon/4&#xc2;&#xaa;_RM/vuln/nmap_nse_targeted_192.168.56.6 192.168.56.6 -->
+<nmaprun scanner="nmap" args="/usr/lib/nmap/nmap -&#45;privileged -Pn -sV -&#45;reason -&#45;script default,safe,vuln -p 22,80 -oA ./recon/4&#xc2;&#xaa;_RM/vuln/nmap_nse_targeted_192.168.56.6 192.168.56.6" start="1761943515" startstr="Fri Oct 31 17:45:15 2025" version="7.95" xmloutputversion="1.05">
+<scaninfo type="syn" protocol="tcp" numservices="2" services="22,80"/>
+<verbose level="0"/>
+<debugging level="0"/>
+<prescript><script id="multicast-profinet-discovery" output="0">0</script><script id="eap-info" output="please specify an interface with -e"/><script id="broadcast-dhcp-discover" output="&#xa;  Response 1 of 1: &#xa;    Interface: eth0&#xa;    IP Offered: 192.168.56.9&#xa;    Server Identifier: 192.168.56.3&#xa;    Subnet Mask: 255.255.255.0&#xa;    Router: 192.168.56.1&#xa;    Domain Name Server: 192.168.56.1&#xa;    Domain Name: ."><table key="Response 1 of 1">
+<elem key="Interface">eth0</elem>
+<elem key="IP Offered">192.168.56.9</elem>
+<elem key="Server Identifier">192.168.56.3</elem>
+<elem key="Subnet Mask">255.255.255.0</elem>
+<elem key="Router">192.168.56.1</elem>
+<elem key="Domain Name Server">192.168.56.1</elem>
+<elem key="Domain Name">.</elem>
+</table>
+</script><script id="targets-asn" output="&#xa;  targets-asn.asn is a mandatory parameter&#xa;"/><script id="broadcast-listener" output="&#xa;  udp&#xa;      DHCP&#xa;        srv ip        cli ip        mask           gw            dns           vendor&#xa;        192.168.56.3  192.168.56.9  255.255.255.0  192.168.56.1  192.168.56.1  -&#xa;"/><script id="hostmap-robtex" output="*TEMPORARILY DISABLED* due to changes in Robtex&apos;s API. See https://www.robtex.com/api/"/><script id="http-robtex-shared-ns" output="*TEMPORARILY DISABLED* due to changes in Robtex&apos;s API. See https://www.robtex.com/api/"/></prescript><hosthint><status state="up" reason="arp-response" reason_ttl="0"/>
+<address addr="192.168.56.6" addrtype="ipv4"/>
+<address addr="08:00:27:53:49:AA" addrtype="mac" vendor="PCS Systemtechnik/Oracle VirtualBox virtual NIC"/>
+<hostnames>
+</hostnames>
+</hosthint>
+<host starttime="1761943555" endtime="1761943561"><status state="up" reason="arp-response" reason_ttl="0"/>
+<address addr="192.168.56.6" addrtype="ipv4"/>
+<address addr="08:00:27:53:49:AA" addrtype="mac" vendor="PCS Systemtechnik/Oracle VirtualBox virtual NIC"/>
+<hostnames>
+</hostnames>
+<ports><port protocol="tcp" portid="22"><state state="closed" reason="reset" reason_ttl="64"/><service name="ssh" method="table" conf="3"/></port>
+<port protocol="tcp" portid="80"><state state="closed" reason="reset" reason_ttl="64"/><service name="http" method="table" conf="3"/></port>
+</ports>
+<hostscript><script id="dns-blacklist" output="&#xa;  SPAM&#xa;    l2.apews.org - FAIL&#xa;    list.quorum.to - SPAM&#xa;"/><script id="port-states" output="&#xa;  tcp: &#xa;    closed: 22,80"><table key="tcp">
+<elem key="closed">22,80</elem>
+</table>
+</script><script id="fcrdns" output="FAIL (No PTR record)"><table key="&lt;none&gt;">
+<elem key="status">fail</elem>
+<elem key="reason">No PTR record</elem>
+</table>
+</script><script id="unusual-port" output="&#xa;  WARNING: this script depends on Nmap&apos;s service/version detection (-sV)&#xa;"/><script id="path-mtu" output="PMTU == 1500"/><script id="ipidseq" output="All zeros"/></hostscript><times srtt="626" rttvar="2827" to="100000"/>
+</host>
+<postscript><script id="reverse-index" output=""></script></postscript><runstats><finished time="1761943561" timestr="Fri Oct 31 17:46:01 2025" summary="Nmap done at Fri Oct 31 17:46:01 2025; 1 IP address (1 host up) scanned in 46.26 seconds" elapsed="46.26" exit="success"/><hosts up="1" down="0" total="1"/>
+</runstats>
+</nmaprun>

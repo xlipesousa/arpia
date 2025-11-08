@@ -1,0 +1,4 @@
+# Nmap 7.95 scan initiated Mon Nov  3 18:20:34 2025 as: /usr/lib/nmap/nmap --privileged -Pn -sV --reason --script default,safe,vuln -p 22,80 -oA ./recon/4ª_RM/vuln/nmap_nse_targeted_192.168.56.9 192.168.56.9
+Host: 192.168.56.9 ()	Status: Up
+Host: 192.168.56.9 ()	Ports: 22/open/tcp//ssh//OpenSSH 4.7p1 Debian 8ubuntu1 (protocol 2.0)/, 80/open/tcp//http//Apache httpd 2.2.8 ((Ubuntu) DAV|2)/
+# Nmap done at Mon Nov  3 18:26:36 2025 -- 1 IP address (1 host up) scanned in 362.23 seconds

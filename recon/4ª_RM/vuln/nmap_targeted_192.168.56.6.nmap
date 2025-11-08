@@ -1,0 +1,11 @@
+# Nmap 7.95 scan initiated Fri Oct 31 17:44:23 2025 as: /usr/lib/nmap/nmap --privileged -Pn -sS -sV --reason -p 22,80 -oA ./recon/4ª_RM/vuln/nmap_targeted_192.168.56.6 192.168.56.6
+Nmap scan report for 192.168.56.6
+Host is up, received arp-response (0.00038s latency).
+
+PORT   STATE  SERVICE REASON       VERSION
+22/tcp closed ssh     reset ttl 64
+80/tcp closed http    reset ttl 64
+MAC Address: 08:00:27:53:49:AA (PCS Systemtechnik/Oracle VirtualBox virtual NIC)
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+# Nmap done at Fri Oct 31 17:44:24 2025 -- 1 IP address (1 host up) scanned in 0.38 seconds

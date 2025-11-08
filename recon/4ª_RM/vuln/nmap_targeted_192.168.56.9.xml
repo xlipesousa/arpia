@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE nmaprun>
+<?xml-stylesheet href="file:///usr/share/nmap/nmap.xsl" type="text/xsl"?>
+<!-- Nmap 7.95 scan initiated Mon Nov  3 18:20:26 2025 as: /usr/lib/nmap/nmap -&#45;privileged -Pn -sS -sV -&#45;reason -p 22,80 -oA ./recon/4&#xc2;&#xaa;_RM/vuln/nmap_targeted_192.168.56.9 192.168.56.9 -->
+<nmaprun scanner="nmap" args="/usr/lib/nmap/nmap -&#45;privileged -Pn -sS -sV -&#45;reason -p 22,80 -oA ./recon/4&#xc2;&#xaa;_RM/vuln/nmap_targeted_192.168.56.9 192.168.56.9" start="1762204826" startstr="Mon Nov  3 18:20:26 2025" version="7.95" xmloutputversion="1.05">
+<scaninfo type="syn" protocol="tcp" numservices="2" services="22,80"/>
+<verbose level="0"/>
+<debugging level="0"/>
+<hosthint><status state="up" reason="arp-response" reason_ttl="0"/>
+<address addr="192.168.56.9" addrtype="ipv4"/>
+<address addr="08:00:27:3E:26:5C" addrtype="mac" vendor="PCS Systemtechnik/Oracle VirtualBox virtual NIC"/>
+<hostnames>
+</hostnames>
+</hosthint>
+<host starttime="1762204827" endtime="1762204834"><status state="up" reason="arp-response" reason_ttl="0"/>
+<address addr="192.168.56.9" addrtype="ipv4"/>
+<address addr="08:00:27:3E:26:5C" addrtype="mac" vendor="PCS Systemtechnik/Oracle VirtualBox virtual NIC"/>
+<hostnames>
+</hostnames>
+<ports><port protocol="tcp" portid="22"><state state="open" reason="syn-ack" reason_ttl="64"/><service name="ssh" product="OpenSSH" version="4.7p1 Debian 8ubuntu1" extrainfo="protocol 2.0" ostype="Linux" method="probed" conf="10"><cpe>cpe:/a:openbsd:openssh:4.7p1</cpe><cpe>cpe:/o:linux:linux_kernel</cpe></service></port>
+<port protocol="tcp" portid="80"><state state="open" reason="syn-ack" reason_ttl="64"/><service name="http" product="Apache httpd" version="2.2.8" extrainfo="(Ubuntu) DAV/2" method="probed" conf="10"><cpe>cpe:/a:apache:http_server:2.2.8</cpe></service></port>
+</ports>
+<times srtt="504" rttvar="2830" to="100000"/>
+</host>
+<runstats><finished time="1762204834" timestr="Mon Nov  3 18:20:34 2025" summary="Nmap done at Mon Nov  3 18:20:34 2025; 1 IP address (1 host up) scanned in 7.43 seconds" elapsed="7.43" exit="success"/><hosts up="1" down="0" total="1"/>
+</runstats>
+</nmaprun>

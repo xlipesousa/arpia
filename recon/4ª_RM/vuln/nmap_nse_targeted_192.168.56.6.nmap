@@ -1,0 +1,48 @@
+# Nmap 7.95 scan initiated Fri Oct 31 17:45:15 2025 as: /usr/lib/nmap/nmap --privileged -Pn -sV --reason --script default,safe,vuln -p 22,80 -oA ./recon/4ª_RM/vuln/nmap_nse_targeted_192.168.56.6 192.168.56.6
+Pre-scan script results:
+|_multicast-profinet-discovery: 0
+|_eap-info: please specify an interface with -e
+| broadcast-dhcp-discover: 
+|   Response 1 of 1: 
+|     Interface: eth0
+|     IP Offered: 192.168.56.9
+|     Server Identifier: 192.168.56.3
+|     Subnet Mask: 255.255.255.0
+|     Router: 192.168.56.1
+|     Domain Name Server: 192.168.56.1
+|_    Domain Name: .
+| targets-asn: 
+|_  targets-asn.asn is a mandatory parameter
+| broadcast-listener: 
+|   udp
+|       DHCP
+|         srv ip        cli ip        mask           gw            dns           vendor
+|_        192.168.56.3  192.168.56.9  255.255.255.0  192.168.56.1  192.168.56.1  -
+|_hostmap-robtex: *TEMPORARILY DISABLED* due to changes in Robtex's API. See https://www.robtex.com/api/
+|_http-robtex-shared-ns: *TEMPORARILY DISABLED* due to changes in Robtex's API. See https://www.robtex.com/api/
+Nmap scan report for 192.168.56.6
+Host is up, received arp-response (0.00063s latency).
+
+PORT   STATE  SERVICE REASON       VERSION
+22/tcp closed ssh     reset ttl 64
+80/tcp closed http    reset ttl 64
+MAC Address: 08:00:27:53:49:AA (PCS Systemtechnik/Oracle VirtualBox virtual NIC)
+
+Host script results:
+| dns-blacklist: 
+|   SPAM
+|     l2.apews.org - FAIL
+|_    list.quorum.to - SPAM
+| port-states: 
+|   tcp: 
+|_    closed: 22,80
+|_fcrdns: FAIL (No PTR record)
+| unusual-port: 
+|_  WARNING: this script depends on Nmap's service/version detection (-sV)
+|_path-mtu: PMTU == 1500
+|_ipidseq: All zeros
+
+Post-scan script results:
+Bug in reverse-index: no string output.
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+# Nmap done at Fri Oct 31 17:46:01 2025 -- 1 IP address (1 host up) scanned in 46.26 seconds
