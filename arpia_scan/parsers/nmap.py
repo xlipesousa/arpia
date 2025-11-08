@@ -31,7 +31,12 @@ def parse_nmap_xml(xml_payload: str) -> List[ObservedEndpoint]:
         if hostname_node is not None:
             hostname = hostname_node.get("name")
 
-        endpoint = ObservedEndpoint(host=host_addr, hostname=hostname)
+        os_match = None
+        os_node = host_node.find("os/osmatch")
+        if os_node is not None:
+            os_match = os_node.get("name")
+
+        endpoint = ObservedEndpoint(host=host_addr, hostname=hostname, os_name=os_match)
 
         for port_node in host_node.findall("ports/port"):
             port_state = port_node.find("state")

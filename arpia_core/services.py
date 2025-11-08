@@ -28,13 +28,21 @@ def reconcile_endpoint(
     hostnames = list(hostnames or [])
     raw = raw or {}
 
-    asset = (
-        Asset.objects.filter(project=project, ips__contains=[ip]).order_by("-last_seen").first()
-    )
+    candidate_assets = list(Asset.objects.filter(project=project).order_by("-last_seen"))
+    asset = None
+    for candidate in candidate_assets:
+        ips = candidate.ips or []
+        if ip in ips:
+            asset = candidate
+            break
 
     if not asset and hostnames:
         for h in hostnames:
-            asset = Asset.objects.filter(project=project, hostnames__contains=[h]).order_by("-last_seen").first()
+            for candidate in candidate_assets:
+                host_list = candidate.hostnames or []
+                if h in host_list:
+                    asset = candidate
+                    break
             if asset:
                 break
 

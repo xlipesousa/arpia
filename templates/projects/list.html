@@ -49,6 +49,15 @@
               <a href="{{ p.share_url }}" class="btn-icon btn-warning" title="Compartilhar" aria-label="Compartilhar projeto {{ p.name }}">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 6l-4-4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 2v13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </a>
+
+              {% if p.can_delete %}
+              <form method="post" action="{{ p.delete_url }}" style="display:inline;" data-project-delete data-project-name="{{ p.name }}">
+                {% csrf_token %}
+                <button type="submit" class="btn-icon btn-danger" title="Excluir" aria-label="Excluir projeto {{ p.name }}">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M3 6h18" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 6v14a1 1 0 001 1h6a1 1 0 001-1V6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 11v6M14 11v6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+              </form>
+              {% endif %}
             </td>
           </tr>
           {% empty %}
@@ -159,7 +168,7 @@
 .projects-table{ table-layout:auto; } /* deixar a tabela ajustar ao conteúdo */
 .projects-table .id-col{ min-width:56px; width:auto; text-align:center; }
 .projects-table .name-col{ min-width:140px; max-width:55%; }
-.projects-table .actions-col{ width:220px; text-align:right; white-space:nowrap; }
+.projects-table .actions-col{ width:260px; text-align:right; white-space:nowrap; }
 
 /* pager simples */
 .btn-pager{
@@ -175,9 +184,19 @@
 </style>
 
 <script>
-  // ações fictícias: substituir por endpoints reais
   (function(){
+    document.querySelectorAll('form[data-project-delete]').forEach((form)=>{
+      form.addEventListener('submit', (ev)=>{
+        const name = form.dataset.projectName || 'este projeto';
+        if(!confirm('Confirma apagar o projeto "' + name + '"?')){
+          ev.preventDefault();
+        }
+      });
+    });
+
+    // Bloco de demonstração permanece ativo para linhas fictícias do template vazio
     const table = document.getElementById('projects-body');
+    if(!table) return;
     table.addEventListener('click', (ev)=>{
       const btn = ev.target.closest('button[data-action]');
       if(!btn) return;

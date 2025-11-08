@@ -17,6 +17,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from arpia_core.models import Project, Script, Tool, Wordlist
+from arpia_core.services import reconcile_endpoint
 from arpia_core.tool_registry import sync_default_tools_for_user
 from arpia_core.views import (
     build_project_macros,
@@ -1133,6 +1134,11 @@ class ScanOrchestrator:
                     f"        <service name=\"{meta['service']}\" product=\"{meta['product']}\" version=\"{meta['version']}\"/>\n"
                     f"      </port>\n"
                 )
+            os_block = (
+                "    <os>\n"
+                "      <osmatch name=\"Linux 5.x\" accuracy=\"90\"/>\n"
+                "    </os>\n"
+            )
             snippet = (
                 "  <host>\n"
                 "    <status state=\"up\" reason=\"syn-ack\"/>\n"
@@ -1140,7 +1146,8 @@ class ScanOrchestrator:
                 "    <ports>\n"
                 + "".join(port_entries)
                 + "    </ports>\n"
-                "  </host>\n"
+                + os_block
+                + "  </host>\n"
             )
             snippets.append(snippet)
         return "<?xml version=\"1.0\"?>\n<nmaprun>\n" + "".join(snippets) + "</nmaprun>"
@@ -1177,6 +1184,7 @@ class ScanOrchestrator:
 
         summary_data["observations"] = observations
 
+        self._persist_observed_endpoints(observations)
         self._store_findings_from_observations(observations)
         summary_data.setdefault("insights", []).extend(self._build_observation_insights(observations))
 
@@ -1215,6 +1223,80 @@ class ScanOrchestrator:
                 data=services,
                 order=self.session.findings.count() + 1,
             )
+
+    def _persist_observed_endpoints(self, observations: dict) -> None:
+        targets = observations.get("targets") or {}
+        host_entries = targets.get("hosts") or []
+        if not host_entries:
+            return
+
+        source_prefix = f"scan-session:{self.session.pk}"
+
+        for host in host_entries:
+            ip = host.get("host")
+            if not ip:
+                continue
+
+            ports = host.get("ports") or []
+            if not ports:
+                continue
+
+            hostnames = []
+            hostname_value = host.get("hostname")
+            if hostname_value:
+                hostnames.append(hostname_value)
+
+            os_name = host.get("operating_system")
+
+            for port in ports:
+                try:
+                    port_number = int(port.get("port"))
+                except (TypeError, ValueError):
+                    continue
+
+                protocol = (port.get("protocol") or "tcp").lower()
+                raw_payload = {
+                    "protocol": protocol,
+                    "service": port.get("service") or "",
+                    "product": port.get("product") or "",
+                    "version": port.get("version") or "",
+                    "severity": port.get("severity"),
+                    "source": port.get("source") or "scan",
+                }
+
+                asset, endpoint = reconcile_endpoint(
+                    project=self.session.project,
+                    ip=ip,
+                    port=port_number,
+                    hostnames=hostnames,
+                    raw=raw_payload,
+                    source=f"{source_prefix}:{protocol}",
+                )
+
+                fields_to_update: list[str] = []
+
+                if os_name:
+                    metadata = dict(asset.metadata or {})
+                    current_os = metadata.get("operating_system")
+                    if not current_os:
+                        metadata["operating_system"] = os_name
+                    elif isinstance(current_os, list):
+                        if os_name not in current_os:
+                            metadata["operating_system"] = [*current_os, os_name]
+                    else:
+                        if current_os != os_name:
+                            metadata["operating_system"] = [current_os, os_name]
+                    if metadata != asset.metadata:
+                        asset.metadata = metadata
+                        fields_to_update.append("metadata")
+
+                now = timezone.now()
+                if not asset.last_seen or asset.last_seen < now:
+                    asset.last_seen = now
+                    fields_to_update.append("last_seen")
+
+                if fields_to_update:
+                    asset.save(update_fields=fields_to_update)
 
     def _build_observation_insights(self, observations: dict) -> List[dict]:
         insights: List[dict] = []

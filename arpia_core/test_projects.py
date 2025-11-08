@@ -120,6 +120,29 @@ class ProjectViewTests(TestCase):
 		project.refresh_from_db()
 		self.assertEqual(project.name, "Proj")
 
+	def test_owner_can_delete_project(self):
+		project = Project.objects.create(owner=self.user, name="Eliminar", description="", client_name="")
+		ProjectMembership.objects.create(project=project, user=self.user, role=ProjectMembership.Role.OWNER)
+
+		response = self.client.post(reverse("projects_delete", kwargs={"pk": project.pk}))
+
+		self.assertRedirects(response, reverse("projects_list"))
+		self.assertFalse(Project.objects.filter(pk=project.pk).exists())
+
+	def test_delete_requires_owner(self):
+		project = Project.objects.create(owner=self.user, name="Compartilhado", description="", client_name="")
+		ProjectMembership.objects.create(project=project, user=self.user, role=ProjectMembership.Role.OWNER)
+		other = get_user_model().objects.create_user(username="charlie", password="secret123")
+		ProjectMembership.objects.create(project=project, user=other, role=ProjectMembership.Role.VIEWER)
+
+		self.client.logout()
+		self.client.login(username="charlie", password="secret123")
+
+		response = self.client.post(reverse("projects_delete", kwargs={"pk": project.pk}))
+
+		self.assertEqual(response.status_code, 404)
+		self.assertTrue(Project.objects.filter(pk=project.pk).exists())
+
 	def test_share_view_adds_member(self):
 		project = Project.objects.create(owner=self.user, name="Compart", description="", client_name="")
 		ProjectMembership.objects.create(project=project, user=self.user, role=ProjectMembership.Role.OWNER)

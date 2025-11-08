@@ -9,7 +9,7 @@ from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from arpia_core.models import Project, Script, Tool
+from arpia_core.models import ObservedEndpoint, Project, Script, Tool
 from arpia_core.views import sync_default_scripts
 from arpia_log.models import LogEntry
 
@@ -213,6 +213,7 @@ class ScanConnectivityTaskTests(TestCase):
         self.assertIn("connectivity", artifacts)
 
 
+
 class ScanScriptTaskTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(
@@ -316,6 +317,57 @@ class ScanScriptTaskTests(TestCase):
 
         output_logs = LogEntry.objects.filter(event_type="scan.task.output", message__icontains="ok")
         self.assertTrue(output_logs.exists())
+
+
+class ScanObservationPersistenceTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="observer",
+            email="observer@example.com",
+            password="pass1234",
+        )
+        self.project = Project.objects.create(
+            owner=self.user,
+            name="Projeto Observação",
+            slug="projeto-observacao",
+            hosts="10.0.0.5\n10.0.0.8",
+            ports="22,80,443",
+        )
+
+    @mock.patch("arpia_scan.services.ConnectivityRunner")
+    def test_persists_observed_endpoints_and_os_metadata(self, runner_cls):
+        session = create_planned_session(
+            owner=self.user,
+            project=self.project,
+            title="Sessão observação",
+        )
+
+        runner_cls.return_value.run.return_value = [
+            ConnectivityProbeResult(
+                host="10.0.0.5",
+                reachable=True,
+                ports=[{"port": 22, "status": "open"}],
+                error=None,
+            ),
+            ConnectivityProbeResult(
+                host="10.0.0.8",
+                reachable=True,
+                ports=[{"port": 80, "status": "open"}],
+                error=None,
+            ),
+        ]
+
+        ScanOrchestrator(session).run()
+
+        endpoints = ObservedEndpoint.objects.filter(asset__project=self.project)
+        self.assertGreater(endpoints.count(), 0)
+
+        assets_with_os = [
+            endpoint.asset
+            for endpoint in endpoints
+            if endpoint.asset and endpoint.asset.metadata.get("operating_system")
+        ]
+        self.assertTrue(assets_with_os)
 
 class ScanSessionDetailViewTests(TestCase):
     def setUp(self):

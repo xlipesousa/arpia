@@ -82,7 +82,7 @@
           <h2>Top vulnerabilidades</h2>
           <span class="caption">Agrupadas por ocorrência</span>
         </header>
-        {% if top_vulnerabilidades %}
+  {% if top_vulnerabilities %}
           <table class="data-table">
             <thead>
               <tr>
@@ -92,7 +92,7 @@
               </tr>
             </thead>
             <tbody>
-              {% for item in top_vulnerabilidades %}
+              {% for item in top_vulnerabilities %}
                 <tr>
                   <td>{{ item.title }}</td>
                   <td><span class="sev-pill sev-{{ item.severity }}">{{ item.severity_display }}</span></td>

@@ -14,6 +14,7 @@ urlpatterns = [
     path("projects/<uuid:pk>/", views.projects_detail, name="projects_detail"),
     path("projects/<uuid:pk>/edit/", views.projects_edit, name="projects_edit"),
     path("projects/<uuid:pk>/share/", views.projects_share, name="projects_share"),
+    path("projects/<uuid:pk>/delete/", views.projects_delete, name="projects_delete"),
 
     # Scripts
     path("scripts/", views.scripts_list, name="scripts_list"),

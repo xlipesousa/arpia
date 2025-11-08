@@ -32,10 +32,6 @@ from .project_logging import (
 from .script_registry import get_default_by_slug, get_default_catalog
 from .utils import safe_filename
 
-
-BASE_DIR = Path(__file__).resolve().parent
-SCRIPTS_BASE = BASE_DIR / "scripts"
-
 OWASP_TOP10_LABELS = {
     "A01:2021": "A01:2021 - Broken Access Control",
     "A02:2021": "A02:2021 - Cryptographic Failures",
@@ -100,6 +96,9 @@ OWASP_KEYWORD_MAPPING = [
     ("ssrf", "A10:2021"),
     ("server-side request forgery", "A10:2021"),
 ]
+
+
+SCRIPTS_BASE = Path(__file__).resolve().parent / "scripts"
 
 
 @login_required
@@ -1126,6 +1125,7 @@ def projects_list(request):
     projects_table = []
     for project in page_obj.object_list:
         created = timezone.localtime(project.created)
+        can_delete = project.owner_id == request.user.id
         projects_table.append(
             {
                 "id": project.pk,
@@ -1136,6 +1136,8 @@ def projects_list(request):
                 "detail_url": reverse("projects_detail", kwargs={"pk": project.pk}),
                 "share_url": reverse("projects_share", kwargs={"pk": project.pk}),
                 "edit_url": reverse("projects_edit", kwargs={"pk": project.pk}),
+                "delete_url": reverse("projects_delete", kwargs={"pk": project.pk}) if can_delete else None,
+                "can_delete": can_delete,
             }
         )
 
@@ -1272,6 +1274,16 @@ def projects_share(request, pk):
         "success": success,
     }
     return render(request, "projects/share.html", context)
+
+
+@login_required
+@require_http_methods(["POST"])
+def projects_delete(request, pk):
+    project = _get_accessible_project(request.user, pk, owner_only=True)
+    project_name = project.name
+    project.delete()
+    messages.success(request, f"Projeto '{project_name}' excluído com sucesso.")
+    return redirect("projects_list")
 
 class ToolWordlistView(LoginRequiredMixin, TemplateView):
     template_name = "tools/list.html"

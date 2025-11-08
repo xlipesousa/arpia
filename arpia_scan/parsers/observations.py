@@ -33,6 +33,7 @@ class ObservedPort:
 class ObservedEndpoint:
     host: str
     hostname: Optional[str] = None
+    os_name: Optional[str] = None
     ports: List[ObservedPort] = field(default_factory=list)
 
     def add_port(self, observed_port: ObservedPort) -> None:
@@ -79,7 +80,14 @@ def merge_observations(endpoints: Iterable[ObservedEndpoint]) -> Dict[str, objec
     service_map: Dict[str, ObservedService] = {}
 
     for endpoint in endpoints:
-        combined = endpoint_map.setdefault(endpoint.host, ObservedEndpoint(host=endpoint.host, hostname=endpoint.hostname))
+        combined = endpoint_map.setdefault(
+            endpoint.host,
+            ObservedEndpoint(host=endpoint.host),
+        )
+        if endpoint.hostname and not combined.hostname:
+            combined.hostname = endpoint.hostname
+        if endpoint.os_name and not combined.os_name:
+            combined.os_name = endpoint.os_name
         for port in endpoint.ports:
             combined.add_port(port)
             service_name = port.service or "desconhecido"
@@ -90,6 +98,7 @@ def merge_observations(endpoints: Iterable[ObservedEndpoint]) -> Dict[str, objec
         {
             "host": endpoint.host,
             "hostname": endpoint.hostname,
+            "operating_system": endpoint.os_name,
             "severity": endpoint.severity,
             "ports": [
                 {
@@ -99,6 +108,7 @@ def merge_observations(endpoints: Iterable[ObservedEndpoint]) -> Dict[str, objec
                     "service": port.service,
                     "product": port.product,
                     "version": port.version,
+                    "source": port.source,
                     "severity": port.severity,
                 }
                 for port in endpoint.ports
