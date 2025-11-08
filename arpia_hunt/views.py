@@ -1,6 +1,7 @@
 from io import BytesIO
 from time import perf_counter
 from typing import Any
+import re
 
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -26,6 +27,84 @@ from .models import (
 	HuntSyncLog,
 )
 from .serializers import HuntFindingSerializer
+
+
+SUMMARY_SPLIT_RE = re.compile(r"[\r\n]+|\s*\*+\s*|\s*[•;]\s*")
+URL_SPLIT_RE = re.compile(r"\s+(https?://)")
+
+
+def _coerce_iterable(value: Any) -> list[Any]:
+	if not value:
+		return []
+	if isinstance(value, (list, tuple, set)):
+		return [item for item in value if item]
+	return [value]
+
+
+def _split_urls_segment(text: str) -> list[str]:
+	segments: list[str] = []
+	remaining = text
+	while remaining:
+		match = re.search(r"https?://\S+", remaining)
+		if not match:
+			clean = remaining.strip()
+			if clean:
+				segments.append(clean)
+			break
+		start, end = match.span()
+		prefix = remaining[:start].strip(" ,;·")
+		if prefix:
+			segments.append(prefix)
+		segments.append(match.group())
+		remaining = remaining[end:]
+	return segments
+
+
+def _normalize_summary_lines(value: Any) -> list[str]:
+	lines: list[str] = []
+	for candidate in _coerce_iterable(value):
+		text = str(candidate)
+		if not text.strip():
+			continue
+		text = text.replace("\r", "\n")
+		text = URL_SPLIT_RE.sub(r"\n\1", text)
+		splits = SUMMARY_SPLIT_RE.split(text)
+		for chunk in splits:
+			chunk = chunk.strip(" -•\t")
+			if not chunk:
+				continue
+			for piece in _split_urls_segment(chunk):
+				clean_piece = re.sub(r"\s{2,}", " ", piece.strip())
+				if not clean_piece:
+					continue
+				if len(clean_piece) > 220:
+					clean_piece = clean_piece[:217].rstrip() + "…"
+				lines.append(clean_piece)
+	return lines
+
+
+def _profile_summary_lines(profile: dict[str, Any] | None, finding: HuntFinding) -> list[str]:
+	items: list[str] = []
+	seen: set[str] = set()
+
+	def _extend(candidate_source: Any) -> None:
+		for entry in _normalize_summary_lines(candidate_source):
+			normalized = entry.strip()
+			if normalized and normalized not in seen:
+				seen.add(normalized)
+				items.append(normalized)
+
+	if isinstance(profile, dict):
+		_extend(profile.get("summary"))
+		_extend(profile.get("highlights"))
+		_extend(profile.get("notes"))
+		if not items and profile.get("description"):
+			_extend(profile.get("description"))
+
+	if not items and getattr(finding, "summary", None):
+		_extend(finding.summary)
+
+	return items[:12]
 
 
 def _user_has_access(user, project: Project) -> bool:
@@ -497,17 +576,46 @@ class HuntDashboardView(LoginRequiredMixin, TemplateView):
 
 	def get_context_data(self, **kwargs):  # type: ignore[override]
 		context = super().get_context_data(**kwargs)
+		projects = list(_resolve_accessible_projects(self.request.user))
+		selected_project = self._resolve_project(projects)
+		selected_project_id = str(selected_project.pk) if selected_project else ""
+		if selected_project:
+			filter_ids = [selected_project.pk]
+		else:
+			filter_ids = [project.pk for project in projects]
+
+		findings_qs = HuntFinding.objects.all()
+		if filter_ids:
+			findings_qs = findings_qs.filter(project_id__in=filter_ids)
+		else:
+			findings_qs = HuntFinding.objects.none()
+
 		stats = {
-			"findings_total": HuntFinding.objects.count(),
-			"findings_active": HuntFinding.objects.filter(is_active=True).count(),
-			"findings_with_cve": HuntFinding.objects.exclude(cve="").count(),
+			"findings_total": findings_qs.count(),
+			"findings_active": findings_qs.filter(is_active=True).count(),
+			"findings_with_cve": findings_qs.exclude(Q(cve="") | Q(cve__isnull=True)).count(),
 		}
-		recent_syncs = list(HuntSyncLog.objects.order_by("-started_at")[:5])
-		recent_logs = list(
-			LogEntry.objects.filter(source_app="arpia_hunt").order_by("-timestamp")[:8]
-		)
+
+		syncs_qs = HuntSyncLog.objects.select_related("project").order_by("-started_at", "-id")
+		if selected_project:
+			syncs_qs = syncs_qs.filter(project=selected_project)
+		elif filter_ids:
+			syncs_qs = syncs_qs.filter(Q(project_id__in=filter_ids) | Q(project__isnull=True))
+		else:
+			syncs_qs = syncs_qs.filter(project__isnull=True)
+		recent_syncs = list(syncs_qs[:5])
+
+		logs_qs = LogEntry.objects.filter(source_app="arpia_hunt").order_by("-timestamp", "-id")
+		if selected_project:
+			logs_qs = logs_qs.filter(project_ref=str(selected_project.pk))
+		elif filter_ids:
+			logs_qs = logs_qs.filter(project_ref__in=[str(pk) for pk in filter_ids])
+		else:
+			logs_qs = logs_qs.none()
+		recent_logs = list(logs_qs[:8])
+
 		recent_profiles_qs = (
-			HuntFinding.objects.filter(profile_version__gt=0)
+			findings_qs.filter(profile_version__gt=0)
 			.select_related("vulnerability", "project")
 			.prefetch_related("recommendations__technique", "recommendations__technique__tactic")
 			.order_by("-last_profiled_at")
@@ -544,12 +652,15 @@ class HuntDashboardView(LoginRequiredMixin, TemplateView):
 			][:3]
 
 			heuristics = heuristic_map.get(finding.cve, [])
+			blue_summary = _profile_summary_lines(finding.blue_profile or {}, finding)
+			red_summary = _profile_summary_lines(finding.red_profile or {}, finding)
 			blue_tabs.append(
 				{
 					"finding": finding,
 					"profile": finding.blue_profile or {},
 					"recommendations": blue_recs,
 					"heuristics": heuristics,
+					"summary_lines": blue_summary,
 				}
 			)
 			red_tabs.append(
@@ -558,38 +669,46 @@ class HuntDashboardView(LoginRequiredMixin, TemplateView):
 					"profile": finding.red_profile or {},
 					"recommendations": red_recs,
 					"heuristics": heuristics,
+					"summary_lines": red_summary,
 				}
 			)
 
-		blue_insights = [
-			{
-				"finding": finding,
-				"profile": finding.blue_profile or {},
-				"recommendations": [
-					rec
-					for rec in finding.recommendations.all()
-					if rec.recommendation_type == HuntRecommendation.Type.BLUE
-				][:3],
-			}
-			for finding in recent_profiles
-		]
-		red_insights = [
-			{
-				"finding": finding,
-				"profile": finding.red_profile or {},
-				"recommendations": [
-					rec
-					for rec in finding.recommendations.all()
-					if rec.recommendation_type == HuntRecommendation.Type.RED
-				][:3],
-			}
-			for finding in recent_profiles
-		]
+		blue_insights = []
+		red_insights = []
+		for finding in recent_profiles:
+			blue_insights.append(
+				{
+					"finding": finding,
+					"profile": finding.blue_profile or {},
+					"recommendations": [
+						rec
+						for rec in finding.recommendations.all()
+						if rec.recommendation_type == HuntRecommendation.Type.BLUE
+					][:3],
+					"summary_lines": _profile_summary_lines(finding.blue_profile or {}, finding),
+				}
+			)
+			red_insights.append(
+				{
+					"finding": finding,
+					"profile": finding.red_profile or {},
+					"recommendations": [
+						rec
+						for rec in finding.recommendations.all()
+						if rec.recommendation_type == HuntRecommendation.Type.RED
+					][:3],
+					"summary_lines": _profile_summary_lines(finding.red_profile or {}, finding),
+				}
+			)
 
 		context.update(
 			{
 				"phase": "Fase 5",
 				"snapshot_label": "Automação & alertas",
+				"projects": projects,
+				"selected_project": selected_project,
+				"selected_project_id": selected_project_id,
+				"has_project": selected_project is not None,
 				"data_sources": [
 					{
 						"label": "Scan",
@@ -634,6 +753,24 @@ class HuntDashboardView(LoginRequiredMixin, TemplateView):
 			}
 		)
 		return context
+
+	def _resolve_project(self, projects):
+		project_id = self.request.GET.get("project")
+		if project_id:
+			for project in projects:
+				if str(project.pk) == str(project_id):
+					return project
+			return None
+		return projects[0] if projects else None
+
+	def _resolve_project(self, projects):
+		project_id = self.request.GET.get("project")
+		if project_id:
+			for project in projects:
+				if str(project.pk) == str(project_id):
+					return project
+			return None
+		return projects[0] if projects else None
 
 
 class HuntFindingDetailView(LoginRequiredMixin, TemplateView):
@@ -684,6 +821,9 @@ class HuntFindingDetailView(LoginRequiredMixin, TemplateView):
 			LogEntry.objects.filter(details__finding_id=str(finding.pk))
 			.order_by("-timestamp")[:10]
 		)
+		finding_summary_lines = _normalize_summary_lines(finding.summary)
+		blue_summary_lines = _profile_summary_lines(finding.blue_profile or {}, finding)
+		red_summary_lines = _profile_summary_lines(finding.red_profile or {}, finding)
 		project_url = None
 		if finding.project_id:
 			try:
@@ -710,6 +850,9 @@ class HuntFindingDetailView(LoginRequiredMixin, TemplateView):
 				"finding": finding,
 				"blue_profile": finding.blue_profile or {},
 				"red_profile": finding.red_profile or {},
+				"finding_summary_lines": finding_summary_lines,
+				"blue_summary_lines": blue_summary_lines,
+				"red_summary_lines": red_summary_lines,
 				"blue_recommendations": blue_recommendations,
 				"red_recommendations": red_recommendations,
 				"blue_heuristics": heuristics,

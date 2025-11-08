@@ -8,15 +8,64 @@
     <p class="page-subtitle">Fase atual: {{ phase }} · Snapshot base: {{ snapshot_label }}</p>
   </div>
   <div class="heading-actions">
-    {% if request.GET.project %}
-      <a href="{% url 'arpia_hunt:dashboard' %}?project={{ request.GET.project }}&amp;format=json" class="btn-secondary" target="_blank" rel="noopener noreferrer">Exportar JSON</a>
-      <a href="{% url 'arpia_hunt:dashboard' %}?project={{ request.GET.project }}&amp;format=pdf" class="btn-secondary" target="_blank" rel="noopener noreferrer">Exportar PDF</a>
-    {% else %}
-      <a href="{% url 'arpia_hunt:dashboard' %}?format=json" class="btn-secondary" target="_blank" rel="noopener noreferrer">Exportar JSON</a>
-      <a href="{% url 'arpia_hunt:dashboard' %}?format=pdf" class="btn-secondary" target="_blank" rel="noopener noreferrer">Exportar PDF</a>
+    {% if has_project %}
+      <div class="active-project">
+        <span class="label">Projeto ativo</span>
+        <strong>{{ selected_project.name }}</strong>
+        {% if selected_project.client_name %}
+          <span class="muted">{{ selected_project.client_name }}</span>
+        {% endif %}
+      </div>
     {% endif %}
+    <div class="heading-buttons">
+      {% if selected_project_id %}
+        <a href="{% url 'arpia_hunt:dashboard' %}?project={{ selected_project_id }}&amp;format=json" class="btn-secondary" target="_blank" rel="noopener noreferrer">Exportar JSON</a>
+        <a href="{% url 'arpia_hunt:dashboard' %}?project={{ selected_project_id }}&amp;format=pdf" class="btn-secondary" target="_blank" rel="noopener noreferrer">Exportar PDF</a>
+      {% else %}
+        <a href="{% url 'arpia_hunt:dashboard' %}?format=json" class="btn-secondary" target="_blank" rel="noopener noreferrer">Exportar JSON</a>
+        <a href="{% url 'arpia_hunt:dashboard' %}?format=pdf" class="btn-secondary" target="_blank" rel="noopener noreferrer">Exportar PDF</a>
+      {% endif %}
+    </div>
   </div>
 </section>
+
+<section class="hunt-shell" data-project-selected="{{ has_project|yesno:'true,false' }}">
+  <div class="left-column">
+    <article class="panel projects-panel">
+      <header class="panel-header">
+        <div>
+          <h2>Projetos</h2>
+          <p class="muted">Você tem acesso a {{ projects|length }} projeto(s).</p>
+        </div>
+        {% if projects %}
+          <a class="see-all" href="{% url 'projects_list' %}">Ver todos</a>
+        {% endif %}
+      </header>
+      {% if projects %}
+        <div class="projects-scroll">
+          <ul class="project-items">
+            {% for project in projects %}
+              <li class="project-item {% if project.id|stringformat:'s' == selected_project_id %}is-active{% endif %}">
+                <a href="?project={{ project.id }}" class="project-card" aria-current="{% if project.id|stringformat:'s' == selected_project_id %}page{% else %}false{% endif %}">
+                  <div class="project-card-body">
+                    <h3>{{ project.name }}</h3>
+                    {% if project.description %}<p class="description">{{ project.description }}</p>{% endif %}
+                    {% if project.client_name %}<span class="client">{{ project.client_name }}</span>{% endif %}
+                  </div>
+                  <span class="project-chevron" aria-hidden="true">→</span>
+                </a>
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% else %}
+        <div class="empty">
+          <p>Nenhum projeto disponível. Solicite acesso ou cadastre um projeto para habilitar o módulo.</p>
+        </div>
+      {% endif %}
+    </article>
+  </div>
+  <div class="right-column">
 
 <section class="panel alert-panel" data-tab-group="hunt-profiles">
   <header class="panel-header alert-header">
@@ -56,7 +105,17 @@
                 </span>
               </summary>
               <div class="profile-body">
-                <p class="profile-summary">{{ card.profile.summary|default:card.finding.summary|default:"Sem resumo." }}</p>
+                {% with summary_lines=card.summary_lines %}
+                  {% if summary_lines %}
+                    <ul class="profile-summary-list">
+                      {% for line in summary_lines|slice:":6" %}
+                        <li>{{ line }}</li>
+                      {% endfor %}
+                    </ul>
+                  {% else %}
+                    <p class="profile-summary">{{ card.profile.summary|default:card.finding.summary|default:"Sem resumo." }}</p>
+                  {% endif %}
+                {% endwith %}
                 {% include "hunt/components/heuristic_chips.html" with heuristics=card.heuristics %}
                 {% include "hunt/components/recommendation_list.html" with recommendations=card.recommendations tone="blue" empty_message="Nenhuma recomendação automatizada ainda." %}
                 <div class="card-actions">
@@ -96,6 +155,17 @@
                 </span>
               </summary>
               <div class="profile-body">
+                {% with summary_lines=card.summary_lines %}
+                  {% if summary_lines %}
+                    <ul class="profile-summary-list">
+                      {% for line in summary_lines|slice:":6" %}
+                        <li>{{ line }}</li>
+                      {% endfor %}
+                    </ul>
+                  {% else %}
+                    <p class="profile-summary">{{ card.profile.summary|default:card.finding.summary|default:"Sem resumo." }}</p>
+                  {% endif %}
+                {% endwith %}
                 {% if card.profile.exploits %}
                   <ul class="exploit-list">
                     {% for exploit in card.profile.exploits|slice:":3" %}
@@ -130,20 +200,6 @@
   <article class="panel">
     <header class="panel-header">
       <div>
-        <h2>Foco atual</h2>
-        <p class="muted">Prioridades da fase de automação e alertas.</p>
-      </div>
-    </header>
-    <ul class="bullet-list">
-      {% for item in phase_objectives %}
-        <li>{{ item }}</li>
-      {% endfor %}
-    </ul>
-  </article>
-
-  <article class="panel">
-    <header class="panel-header">
-      <div>
         <h2>Fontes de dados</h2>
         <p class="muted">Bases ativas que alimentam correlação e disparo de alertas.</p>
       </div>
@@ -154,34 +210,6 @@
           <strong>{{ source.label }}</strong>
           <p>{{ source.description }}</p>
         </li>
-      {% endfor %}
-    </ul>
-  </article>
-
-  <article class="panel">
-    <header class="panel-header">
-      <div>
-        <h2>Entregáveis Fase 5</h2>
-        <p class="muted">Pontos de controle para consolidar automação e monitoramento.</p>
-      </div>
-    </header>
-    <ul class="deliverables">
-      {% for deliverable in deliverables %}
-        <li>{{ deliverable }}</li>
-      {% endfor %}
-    </ul>
-  </article>
-
-  <article class="panel">
-    <header class="panel-header">
-      <div>
-        <h2>Próximos passos</h2>
-        <p class="muted">Sequência planejada para estabilizar a operação dos alertas.</p>
-      </div>
-    </header>
-    <ul class="next-steps">
-      {% for step in next_steps %}
-        <li>{{ step }}</li>
       {% endfor %}
     </ul>
   </article>
@@ -265,7 +293,17 @@
                 </span>
               </summary>
               <div class="profile-body">
-                <p class="profile-summary">{{ item.profile.summary|default:item.finding.summary|default:"Sem resumo." }}</p>
+                {% with summary_lines=item.summary_lines %}
+                  {% if summary_lines %}
+                    <ul class="profile-summary-list">
+                      {% for line in summary_lines|slice:":6" %}
+                        <li>{{ line }}</li>
+                      {% endfor %}
+                    </ul>
+                  {% else %}
+                    <p class="profile-summary">{{ item.profile.summary|default:item.finding.summary|default:"Sem resumo." }}</p>
+                  {% endif %}
+                {% endwith %}
                 <dl>
                   <div><dt>Projeto</dt><dd>{{ item.finding.project.name }}</dd></div>
                   {% if item.profile.references %}
@@ -310,6 +348,17 @@
                 </span>
               </summary>
               <div class="profile-body">
+                {% with summary_lines=item.summary_lines %}
+                  {% if summary_lines %}
+                    <ul class="profile-summary-list">
+                      {% for line in summary_lines|slice:":6" %}
+                        <li>{{ line }}</li>
+                      {% endfor %}
+                    </ul>
+                  {% else %}
+                    <p class="profile-summary">{{ item.profile.summary|default:item.finding.summary|default:"Sem resumo." }}</p>
+                  {% endif %}
+                {% endwith %}
                 {% if item.profile.exploits %}
                   <ul class="exploit-list">
                     {% for exploit in item.profile.exploits|slice:":3" %}
@@ -424,6 +473,9 @@
   {% endif %}
 </section>
 
+  </div>
+</section>
+
 <script>
 document.addEventListener("DOMContentLoaded",function(){const group=document.querySelector('[data-tab-group="hunt-profiles"]');if(!group){return;}const controls=Array.from(group.querySelectorAll('[data-tab-target]'));const panels=Array.from(group.querySelectorAll('[data-tab-panel]'));controls.forEach(function(control){control.addEventListener("click",function(){controls.forEach(function(btn){btn.classList.toggle("active",btn===control);});panels.forEach(function(panel){panel.classList.toggle("active",panel.dataset.tabPanel===control.dataset.tabTarget);});});});});
 </script>
@@ -431,8 +483,31 @@ document.addEventListener("DOMContentLoaded",function(){const group=document.que
 <style>
 .page-heading{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.6rem;gap:1rem;}
 .page-heading h1{margin:0;font-size:1.9rem;color:var(--text);}
-.heading-actions{display:flex;align-items:center;gap:.6rem;}
+.heading-actions{display:flex;align-items:flex-start;gap:1rem;flex-wrap:wrap;justify-content:flex-end;}
+.heading-buttons{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;}
+.btn-secondary{display:inline-flex;align-items:center;justify-content:center;padding:.55rem 1.1rem;border-radius:999px;font-weight:600;font-size:.85rem;background:rgba(76,148,255,0.15);border:1px solid rgba(76,148,255,0.28);color:#8bc5ff;text-decoration:none;transition:all .2s ease;box-shadow:0 6px 18px rgba(72,144,255,0.12);}
+.btn-secondary:hover{background:rgba(118,187,255,0.26);border-color:rgba(118,187,255,0.42);color:#dff0ff;}
+.btn-secondary:focus{outline:2px solid rgba(118,187,255,0.45);outline-offset:3px;}
+.active-project{display:flex;flex-direction:column;gap:.25rem;background:rgba(255,255,255,0.02);padding:.8rem 1rem;border-radius:10px;border:1px solid rgba(255,255,255,0.06);min-width:220px;}
+.active-project .label{font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
 .page-subtitle{margin:.25rem 0 0;font-size:.95rem;color:var(--muted);}
+.hunt-shell{display:grid;grid-template-columns:minmax(320px,360px) 1fr;gap:1.6rem;align-items:start;margin-bottom:2rem;}
+.left-column,.right-column{display:flex;flex-direction:column;gap:1.6rem;}
+.projects-panel{display:flex;flex-direction:column;max-height:24rem;}
+.projects-panel .panel-header{margin-bottom:.9rem;}
+.projects-scroll{flex:1;min-height:0;overflow:auto;padding-right:.4rem;}
+.project-items{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.9rem;}
+.project-item{position:relative;transition:.2s ease;}
+.project-card{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;padding:1.05rem 1.2rem;border-radius:14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.03);text-decoration:none;color:inherit;transition:.2s ease;}
+.project-card:hover{border-color:rgba(127,181,255,0.25);box-shadow:0 0 0 1px rgba(127,181,255,0.15);}
+.project-item.is-active .project-card{border-color:rgba(127,181,255,0.6);box-shadow:0 0 0 2px rgba(127,181,255,0.2);background:rgba(127,181,255,0.08);}
+.project-card-body{display:flex;flex-direction:column;gap:.4rem;}
+.project-card h3{margin:0;font-size:1.05rem;color:var(--text);}
+.project-card .description{margin:0;color:var(--muted);font-size:.85rem;}
+.project-card .client{display:inline-flex;align-items:center;gap:.35rem;margin-top:.2rem;padding:.2rem .6rem;border-radius:999px;background:rgba(127,181,255,0.15);color:#cfe4ff;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;}
+.project-chevron{display:inline-flex;align-items:center;justify-content:center;min-width:1.75rem;height:1.75rem;border-radius:999px;background:rgba(255,255,255,0.06);color:rgba(230,241,255,0.7);font-size:1.1rem;transition:.2s ease;}
+.project-card:hover .project-chevron{background:rgba(127,181,255,0.2);color:#e8f2ff;transform:translateX(2px);}
+.see-all{color:var(--muted);font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;}
 .alert-panel{margin-bottom:1.8rem;}
 .alert-header{align-items:center;}
 .tab-controls{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;}
@@ -463,6 +538,8 @@ document.addEventListener("DOMContentLoaded",function(){const group=document.que
 .meta-chip{display:inline-flex;align-items:center;gap:.25rem;padding:.35rem .65rem;border-radius:999px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.16);font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;}
 .profile-body{padding:1.1rem 1.3rem;display:flex;flex-direction:column;gap:.9rem;background:rgba(255,255,255,0.02);}
 .profile-summary{margin:0;color:var(--muted);line-height:1.35;font-size:.9rem;}
+.profile-summary-list{margin:0;padding-left:1.2rem;display:flex;flex-direction:column;gap:.45rem;color:var(--muted);font-size:.9rem;line-height:1.45;list-style:disc;}
+.profile-summary-list li{margin:0;}
 .heuristic-chips{list-style:none;margin:.6rem 0 0;padding:0;display:flex;flex-wrap:wrap;gap:.45rem;}
 .heuristic-chips li{padding:.3rem .65rem;border-radius:999px;background:rgba(118,187,255,0.12);border:1px solid rgba(118,187,255,0.28);color:#d5ecff;font-size:.72rem;font-weight:600;letter-spacing:.06em;}
 .recommendation-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.55rem;}
@@ -540,8 +617,11 @@ document.addEventListener("DOMContentLoaded",function(){const group=document.que
 .log-feed .severity-debug{background:rgba(255,255,255,0.08);color:#f0f6ff;}
 @media (max-width:960px){
   .page-heading{flex-direction:column;align-items:flex-start;}
-  .heading-actions{width:100%;}
-  .heading-actions .btn-secondary{width:100%;justify-content:center;}
+  .heading-actions{width:100%;justify-content:flex-start;}
+  .heading-buttons{width:100%;justify-content:flex-start;}
+  .heading-buttons .btn-secondary{flex:1 1 auto;justify-content:center;}
+  .hunt-shell{grid-template-columns:1fr;}
+  .projects-panel{max-height:none;}
 }
 </style>
 {% endblock %}

@@ -13,75 +13,136 @@
   <span>{{ finding.vulnerability.title }}</span>
 </nav>
 
-<section class="page-heading">
-  <div>
-    <h1>{{ finding.vulnerability.title }}</h1>
-    <p class="page-subtitle">Projeto: {{ finding.project.name }} · CVE: {{ finding.cve|default:"Sem CVE" }}</p>
-  </div>
-  <div class="heading-actions">
-    {% if project_url %}
-      <a class="btn" href="{{ project_url }}">Voltar ao projeto</a>
-    {% endif %}
-  </div>
-</section>
-
-<section class="panel finding-meta">
-  <header class="panel-header">
-    <div>
-      <h2>Resumo do finding</h2>
-      <p class="muted">Contexto consolidado após enriquecimento externo e heurísticas ATT&CK.</p>
+<section class="panel hero-panel">
+  <header class="hero-header">
+    <div class="hero-text">
+      <div class="hero-title-row">
+        <span class="badge severity-{{ finding.severity }}">{{ finding.get_severity_display }}</span>
+        <h1>{{ finding.vulnerability.title }}</h1>
+      </div>
+      <p class="hero-subtitle">Projeto: {{ finding.project.name }}{% if finding.detected_at %} · Detectado em {{ finding.detected_at|date:"d/m/Y H:i" }}{% endif %}</p>
     </div>
-    <span class="badge severity-{{ finding.severity }}">{{ finding.get_severity_display }}</span>
+    <div class="hero-actions">
+      {% if project_url %}
+        <a class="btn-secondary" href="{{ project_url }}">Voltar ao projeto</a>
+      {% endif %}
+      {% if vulnerability_url %}
+        <a class="btn-tertiary" href="{{ vulnerability_url }}">Ver sessão de vulnerabilidades</a>
+      {% endif %}
+    </div>
   </header>
-  <dl class="meta-grid">
+
+  <ul class="hero-chips">
+    {% if finding.cve %}
+      <li class="hero-chip"><span>CVE</span><strong>{{ finding.cve }}</strong></li>
+    {% endif %}
+    {% if finding.cvss_score %}
+      <li class="hero-chip"><span>CVSS</span><strong>{{ finding.cvss_score|floatformat:1 }}</strong></li>
+    {% endif %}
+    {% if finding.cvss_vector %}
+      <li class="hero-chip"><span>Vetor</span><strong>{{ finding.cvss_vector }}</strong></li>
+    {% endif %}
+    {% if finding.last_profiled_at %}
+      <li class="hero-chip"><span>Perfil</span><strong>{{ finding.last_profiled_at|date:"d/m/Y H:i" }}</strong></li>
+    {% endif %}
+    <li class="hero-chip {% if finding.is_active %}is-active{% else %}is-closed{% endif %}"><span>Status</span><strong>{% if finding.is_active %}Ativo{% else %}Encerrado{% endif %}</strong></li>
+    {% if finding.last_synced_at %}
+      <li class="hero-chip"><span>Último sync</span><strong>{{ finding.last_synced_at|date:"d/m/Y H:i" }}</strong></li>
+    {% endif %}
+  </ul>
+
+  {% if finding.tags %}
+    <div class="hero-tags">
+      {% for tag in finding.tags %}
+        <span class="tag-pill">{{ tag }}</span>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <dl class="meta-grid hero-meta-grid">
     <div><dt>Host</dt><dd>{{ finding.host|default:"—" }}</dd></div>
     <div><dt>Serviço</dt><dd>{{ finding.service|default:"—" }}</dd></div>
     <div><dt>Porta</dt><dd>{{ finding.port|default:"—" }}</dd></div>
-    <div><dt>CVSS</dt><dd>{{ finding.cvss_score|default:"—" }}</dd></div>
-    <div><dt>Último perfil</dt><dd>{% if finding.last_profiled_at %}{{ finding.last_profiled_at|date:"d/m/Y H:i" }}{% else %}—{% endif %}</dd></div>
-    <div><dt>Perfil versão</dt><dd>{{ finding.profile_version }}</dd></div>
+    <div><dt>Protocolo</dt><dd>{{ finding.protocol|default:"—" }}</dd></div>
+    <div><dt>Detectado</dt><dd>{% if finding.detected_at %}{{ finding.detected_at|date:"d/m/Y H:i" }}{% else %}—{% endif %}</dd></div>
+    <div><dt>Último sync</dt><dd>{% if finding.last_synced_at %}{{ finding.last_synced_at|date:"d/m/Y H:i" }}{% else %}—{% endif %}</dd></div>
+    <div><dt>Perfil versão</dt><dd>{{ finding.profile_version|default:"—" }}</dd></div>
+    <div><dt>Snapshots</dt><dd>{{ finding.state_version|default:"—" }}</dd></div>
   </dl>
-  <p class="finding-summary">{{ finding.summary|default:"Sem resumo disponível." }}</p>
+
+  {% if finding_summary_lines %}
+    <ul class="summary-list hero-summary">
+      {% for line in finding_summary_lines|slice:":6" %}
+        <li>{{ line }}</li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="finding-summary">{{ finding.summary|default:"Sem resumo disponível." }}</p>
+  {% endif %}
 </section>
 
-<section class="panel profile-tabs" data-tab-group="finding-profiles">
-  <header class="panel-header">
-    <div>
-      <h2>Perfis e recomendações</h2>
-      <p class="muted">Alternar entre visões Blue/Red para explorar controles defensivos e cenários ofensivos.</p>
-    </div>
-    <div class="tab-controls">
-      <button type="button" class="tab-control active" data-tab-target="blue">Blue Team</button>
-      <button type="button" class="tab-control" data-tab-target="red">Red Team</button>
-    </div>
-  </header>
-  <div class="tab-panels">
-    <div class="tab-panel active" data-tab-panel="blue">
-      <article class="profile-column">
-        <h3>Resumo Blue</h3>
+<section class="profiles-panel">
+  <div class="profiles-grid">
+    <article class="profile-card blue">
+      <header>
+        <h2>Blue Team</h2>
+        <span class="profile-tag">Defensivo</span>
+      </header>
+      {% if blue_summary_lines %}
+        <ul class="summary-list">
+          {% for line in blue_summary_lines|slice:":8" %}
+            <li>{{ line }}</li>
+          {% endfor %}
+        </ul>
+      {% else %}
         <p class="profile-summary">{{ blue_profile.summary|default:finding.summary|default:"Sem resumo Blue." }}</p>
-        {% if blue_profile.references %}
+      {% endif %}
+
+      {% if blue_profile.references %}
+        <div class="profile-section">
           <h4>Referências</h4>
           <ul class="reference-list">
-            {% for ref in blue_profile.references %}
+            {% for ref in blue_profile.references|slice:":6" %}
               <li><a href="{{ ref }}" target="_blank" rel="noopener">{{ ref }}</a></li>
             {% endfor %}
           </ul>
-        {% endif %}
-        <h4>Heurísticas aplicadas</h4>
+        </div>
+      {% endif %}
+
+      <div class="profile-section">
+        <h4>Heurísticas ATT&amp;CK</h4>
         {% include "hunt/components/heuristic_chips.html" with heuristics=blue_heuristics %}
-        <h4>Recomendações</h4>
+        {% if not blue_heuristics %}
+          <p class="muted">Nenhuma heurística aplicada ainda.</p>
+        {% endif %}
+      </div>
+
+      <div class="profile-section">
+        <h4>Recomendações prioritárias</h4>
         {% include "hunt/components/recommendation_list.html" with recommendations=blue_recommendations tone="blue" empty_message="Nenhuma recomendação Blue disponível." %}
-      </article>
-    </div>
-    <div class="tab-panel" data-tab-panel="red">
-      <article class="profile-column">
-        <h3>Resumo Red</h3>
+      </div>
+    </article>
+
+    <article class="profile-card red">
+      <header>
+        <h2>Red Team</h2>
+        <span class="profile-tag">Ofensivo</span>
+      </header>
+      {% if red_summary_lines %}
+        <ul class="summary-list">
+          {% for line in red_summary_lines|slice:":8" %}
+            <li>{{ line }}</li>
+          {% endfor %}
+        </ul>
+      {% else %}
         <p class="profile-summary">{{ red_profile.summary|default:"Sem resumo Red." }}</p>
-        {% if red_profile.exploits %}
+      {% endif %}
+
+      {% if red_profile.exploits %}
+        <div class="profile-section">
           <h4>Exploits correlacionados</h4>
           <ul class="exploit-list">
-            {% for exploit in red_profile.exploits %}
+            {% for exploit in red_profile.exploits|slice:":6" %}
               <li>
                 <strong>{{ exploit.title|default:"Exploit" }}</strong>
                 <span class="muted">Fonte: {{ exploit.source|default:"?" }}</span>
@@ -90,17 +151,31 @@
               </li>
             {% endfor %}
           </ul>
-        {% endif %}
-        <h4>Heurísticas aplicadas</h4>
+        </div>
+      {% else %}
+        <div class="profile-section">
+          <h4>Exploits correlacionados</h4>
+          <p class="muted">Sem exploits mapeados.</p>
+        </div>
+      {% endif %}
+
+      <div class="profile-section">
+        <h4>Heurísticas ATT&amp;CK</h4>
         {% include "hunt/components/heuristic_chips.html" with heuristics=red_heuristics %}
-        <h4>Recomendações</h4>
+        {% if not red_heuristics %}
+          <p class="muted">Nenhuma heurística aplicada ainda.</p>
+        {% endif %}
+      </div>
+
+      <div class="profile-section">
+        <h4>Recomendações ofensivas</h4>
         {% include "hunt/components/recommendation_list.html" with recommendations=red_recommendations tone="red" empty_message="Nenhuma recomendação Red disponível." %}
-      </article>
-    </div>
+      </div>
+    </article>
   </div>
 </section>
 
-<section class="panel related-insights">
+<section class="panel insight-panel">
   <header class="panel-header">
     <div>
       <h2>Contexto adicional</h2>
@@ -143,11 +218,11 @@
   </div>
 </section>
 
-<section class="panel navigation-panel">
+<section class="panel action-panel">
   <header class="panel-header">
     <div>
       <h2>Ações rápidas</h2>
-      <p class="muted">Links para automações e módulos relacionados.</p>
+      <p class="muted">Facilite integrações e acompanhe o ciclo completo deste finding.</p>
     </div>
   </header>
   <ul class="action-list">
@@ -168,19 +243,4 @@
 
 {% block extra_js %}
 {{ block.super }}
-<script>
-document.addEventListener("DOMContentLoaded", function(){
-  var groups = Array.from(document.querySelectorAll('[data-tab-group]'));
-  groups.forEach(function(group){
-    var controls = Array.from(group.querySelectorAll('[data-tab-target]'));
-    var panels = Array.from(group.querySelectorAll('[data-tab-panel]'));
-    controls.forEach(function(control){
-      control.addEventListener("click", function(){
-        controls.forEach(function(btn){ btn.classList.toggle("active", btn === control); });
-        panels.forEach(function(panel){ panel.classList.toggle("active", panel.dataset.tabPanel === control.dataset.tabTarget); });
-      });
-    });
-  });
-});
-</script>
 {% endblock %}
