@@ -93,6 +93,50 @@ class ScanDashboardViewTests(TestCase):
         self.assertTrue(script_cards)
         self.assertTrue(all(card["enabled"] for card in script_cards))
 
+    def test_dashboard_hides_excluded_nse_scripts_from_flow(self):
+        project = Project.objects.create(owner=self.user, name="Projeto Epsilon", slug="projeto-epsilon")
+        sync_default_scripts()
+
+        Script.objects.update_or_create(
+            owner=None,
+            slug="nmap-targeted-nse",
+            defaults={
+                "name": "Nmap — NSE focado",
+                "description": "Aplica scripts NSE focados nas portas detectadas.",
+                "filename": "nmap_targeted_nse.sh",
+                "content": "#!/bin/sh\necho focused",
+                "kind": Script.Kind.DEFAULT,
+                "tags": ["nmap", "nse"],
+                "required_tool_slug": "nmap",
+            },
+        )
+
+        Script.objects.update_or_create(
+            owner=None,
+            slug="nmap-nse-vulnerabilities",
+            defaults={
+                "name": "Nmap — NSE Vulnerabilities",
+                "description": "Executa scripts NSE de vulnerabilidades.",
+                "filename": "nmap_nse_vulnerabilities.sh",
+                "content": "#!/bin/sh\necho vuln",
+                "kind": Script.Kind.DEFAULT,
+                "tags": ["nmap", "nse"],
+                "required_tool_slug": "nmap",
+            },
+        )
+
+        self.client.login(username="tester", password="pass1234")
+        response = self.client.get(reverse("arpia_scan:dashboard"), data={"project": project.pk})
+
+        self.assertEqual(response.status_code, 200)
+        action_cards = response.context["action_cards"]
+        script_cards = [card for card in action_cards if card.get("script_slug")]
+        titles = {card["title"] for card in script_cards}
+        slugs = {card["script_slug"] for card in script_cards}
+        self.assertNotIn("Nmap — NSE focado", titles)
+        self.assertNotIn("Nmap — NSE Vulnerabilities", titles)
+        self.assertFalse({"nmap-targeted-nse", "nmap-nse-vulnerabilities"} & slugs)
+
 
 class ScanModelTests(TestCase):
     def setUp(self):

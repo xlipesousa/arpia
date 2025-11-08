@@ -18,6 +18,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.utils.http import urlencode
+from django.utils.text import slugify
 from django.views import View
 from django.views.decorators.http import require_http_methods
 from django.views.generic import TemplateView
@@ -60,6 +61,13 @@ TERMINAL_SESSION_STATUSES = {
     ScanSession.Status.COMPLETED,
     ScanSession.Status.FAILED,
     ScanSession.Status.CANCELED,
+}
+
+FLOW_SCRIPT_EXCLUSION_IDENTIFIERS = {
+    "nmap-targeted-nse",
+    "nmap-nse-focado",
+    "nmap-nse-vulnerabilities",
+    "nmap-vuln-nse",
 }
 
 
@@ -496,6 +504,11 @@ class ScanDashboardView(LoginRequiredMixin, TemplateView):
         tools_map = {tool.slug: tool for tool in Tool.objects.for_user(user)}
 
         for script in scripts:
+            normalized_identifiers = {script.slug or ""}
+            if script.name:
+                normalized_identifiers.add(slugify(script.name))
+            if any(identifier in FLOW_SCRIPT_EXCLUSION_IDENTIFIERS for identifier in normalized_identifiers if identifier):
+                continue
             required_tool_slug = script.required_tool_slug or ""
             required_tool = tools_map.get(required_tool_slug) if required_tool_slug else None
             enabled = has_project and (not required_tool_slug or required_tool is not None)

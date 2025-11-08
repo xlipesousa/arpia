@@ -1,0 +1,11 @@
+[2025-11-08 16:28:44 -0500] [70572] [INFO] Starting gunicorn 23.0.0
+[2025-11-08 16:28:44 -0500] [70572] [INFO] Listening at: http://0.0.0.0:8000 (70572)
+[2025-11-08 16:28:44 -0500] [70572] [INFO] Using worker: sync
+[2025-11-08 16:28:44 -0500] [70574] [INFO] Booting worker with pid: 70574
+[2025-11-08 16:28:44 -0500] [70575] [INFO] Booting worker with pid: 70575
+[2025-11-08 16:28:44 -0500] [70576] [INFO] Booting worker with pid: 70576
+[2025-11-08 16:30:12 -0500] [70572] [INFO] Handling signal: term
+[2025-11-08 18:30:12 -0300] [70576] [INFO] Worker exiting (pid: 70576)
+[2025-11-08 18:30:12 -0300] [70574] [INFO] Worker exiting (pid: 70574)
+[2025-11-08 18:30:12 -0300] [70575] [INFO] Worker exiting (pid: 70575)
+[2025-11-08 16:30:12 -0500] [70572] [INFO] Shutting down: Master
