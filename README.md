@@ -13,14 +13,20 @@ ALLOWED_HOSTS=192.168.0.10,127.0.0.1,localhost  # ajuste para o IP/nome do host
 CSRF_TRUSTED_ORIGINS=http://192.168.0.10        # precisa conter o esquema (http:// ou https://)
 ```
 
-Passos recomendados:
-- Ative o virtualenv `source .venv/bin/activate`
-- Carregue o arquivo de configuração: `set -a && source .env.production && set +a`
-- Atualize banco e assets: `python manage.py migrate --noinput` e `python manage.py collectstatic --noinput`
-- Faça uma checagem rápida de produção: `python manage.py check --deploy`
-- Suba o serviço escutando em todas as interfaces: `gunicorn --bind 0.0.0.0:8000 arpia_project.wsgi`
+Passos recomendados (com o novo orquestrador `arpia.sh`):
+- Garanta que o `.venv` esteja criado (via `install.sh` ou manualmente).
+- Ajuste as variáveis em `.env.production`.
+- Inicie o serviço com `./arpia.sh start` (opções abaixo). O script carrega o `.env`, executa `migrate` por padrão e sobe o Gunicorn em segundo plano.
 
-Enquanto o serviço estiver rodando, o ARPIA ficará acessível em `http://<IP-do-host>:8000/`.
+Detalhes do script de produção `arpia.sh`:
+- Detecta automaticamente o IP principal do host e, se nenhuma configuração for passada, inicia o serviço em `<ip_detectado>:8000`.
+- `ENV_FILE=.env.custom ./arpia.sh start` — usa um arquivo `.env` alternativo.
+- `BIND="0.0.0.0:9000" WORKERS=4 ./arpia.sh restart` — customiza bind e quantidade de workers.
+- `RUN_MIGRATIONS=false ./arpia.sh start` — pula `migrate`; útil se a step já foi executada previamente.
+- `RUN_COLLECTSTATIC=true ./arpia.sh start` — dispara o `collectstatic` automaticamente.
+- Logs: `logs/gunicorn.log`; PID: `.arpia_gunicorn.pid`.
+
+Enquanto o serviço estiver rodando, o ARPIA ficará acessível em `http://<IP-do-host>:8000/` (ou na porta configurada em `BIND`).
 
 Pré-requisitos
 - Git
@@ -52,23 +58,36 @@ Scripts úteis
   - Sincroniza com o remoto (git pull --rebase), instala dependências e aplica migrações automaticamente.
   - Recomendado após qualquer git pull ou antes de rodar o servidor para garantir que o banco esteja em dia.
 
-- arpia.sh
-  - Controla o servidor de desenvolvimento em background.
-  - Torne executável: chmod +x arpia.sh
+- arpia-dev.sh
+  - Controla o servidor de desenvolvimento (`runserver`) em background.
+  - Torne executável: `chmod +x arpia-dev.sh`
   - Uso:
-    - ./arpia.sh start    — inicia runserver em background (PID salvo em .arpia_runserver.pid)
-    - ./arpia.sh stop     — para o servidor em background
-    - ./arpia.sh status   — verifica estado
-    - ./arpia.sh restart  — reinicia
+    - `./arpia-dev.sh start`    — inicia runserver em background (PID salvo em `.arpia_runserver.pid`)
+    - `./arpia-dev.sh stop`     — para o servidor em background
+    - `./arpia-dev.sh status`   — verifica estado
+    - `./arpia-dev.sh restart`  — reinicia
+  - Detecta automaticamente o IP do host e usa `<ip_detectado>:8000` como bind padrão (sobreponha com `HOST=ip:porta`).
 
-Parâmetros e logs
-- HOST (opcional) — define host:porta para runserver; ex:
-  - HOST="0.0.0.0:8000" ./arpia.sh start
-- Logs do runserver ficam em logs/runserver.log
-- PID do processo fica em .arpia_runserver.pid
+- arpia.sh
+  - Novo orquestrador de produção usando Gunicorn.
+  - Torne executável: `chmod +x arpia.sh`
+  - Uso básico: `./arpia.sh start` (carrega `.env.production`, aplica migrações e sobe Gunicorn).
+  - `./arpia.sh stop` encerra o processo; `./arpia.sh status` exibe o PID/log; `./arpia.sh restart` aplica stop/start.
+  - Se `ALLOWED_HOSTS` ou `CSRF_TRUSTED_ORIGINS` não estiverem definidos, o script preenche automaticamente com o IP detectado.
+
+Parâmetros e logs (desenvolvimento)
+- HOST (opcional) — define host:porta para `runserver`; por padrão usa `<ip_detectado>:8000`.
+- Logs do runserver ficam em `logs/runserver.log`
+- PID do processo fica em `.arpia_runserver.pid`
+
+Parâmetros e logs (produção)
+- `BIND` e `WORKERS` controlam bind e número de workers (`./arpia.sh start`). Se `BIND` não for informado, usa `<ip_detectado>:8000`.
+- Logs do Gunicorn ficam em `logs/gunicorn.log`.
+- PID do Gunicorn fica em `.arpia_gunicorn.pid`.
 
 Atenção
-- O script arpia.sh usa o python do .venv se presente; garanta que o .venv foi criado pelo install.sh ou manualmente.
+- Os scripts `arpia-dev.sh` e `arpia.sh` usam o Python do `.venv` se presente; garanta que o `.venv` foi criado pelo `install.sh` ou manualmente.
+- O `arpia.sh` define automaticamente `ALLOWED_HOSTS` e `CSRF_TRUSTED_ORIGINS` com o IP detectado caso não estejam presentes no ambiente.
 - Para desenvolvimento, DEBUG=True (configurado via .env). Não use em produção.
 - Se o repositório for privado, garanta que os colaboradores têm acesso SSH/HTTPS conforme preferir.
 - O comando `python manage.py runserver` agora aplica migrações pendentes automaticamente antes de subir o servidor.
