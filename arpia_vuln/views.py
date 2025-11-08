@@ -830,7 +830,15 @@ class VulnSessionReportPreviewView(LoginRequiredMixin, TemplateView):
 		last_collected_iso = findings_summary.get("last_collected_at")
 		last_collected_dt = self._parse_summary_datetime(last_collected_iso)
 		report_json = json.dumps(snapshot or {}, indent=2, ensure_ascii=False)
+		max_cvss_value = findings_summary.get("max_cvss") if isinstance(findings_summary, dict) else None
+		has_max_cvss = max_cvss_value is not None
 
+		project_consolidated_url = None
+		if self.session.project_id:
+			project_consolidated_url = reverse(
+				"arpia_report:project_consolidated",
+				args=[self.session.project.pk],
+			)
 		context.update(
 			{
 				"session": self.session,
@@ -849,6 +857,9 @@ class VulnSessionReportPreviewView(LoginRequiredMixin, TemplateView):
 				"last_collected": last_collected_dt,
 				"last_collected_raw": last_collected_iso,
 				"report_json": report_json,
+				"max_cvss_value": max_cvss_value,
+				"has_max_cvss": has_max_cvss,
+				"project_consolidated_url": project_consolidated_url,
 			}
 		)
 		return context
@@ -1000,6 +1011,7 @@ class VulnSessionReportPreviewView(LoginRequiredMixin, TemplateView):
 		cvss_samples = cvss_samples[:5]
 		cvss_score = float(finding.cvss_score) if finding.cvss_score is not None else None
 		cvss_display = cvss_score if cvss_score is not None else (cvss_samples[0] if cvss_samples else None)
+		cvss_samples_display = [f"{value:.1f}" for value in cvss_samples]
 
 		port_display = ""
 		if finding.port:
@@ -1009,6 +1021,14 @@ class VulnSessionReportPreviewView(LoginRequiredMixin, TemplateView):
 
 		source_label = data.get("source_kind") or data.get("source") or ""
 		artifact_path = data.get("file_path") or ""
+		scanner = data.get("scanner") or ""
+		raw_output = data.get("raw_output") if isinstance(data.get("raw_output"), str) else ""
+		summary_hint = data.get("summary_hint") or ""
+		summary_basis = finding.summary or summary_hint
+		summary_info = _prepare_dashboard_summary(summary_basis)
+		top_cves = data.get("top_cves") if isinstance(data.get("top_cves"), list) else []
+		if not top_cves and primary_cve:
+			top_cves = [primary_cve]
 
 		task_payload = None
 		if finding.source_task:
@@ -1024,6 +1044,10 @@ class VulnSessionReportPreviewView(LoginRequiredMixin, TemplateView):
 			"id": str(finding.pk),
 			"title": finding.title,
 			"summary": finding.summary,
+			"summary_hint": summary_hint,
+			"summary_preview": summary_info["preview"],
+			"summary_full": summary_info["full"],
+			"summary_collapsible": summary_info["collapsible"],
 			"severity": finding.severity,
 			"severity_display": finding.get_severity_display(),
 			"status": finding.status,
@@ -1037,13 +1061,17 @@ class VulnSessionReportPreviewView(LoginRequiredMixin, TemplateView):
 			"cvss_score": cvss_score,
 			"cvss_samples": cvss_samples,
 			"cvss_display": cvss_display,
+			"cvss_samples_display": cvss_samples_display,
 			"primary_cve": primary_cve,
 			"extra_cves_count": extra_cves_count,
 			"all_cves": cves,
+			"top_cves": top_cves,
 			"references": references,
 			"references_total": len(references),
 			"artifact_path": artifact_path,
 			"source_label": source_label,
+			"scanner": scanner,
+			"raw_output": raw_output,
 			"data": data,
 			"task": task_payload,
 		}

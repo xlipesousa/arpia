@@ -13,7 +13,7 @@
     <span class="status-pill status-{{ session.status }}" id="session-status-pill">{{ session.get_status_display }}</span>
     <span class="live-indicator {% if session.is_terminal %}hidden{% endif %}" id="live-indicator">Atualizando em tempo real…</span>
     {% if report_url %}
-      <a href="{{ report_url }}" class="report-link" target="_blank" rel="noopener noreferrer">Ver relatório provisório</a>
+      <a href="{{ report_url }}" class="report-button">Ver relatório de sessão</a>
     {% endif %}
   </div>
 </section>
@@ -417,6 +417,9 @@
 .live-indicator.hidden{display:none;}
 .live-indicator.tone-success{color:#d8f6e9;}
 .live-indicator.tone-error{color:#ffd9d9;}
+.report-button{display:inline-flex;align-items:center;gap:.35rem;margin-top:.75rem;padding:.45rem 1rem;border-radius:999px;background:#4c94ff;color:#031a36;font-weight:600;font-size:.85rem;text-decoration:none;box-shadow:0 8px 18px rgba(44,120,226,0.35);transition:transform .15s ease,box-shadow .15s ease;}
+.report-button:hover{transform:translateY(-1px);box-shadow:0 10px 22px rgba(44,120,226,0.45);}
+.report-button:focus{outline:2px solid rgba(255,255,255,0.35);outline-offset:3px;}
 .btn-secondary{display:inline-flex;align-items:center;justify-content:center;padding:.45rem .9rem;border-radius:999px;font-weight:600;font-size:.85rem;background:rgba(76,148,255,0.15);border:1px solid rgba(76,148,255,0.25);color:#8bc5ff;text-decoration:none;transition:.2s ease;}
 .btn-secondary:hover{background:rgba(117,187,255,0.25);}
 

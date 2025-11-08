@@ -28,7 +28,7 @@
       <p id="greenbone-retry-feedback" class="start-feedback" hidden></p>
     </div>
     {% if report_url %}
-      <a href="{{ report_url }}" class="report-link" target="_blank" rel="noopener noreferrer">Ver relatório provisório</a>
+      <a href="{{ report_url }}" class="report-button">Ver relatório de sessão</a>
     {% endif %}
   </div>
 </section>
@@ -308,8 +308,9 @@
 .status-pill{display:inline-flex;align-items:center;padding:.28rem .75rem;border-radius:999px;font-weight:600;font-size:.85rem;color:var(--text);background:rgba(255,255,255,0.08);}
 .live-indicator{font-size:.82rem;color:#8bc5ff;}
 .live-indicator.hidden{display:none;}
-.report-link{color:#8bc5ff;font-weight:600;text-decoration:none;}
-.report-link:hover{color:#bfe0ff;}
+.report-button{display:inline-flex;align-items:center;gap:.35rem;margin-top:.75rem;padding:.45rem 1rem;border-radius:999px;background:#4c94ff;color:#031a36;font-weight:600;font-size:.85rem;text-decoration:none;box-shadow:0 8px 18px rgba(44,120,226,0.35);transition:transform .15s ease,box-shadow .15s ease;}
+.report-button:hover{transform:translateY(-1px);box-shadow:0 10px 22px rgba(44,120,226,0.45);}
+.report-button:focus{outline:2px solid rgba(255,255,255,0.35);outline-offset:3px;}
 .btn-start,.btn-retry,.btn-cancel{margin-top:.45rem;padding:.5rem 1.1rem;border-radius:999px;font-weight:700;border:none;cursor:pointer;transition:opacity .18s ease,transform .18s ease;}
 .btn-start{background:linear-gradient(90deg,#52d2ff,#7fb5ff);color:#021223;}
 .btn-retry{background:linear-gradient(90deg,#ff8c69,#ff5f8a);color:#021223;}

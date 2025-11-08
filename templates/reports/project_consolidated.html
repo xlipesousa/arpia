@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load static %}
+{% load static report_extras %}
 {% block title %}Relatório Consolidado — {{ project.name }}{% endblock %}
 
 {% block content %}
@@ -18,6 +18,36 @@
       <button type="button" class="btn-primary" onclick="window.print()">Exportar PDF</button>
     </div>
   </header>
+
+  {% if executive_overview or executive_highlights %}
+  <section class="executive-section">
+    <header>
+      <h2>Visão executiva</h2>
+      <p class="muted">Resumo rápido dos principais indicadores consolidados do projeto.</p>
+    </header>
+    {% if executive_overview %}
+    <div class="executive-metrics">
+      {% for metric in executive_overview %}
+        <article class="metric-card metric-{{ metric.tone|default:'neutral' }}">
+          <h3>{{ metric.label }}</h3>
+          <p class="metric-value">{{ metric.value }}</p>
+          {% if metric.description %}<p class="metric-description">{{ metric.description }}</p>{% endif %}
+        </article>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% if executive_highlights %}
+    <div class="executive-highlights">
+      <h3>Destaques</h3>
+      <ul>
+        {% for item in executive_highlights %}
+          <li class="highlight-{{ item.tone|default:'info' }}">{{ item.message }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+  </section>
+  {% endif %}
 
   <section class="project-summary">
     <article class="summary-card">
@@ -86,6 +116,38 @@
       {% if project_report.summary %}
       <p class="project-summary-text">{{ project_report.summary }}</p>
       {% endif %}
+      <div class="module-metrics">
+        {% if scan_key_metrics %}
+        <div>
+          <h3>Scan</h3>
+          <ul>
+            {% for metric in scan_key_metrics %}
+              <li><strong>{{ metric.value }}</strong> {{ metric.label }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+        {% if vuln_key_metrics %}
+        <div>
+          <h3>Vulnerabilidades</h3>
+          <ul>
+            {% for metric in vuln_key_metrics %}
+              <li><strong>{{ metric.value }}</strong> {{ metric.label }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+        {% if hunt_key_metrics %}
+        <div>
+          <h3>Threat Hunt</h3>
+          <ul>
+            {% for metric in hunt_key_metrics %}
+              <li><strong>{{ metric.value }}</strong> {{ metric.label }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+      </div>
     </article>
   </section>
 
@@ -243,27 +305,91 @@
           {% endfor %}
         </ul>
         {% endif %}
+        {% if scan_observations %}
+        <div class="observation-block">
+          <h4>Observações registradas</h4>
+          <ul class="observation-list">
+            {% for key, value in scan_observations.items %}
+              {% if value %}
+                <li><strong>{{ key|underscore_to_space|title }}:</strong> {{ value }}</li>
+              {% endif %}
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
       </article>
       <article class="scan-card">
         <h3>Principais hosts</h3>
-        {% if scan_hosts %}
-        <ul class="token-list">
-          {% for host in scan_hosts|slice:":10" %}<li>{{ host }}</li>{% endfor %}
-        </ul>
+        {% if scan_host_entries %}
+        <table class="compact-table">
+          <thead>
+            <tr>
+              <th>Host</th>
+              <th>Alcançável</th>
+              <th>Portas abertas</th>
+              <th>Observações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for host in scan_host_entries|slice:":6" %}
+            <tr>
+              <td>{{ host.host|default:"—" }}</td>
+              <td>{% if host.reachable %}<span class="status-pill status-active">Sim</span>{% else %}<span class="status-pill status-archived">Não</span>{% endif %}</td>
+              <td>{% if host.open_ports %}{{ host.open_ports|join:", " }}{% else %}<span class="muted">—</span>{% endif %}</td>
+              <td>{{ host.notes|default:"" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
         {% else %}
           <p class="empty">Sem registros de hosts para esta execução.</p>
         {% endif %}
-        {% if scan_services.items %}
+        {% if scan_service_entries %}
         <h4>Serviços destacados</h4>
         <ul class="token-list">
-          {% for service in scan_services.items|slice:":6" %}
-            <li>{{ service.service|default:"desconhecido"|title }} — {{ service.occurrences|length|default:0 }} ocorrência(s)</li>
+          {% for service in scan_service_entries %}
+            <li>{{ service.service|default:"desconhecido" }} — {{ service.occurrences }} host(s)</li>
           {% endfor %}
         </ul>
         {% endif %}
       </article>
     </div>
-    {% if scan_findings %}
+    {% if scan_tasks %}
+    <div class="scan-tasks">
+      <h3>Fluxo de etapas executadas</h3>
+      <table class="scan-tasks-table">
+        <thead>
+          <tr>
+            <th>Ordem</th>
+            <th>Etapa</th>
+            <th>Status</th>
+            <th>Ferramenta</th>
+            <th>Script</th>
+            <th>Início</th>
+            <th>Término</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for task in scan_tasks|slice:":12" %}
+          <tr>
+            <td>{{ task.order|default:forloop.counter }}</td>
+            <td>{{ task.name|default:"—" }}</td>
+            <td><span class="badge status-{{ task.status|default:"pending"|lower }}">{{ task.status_display|default:task.status|default:"—"|title }}</span></td>
+            <td>{% if task.tool %}{{ task.tool.name|default:task.tool.slug|default:"—" }}{% else %}<span class="muted">—</span>{% endif %}</td>
+            <td>{% if task.script %}{{ task.script.name|default:task.script.slug|default:"—" }}{% else %}<span class="muted">—</span>{% endif %}</td>
+            <td>{% if task.started_at %}{{ task.started_at|date:"d/m/Y H:i" }}{% else %}<span class="muted">—</span>{% endif %}</td>
+            <td>{% if task.finished_at %}{{ task.finished_at|date:"d/m/Y H:i" }}{% else %}<span class="muted">—</span>{% endif %}</td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="7" class="muted">Nenhuma etapa registrada.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+    {% if scan_display_findings %}
     <div class="scan-findings">
       <h3>Achados relevantes</h3>
       <table>
@@ -276,7 +402,7 @@
           </tr>
         </thead>
         <tbody>
-          {% for finding in scan_findings|slice:":8" %}
+          {% for finding in scan_display_findings|slice:":10" %}
           <tr>
             <td>{{ finding.title|default:"—" }}</td>
             <td>{{ finding.severity|default:"info"|upper }}</td>
@@ -330,14 +456,52 @@
     <div class="vuln-grid">
       <article class="vuln-card">
         <h3>Distribuição por severidade</h3>
-        {% if vuln_severity %}
-        <ul class="token-list">
-          {% for severity, count in vuln_severity.items %}
-            <li><strong>{{ severity|upper }}</strong> — {{ count }} registro(s)</li>
+        {% if vuln_severity_breakdown %}
+        <ul class="severity-list">
+          {% for item in vuln_severity_breakdown %}
+            <li>
+              <span class="severity-label severity-{{ item.key }}">{{ item.label }}</span>
+              <span class="severity-count">{{ item.count }}</span>
+              <span class="severity-bar"><span style="width: {{ item.percentage }}%"></span></span>
+              <span class="severity-percentage">{{ item.percentage }}%</span>
+            </li>
           {% endfor %}
         </ul>
         {% else %}
           <p class="empty">Sem distribuição registrada.</p>
+        {% endif %}
+        <div class="vuln-stats">
+          <div>
+            <span class="metric-value">{{ vuln_status_overview.open_total }}</span>
+            <span class="metric-label">Abertas</span>
+          </div>
+          <div>
+            <span class="metric-value">{{ vuln_status_overview.resolved_total }}</span>
+            <span class="metric-label">Resolvidas</span>
+          </div>
+          <div>
+            <span class="metric-value">{{ vuln_overview.unique_cves_total|default:0 }}</span>
+            <span class="metric-label">CVEs únicas</span>
+          </div>
+        </div>
+      </article>
+      <article class="vuln-card">
+        <h3>Hosts e serviços afetados</h3>
+        {% if vuln_top_hosts %}
+        <h4>Principais hosts</h4>
+        <ul class="token-list">
+          {% for host in vuln_top_hosts %}
+            <li>{{ host.label }} — {{ host.count }} registro(s)</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+        {% if vuln_top_services %}
+        <h4>Serviços</h4>
+        <ul class="token-list">
+          {% for service in vuln_top_services %}
+            <li>{{ service.label|default:"desconhecido" }} — {{ service.count }} registro(s)</li>
+          {% endfor %}
+        </ul>
         {% endif %}
         {% if vuln_cves %}
         <h4>CVEs referenciadas</h4>
@@ -346,50 +510,56 @@
         </ul>
         {% endif %}
       </article>
-      <article class="vuln-card">
-        <h3>Resumo textual</h3>
-        <ul class="vuln-summary-list">
-          {% for item in vuln_items|slice:":3" %}
-            <li>
-              <strong>{{ item.title }}</strong>
-              <p class="muted">{{ item.summary|default:"Sem descrição." }}</p>
-            </li>
-          {% endfor %}
-        </ul>
-      </article>
     </div>
-    {% if vuln_findings %}
-    <div class="vuln-table-wrapper">
-      <table>
-        <thead>
-          <tr>
-            <th>Título</th>
-            <th>Severidade</th>
-            <th>Status</th>
-            <th>Host</th>
-            <th>CVEs</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for finding in vuln_findings|slice:":12" %}
-          <tr>
-            <td>{{ finding.title|default:"—" }}</td>
-            <td>{{ finding.severity|default:"—"|upper }}</td>
-            <td>{{ finding.status|default:"—"|title }}</td>
-            <td>{{ finding.host|default:"—" }}</td>
-            <td>
-              {% if finding.cves %}
-                {{ finding.cves|join:", " }}
-              {% elif finding.cve %}
-                {{ finding.cve }}
-              {% else %}
-                <span class="muted">—</span>
+    {% if vuln_display_findings %}
+    <div class="vuln-findings">
+      <h3>Achados priorizados</h3>
+      <ul class="vuln-findings-list">
+        {% for finding in vuln_display_findings|slice:":15" %}
+        <li>
+          <div class="finding-head">
+            <span class="badge severity-{{ finding.severity|default:'unknown' }}">{{ finding.severity_display|default:"—" }}</span>
+            <span class="badge status-{{ finding.status|default:'open' }}">{{ finding.status_display|default:"—" }}</span>
+            {% if finding.primary_cve %}<span class="badge badge-outline">{{ finding.primary_cve }}</span>{% endif %}
+            {% if finding.cvss %}<span class="badge badge-muted">CVSS {{ finding.cvss|floatformat:1 }}</span>{% endif %}
+          </div>
+          <h4>{{ finding.title|default:"Achado" }}</h4>
+          <p class="finding-summary">{{ finding.summary|default:"Sem descrição adicional." }}</p>
+          <dl class="finding-meta">
+            {% if finding.host %}<div><dt>Host</dt><dd>{{ finding.host }}</dd></div>{% endif %}
+            {% if finding.service %}<div><dt>Serviço</dt><dd>{{ finding.service }}</dd></div>{% endif %}
+            {% if finding.port %}<div><dt>Porta</dt><dd>{{ finding.port }}</dd></div>{% endif %}
+            {% if finding.protocol %}<div><dt>Protocolo</dt><dd>{{ finding.protocol }}</dd></div>{% endif %}
+          </dl>
+          {% if finding.cves %}
+            <div class="chip-group" role="list">
+              <span class="chip chip-label" role="listitem">CVEs correlacionadas</span>
+              {% for cve in finding.cves %}
+                <span class="chip" role="listitem">{{ cve }}</span>
+              {% endfor %}
+              {% if finding.extra_cve_count %}
+                <span class="chip chip-muted" role="listitem">+{{ finding.extra_cve_count }}</span>
               {% endif %}
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+            </div>
+          {% elif finding.primary_cve %}
+            <div class="chip-group single" role="list">
+              <span class="chip chip-label" role="listitem">CVE principal</span>
+              <span class="chip" role="listitem">{{ finding.primary_cve }}</span>
+            </div>
+          {% endif %}
+          {% if finding.references %}
+          <div class="reference-list">
+            {% for ref in finding.references %}
+              <a href="{{ ref }}" target="_blank" rel="noopener noreferrer">Referência {{ forloop.counter }}</a>
+            {% endfor %}
+          </div>
+          {% endif %}
+          {% if finding.artifact %}
+            <p class="muted artifact-note">Artefato relacionado: {{ finding.artifact }}</p>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
     </div>
     {% endif %}
     {% else %}
@@ -402,6 +572,16 @@
       <h2>Threat Hunt & inteligência</h2>
       <p class="muted">Evidências, indicadores e notas coletadas durante as atividades ofensivas.</p>
     </header>
+    {% if hunt_key_metrics %}
+    <div class="module-metrics">
+      {% for metric in hunt_key_metrics %}
+        <div>
+          <strong>{{ metric.value }}</strong>
+          <span class="muted">{{ metric.label }}</span>
+        </div>
+      {% endfor %}
+    </div>
+    {% endif %}
     {% if hunt_items %}
     <div class="hunt-grid">
       <article class="hunt-card">
@@ -458,6 +638,37 @@
       <p class="empty">Nenhuma atividade de threat hunt documentada.</p>
     {% endif %}
   </section>
+
+  {% if project_report_payload_json or scan_snapshot_json %}
+  <section class="appendix-section">
+    <header>
+      <h2>Apêndices técnicos</h2>
+      <p class="muted">Dados brutos preservados para auditoria e rastreabilidade.</p>
+    </header>
+    <div class="appendix-grid">
+      {% if project_report_payload_json %}
+      <article class="appendix-card">
+        <h3>Resumo agregado do projeto</h3>
+        <p class="muted">Estrutura JSON com o consolidado fornecido pelos módulos.</p>
+        <details>
+          <summary>Exibir conteúdo</summary>
+          <pre>{{ project_report_payload_json|preformatted }}</pre>
+        </details>
+      </article>
+      {% endif %}
+      {% if scan_snapshot_json %}
+      <article class="appendix-card">
+        <h3>Snapshot completo do módulo de scan</h3>
+        <p class="muted">Inclui estado das tarefas, métricas e achados capturados na última execução.</p>
+        <details>
+          <summary>Exibir conteúdo</summary>
+          <pre>{{ scan_snapshot_json|preformatted }}</pre>
+        </details>
+      </article>
+      {% endif %}
+    </div>
+  </section>
+  {% endif %}
 
   <footer class="report-footer">
     <p>Relatório gerado automaticamente pela plataforma ARPIA. Utilize o botão "Exportar PDF" para compartilhar com o cliente.</p>
@@ -518,6 +729,17 @@
 .metric-row div{background:rgba(0,0,0,0.25);padding:.8rem;border-radius:12px;display:flex;flex-direction:column;gap:.3rem;border:1px solid rgba(255,255,255,0.05);}
 .metric-value{font-size:1.4rem;font-weight:700;color:#8bc5ff;}
 .metric-label{font-size:.75rem;color:var(--muted);}
+.observation-block{display:flex;flex-direction:column;gap:.45rem;}
+.observation-block h4{margin:0;font-size:.95rem;color:var(--text);}
+.observation-list{margin:0;padding-left:1.1rem;font-size:.85rem;color:var(--muted);line-height:1.45;}
+.observation-list li{margin-bottom:.3rem;}
+.observation-list strong{color:var(--text);font-weight:600;}
+.scan-tasks{margin-top:1.2rem;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);border-radius:14px;padding:1.2rem;}
+.scan-tasks h3{margin:0 0 .8rem;font-size:1.05rem;color:var(--text);}
+.scan-tasks-table{width:100%;border-collapse:collapse;font-size:.88rem;}
+.scan-tasks-table th,.scan-tasks-table td{padding:.55rem .75rem;border-bottom:1px solid rgba(255,255,255,0.06);text-align:left;vertical-align:top;}
+.scan-tasks-table th{font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);}
+.scan-tasks-table tr:last-child td{border-bottom:none;}
 .highlight-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.6rem;}
 .highlight-list li{padding:.55rem .75rem;border-radius:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);}
 .scan-findings table,.vuln-table-wrapper table,.hunt-card table{width:100%;border-collapse:collapse;font-size:.9rem;background:rgba(255,255,255,0.02);border-radius:12px;overflow:hidden;}
@@ -529,7 +751,53 @@
 .vuln-card,.hunt-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);border-radius:14px;padding:1.2rem;display:flex;flex-direction:column;gap:.8rem;}
 .vuln-summary-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.7rem;}
 .vuln-summary-list li{background:rgba(255,255,255,0.03);border-radius:12px;padding:.7rem 1rem;border:1px solid rgba(255,255,255,0.05);}
+.severity-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.6rem;}
+.severity-list li{display:grid;grid-template-columns:auto 60px 1fr 60px;align-items:center;gap:.6rem;font-size:.85rem;}
+.severity-label{font-weight:600;color:var(--text);}
+.severity-count{font-weight:600;color:#8bc5ff;text-align:right;}
+.severity-bar{height:.45rem;background:rgba(255,255,255,0.08);border-radius:999px;overflow:hidden;}
+.severity-bar span{display:block;height:100%;background:linear-gradient(90deg,#7fb5ff,#52d2ff);}
+.severity-percentage{text-align:right;color:var(--muted);font-size:.82rem;}
+.vuln-findings{margin-top:1.2rem;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);border-radius:14px;padding:1.2rem;display:flex;flex-direction:column;gap:1rem;}
+.vuln-findings h3{margin:0;font-size:1.1rem;color:var(--text);}
+.vuln-findings-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1rem;}
+.vuln-findings-list li{background:rgba(0,0,0,0.25);border-radius:12px;padding:1rem 1.2rem;border:1px solid rgba(255,255,255,0.05);display:flex;flex-direction:column;gap:.6rem;}
+.finding-head{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;}
+.finding-summary{margin:0;font-size:.9rem;color:var(--muted);line-height:1.45;}
+.finding-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.6rem;margin:0;}
+.finding-meta div{display:flex;flex-direction:column;gap:.15rem;}
+.finding-meta dt{font-size:.72rem;text-transform:uppercase;color:var(--muted);letter-spacing:.06em;}
+.finding-meta dd{margin:0;color:var(--text);font-weight:600;}
+.chip-group{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;}
+.chip{display:inline-flex;align-items:center;padding:.25rem .65rem;border-radius:999px;font-size:.75rem;font-weight:600;background:rgba(255,255,255,0.06);color:#d5ecff;border:1px solid rgba(255,255,255,0.08);}
+.chip-label{background:rgba(127,181,255,0.18);color:#e0f1ff;}
+.chip-muted{background:rgba(255,255,255,0.04);color:#a9b9d1;}
+.reference-list{display:flex;flex-wrap:wrap;gap:.45rem;margin-top:.4rem;}
+.reference-list a{font-size:.78rem;color:#8bc5ff;text-decoration:none;background:rgba(76,148,255,0.18);padding:.28rem .6rem;border-radius:999px;border:1px solid rgba(76,148,255,0.28);}
+.reference-list a:hover{background:rgba(76,148,255,0.24);}
+.artifact-note{margin:0;font-size:.82rem;color:var(--muted);}
+.badge{display:inline-flex;align-items:center;padding:.22rem .65rem;border-radius:999px;font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;background:rgba(255,255,255,0.12);color:#f0f6ff;}
+.badge.severity-critical{background:rgba(255,86,86,0.2);color:#ffd0d0;}
+.badge.severity-high{background:rgba(255,138,76,0.22);color:#ffe1c6;}
+.badge.severity-medium{background:rgba(255,214,102,0.22);color:#fff0c7;}
+.badge.severity-low{background:rgba(118,221,174,0.22);color:#d8f6e9;}
+.badge.severity-info{background:rgba(127,181,255,0.22);color:#deedff;}
+.badge.severity-unknown{background:rgba(255,255,255,0.12);color:#f0f6ff;}
+.badge.status-open{background:rgba(255,255,255,0.12);color:#f0f6ff;}
+.badge.status-ack{background:rgba(127,181,255,0.22);color:#deedff;}
+.badge.status-in_progress{background:rgba(127,181,255,0.22);color:#deedff;}
+.badge.status-resolved{background:rgba(118,221,174,0.22);color:#d8f6e9;}
+.badge.status-closed{background:rgba(118,221,174,0.22);color:#d8f6e9;}
+.badge.status-failed{background:rgba(255,132,132,0.24);color:#ffd5d5;}
+.badge.status-pending{background:rgba(255,255,255,0.12);color:#f0f6ff;}
+.badge-outline{border:1px solid rgba(127,181,255,0.45);background:rgba(127,181,255,0.12);color:#e0f1ff;}
+.badge-muted{background:rgba(255,255,255,0.08);color:#f6fbff;}
 .hunt-notes{list-style:disc;margin:0;padding-left:1.6rem;display:flex;flex-direction:column;gap:.6rem;}
+.appendix-section{display:flex;flex-direction:column;gap:1.2rem;background:rgba(8,23,43,0.78);border:1px solid rgba(255,255,255,0.05);border-radius:18px;padding:1.6rem;box-shadow:0 18px 40px rgba(5,16,32,0.3);}
+.appendix-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.2rem;}
+.appendix-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);border-radius:14px;padding:1.2rem;display:flex;flex-direction:column;gap:.8rem;}
+.appendix-card details summary{cursor:pointer;color:#8bc5ff;font-weight:600;}
+.appendix-card pre{margin:.6rem 0 0;background:rgba(0,0,0,0.45);padding:.9rem;border-radius:10px;max-height:360px;overflow:auto;font-family:"Fira Code",monospace;font-size:.82rem;color:#e8f2ff;}
 
 .report-footer{padding:1.5rem;border:1px solid rgba(255,255,255,0.08);border-radius:18px;background:rgba(5,18,36,0.85);box-shadow:0 12px 28px rgba(5,16,32,0.35);text-align:center;line-height:1.6;}
 .report-footer p{margin:.5rem 0;}
@@ -538,13 +806,19 @@
   body{background:#fff;color:#000;}
   .no-print{display:none !important;}
   .consolidated-report{box-shadow:none;gap:1.5rem;}
-  .report-heading,.summary-card,.scope-section,.assets-section,.scan-section,.vuln-section,.hunt-section,.report-footer{background:#fff !important;color:#000;border-color:#ccc;box-shadow:none;}
+  .report-heading,.summary-card,.scope-section,.assets-section,.scan-section,.vuln-section,.hunt-section,.appendix-section,.report-footer{background:#fff !important;color:#000;border-color:#ccc;box-shadow:none;}
   .summary-grid dd,.module-chip,.token-list li,.scope-card,.scan-card,.vuln-card,.hunt-card,.scan-findings table,.vuln-table-wrapper table,.hunt-card table, .assets-table{border-color:#ccc !important;color:#000;}
   .module-chip{background:#f6f7f9;border-color:#d9d9d9;}
   .token-list li{background:#f0f4ff;border-color:#d0dcff;color:#000;}
   .highlight-list li{background:#f7f9fb;border-color:#d6e0ee;color:#000;}
   .scan-timeline li{background:#f7f7f7;border-color:#d9d9d9;color:#000;}
   .status-pill{background:#2d3648;color:#fff;}
+  .scan-tasks,.vuln-findings,.appendix-card{background:#fff !important;border-color:#ccc;}
+  .scan-tasks-table th,.scan-tasks-table td{border-color:#ccc;color:#000;}
+  .vuln-findings-list li{background:#f9f9f9;border-color:#d9d9d9;color:#000;}
+  .badge{background:#e0e7f5;color:#000;border-color:#c8d4ec;}
+  .chip{background:#eef3ff;color:#000;border-color:#ccd6f1;}
+  .appendix-card pre{background:#f4f4f4;color:#000;border:1px solid #d0d0d0;}
 }
 </style>
 {% endblock %}

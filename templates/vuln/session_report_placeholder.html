@@ -1,273 +1,263 @@
 {% extends "base.html" %}
-{% block title %}Relatório de vulnerabilidades — {{ session.title }}{% endblock %}
+{% block title %}Relatório da sessão — {{ session.title }}{% endblock %}
 
 {% block content %}
 <section class="page-heading">
   <div>
     <a href="{% url 'arpia_vuln:session_detail' session.id %}" class="back-link">← Voltar para a sessão</a>
     <h1>Relatório da sessão</h1>
-    <p class="page-subtitle">Resumo consolidado da sessão <strong>{{ session.title }}</strong>.</p>
+    <p class="page-subtitle">Consolidação dos achados registrados em <strong>{{ session.title }}</strong> para o projeto <strong>{{ project.name }}</strong>.</p>
+    {% if project_consolidated_url %}
+      <div class="page-actions">
+        <a href="{{ project_consolidated_url }}" class="primary-link">Ver relatório consolidado</a>
+      </div>
+    {% endif %}
   </div>
   <div class="session-status">
     <span class="label">Status</span>
     <span class="status-pill status-{{ session.status }}">{{ session.get_status_display }}</span>
-    <span class="meta-line">
-      Última coleta:
-      {% if last_collected %}
-        {{ last_collected|date:"d/m/Y H:i" }}
-      {% elif last_collected_raw %}
-        {{ last_collected_raw }}
-      {% else %}
-        {{ session.updated_at|date:"d/m/Y H:i" }}
-      {% endif %}
-    </span>
+    <span class="muted session-meta">Coletado em {% if last_collected %}{{ last_collected|date:"d/m/Y H:i" }}{% else %}—{% endif %}</span>
   </div>
 </section>
 
-<section class="report-metrics">
-  <article class="card metric">
-    <h2>Total de achados</h2>
-    <p class="metric-value">{{ total_findings }}</p>
-    <p class="metric-caption">Itens consolidados nesta sessão.</p>
-  </article>
-  <article class="card metric">
-    <h2>Abertos</h2>
-    <p class="metric-value">{{ open_findings }}</p>
-    <p class="metric-caption">Findings com status em aberto.</p>
-  </article>
-  <article class="card metric">
-    <h2>Hosts impactados</h2>
-    <p class="metric-value">{{ hosts_impacted }}</p>
-    <p class="metric-caption">Alvos com vulnerabilidades registradas.</p>
-  </article>
-  <article class="card metric">
-    <h2>Maior CVSS</h2>
-    <p class="metric-value">
-      {% if summary.max_cvss %}
-        {{ summary.max_cvss|floatformat:1 }}
-      {% else %}
-        —
-      {% endif %}
-    </p>
-    <p class="metric-caption">Pontuação mais alta observada.</p>
-  </article>
-</section>
-
-<section class="severity-overview card">
-  <h2>Distribuição por severidade</h2>
-  <div class="severity-grid">
-    {% for item in severity_breakdown %}
-      <div class="severity-chip severity-{{ item.key }}">
-        <span class="chip-label">{{ item.label }}</span>
-        <span class="chip-value">{{ item.count }}</span>
-        <span class="chip-extra">
-          {% if item.percentage %}
-            {{ item.percentage }}%
-          {% else %}
-            0%
-          {% endif %}
-        </span>
-      </div>
-    {% endfor %}
-  </div>
-</section>
-
-<section class="report-body">
-  <article class="card findings-card">
-    <header class="card-header">
-      <h2>Achados consolidados</h2>
-      <span class="muted">
-        {{ display_findings|length }} {% if display_findings|length == 1 %}registro{% else %}registros{% endif %}
-      </span>
+<section class="report-grid">
+  <article class="card session-card">
+    <header>
+      <h2>Resumo rápido</h2>
+      <p class="muted">Dados principais da sessão.</p>
     </header>
+    <dl class="quick-metrics">
+      <div><dt>Projeto</dt><dd>{{ project.name }}</dd></div>
+      <div><dt>Sessão</dt><dd>#{{ session.reference }}</dd></div>
+      <div><dt>Status</dt><dd>{{ session.get_status_display }}</dd></div>
+      <div><dt>Início</dt><dd>{% if session.started_at %}{{ session.started_at|date:"d/m/Y H:i" }}{% else %}<span class="muted">—</span>{% endif %}</dd></div>
+      <div><dt>Término</dt><dd>{% if session.finished_at %}{{ session.finished_at|date:"d/m/Y H:i" }}{% else %}<span class="muted">—</span>{% endif %}</dd></div>
+      <div><dt>Responsável</dt><dd>{{ session.owner.get_username }}</dd></div>
+    </dl>
+  </article>
 
-    {% if has_findings %}
-      <div class="findings-accordion">
-        {% for finding in display_findings %}
-          <details class="finding-item" data-testid="finding-item">
-            <summary class="finding-summary-row">
-              <span class="severity-pill severity-{{ finding.severity }}">{{ finding.severity_display }}</span>
-              <span class="finding-headline">
-                <strong>{{ finding.title }}</strong>
-                {% if finding.host %}
-                  <span class="muted">• {{ finding.host }}</span>
-                {% endif %}
-              </span>
-              <span class="finding-meta">
-                {% if finding.cvss_display %}
-                  <span class="meta-chip">CVSS {{ finding.cvss_display|floatformat:1 }}</span>
-                {% endif %}
-                {% if finding.primary_cve %}
-                  <span class="meta-chip">{{ finding.primary_cve }}{% if finding.extra_cves_count > 0 %} +{{ finding.extra_cves_count }}{% endif %}</span>
-                {% endif %}
-                {% if finding.port_display %}
-                  <span class="meta-chip">{{ finding.port_display }}</span>
-                {% endif %}
-              </span>
-            </summary>
-            <div class="finding-body">
-              {% if finding.summary %}
-                <p class="finding-description">{{ finding.summary|linebreaksbr }}</p>
+  <article class="card metrics-card">
+    <header>
+      <h2>Métricas consolidadas</h2>
+      <p class="muted">Totais extraídos do snapshot atual.</p>
+    </header>
+    <div class="metrics-grid">
+      <div><span class="metric-value">{{ total_findings|default:0 }}</span><span class="metric-label">achados</span></div>
+      <div><span class="metric-value">{{ open_findings|default:0 }}</span><span class="metric-label">abertos</span></div>
+      <div><span class="metric-value">{{ hosts_impacted|default:0 }}</span><span class="metric-label">hosts impactados</span></div>
+      {% if max_cvss_value is not None %}
+        <div><span class="metric-value">{{ max_cvss_value|floatformat:1 }}</span><span class="metric-label">CVSS máximo</span></div>
+      {% endif %}
+    </div>
+    {% if sources %}
+      <div class="chip-group" role="list">
+        <span class="chip chip-label" role="listitem">Fontes</span>
+        {% for source in sources %}
+          <span class="chip" role="listitem">{{ source }}</span>
+        {% endfor %}
+      </div>
+    {% endif %}
+    {% if top_cves %}
+      <div class="chip-group" role="list">
+        <span class="chip chip-label" role="listitem">CVEs em destaque</span>
+        {% for cve in top_cves|slice:":8" %}
+          <span class="chip" role="listitem">{{ cve }}</span>
+        {% endfor %}
+        {% if top_cves|length > 8 %}
+          <span class="chip chip-muted" role="listitem">+{{ top_cves|length|add:"-8" }}</span>
+        {% endif %}
+      </div>
+    {% endif %}
+  </article>
+
+  <article class="card severity-card">
+    <header>
+      <h2>Severidade dos achados</h2>
+      <p class="muted">Distribuição por classificação.</p>
+    </header>
+    <ul class="severity-list">
+      {% for item in severity_breakdown %}
+        <li>
+          <div class="severity-label severity-{{ item.key }}">{{ item.label }}</div>
+          <div class="severity-progress">
+            <span style="width: {{ item.percentage }}%"></span>
+          </div>
+          <div class="severity-meta">{{ item.count }} • {{ item.percentage|floatformat:1 }}%</div>
+        </li>
+      {% endfor %}
+    </ul>
+  </article>
+
+  <article class="card snapshot-card">
+    <header>
+      <h2>Snapshot bruto</h2>
+      <p class="muted">Dados originais para auditoria.</p>
+    </header>
+    {% if report_json %}
+      <details>
+        <summary>Expandir JSON</summary>
+        <pre class="snapshot-json">{{ report_json }}</pre>
+      </details>
+    {% else %}
+      <p class="empty">Nenhum snapshot disponível.</p>
+    {% endif %}
+  </article>
+</section>
+
+<section class="findings-section">
+  <article class="card findings-card" data-empty-text="Nenhum achado consolidado.">
+    <header class="section-header">
+      <h2>Achados consolidados</h2>
+      <p class="muted">Resumo humano dos achados coletados nesta sessão.</p>
+    </header>
+    <ul class="findings-list" id="consolidated-findings">
+      {% for finding in display_findings %}
+        <li>
+          <div class="finding-head">
+            <span class="badge severity-{{ finding.severity }}">{{ finding.severity_display }}</span>
+            <span class="badge status-{{ finding.status }}">{{ finding.status_display }}</span>
+            {% if finding.primary_cve %}<span class="badge cve">{{ finding.primary_cve }}</span>{% endif %}
+            {% if finding.cvss_display %}<span class="badge score">CVSS {{ finding.cvss_display|floatformat:1 }}</span>{% endif %}
+          </div>
+          <h3>{{ finding.title }}</h3>
+          <div class="finding-summary">
+            {% if finding.summary_preview %}
+              <div class="summary-preview">{{ finding.summary_preview|linebreaksbr }}</div>
+              {% if finding.summary_collapsible %}
+                <details class="summary-details">
+                  <summary>Ver resumo completo</summary>
+                  <pre>{{ finding.summary_full }}</pre>
+                </details>
               {% endif %}
-              <dl class="finding-details">
-                <div>
-                  <dt>Status</dt>
-                  <dd>{{ finding.status_display }}</dd>
-                </div>
-                <div>
-                  <dt>Fonte</dt>
-                  <dd>{% if finding.source_label %}{{ finding.source_label }}{% else %}<span class="muted">—</span>{% endif %}</dd>
-                </div>
-                <div>
-                  <dt>Serviço</dt>
-                  <dd>{% if finding.service %}{{ finding.service }}{% else %}<span class="muted">—</span>{% endif %}</dd>
-                </div>
-              </dl>
-              {% if finding.references %}
-                <div class="reference-list">
-                  {% for ref in finding.references %}
-                    <a href="{{ ref }}" target="_blank" rel="noopener noreferrer">{{ ref }}</a>
-                  {% endfor %}
-                </div>
-              {% endif %}
-              {% if finding.task %}
-                <div class="finding-task">
-                  <span class="muted">Tarefa:</span>
-                  <span>{{ finding.task.name }} ({{ finding.task.status_display }})</span>
-                </div>
-              {% endif %}
-              {% if finding.artifact_path %}
-                <div class="finding-artifact">
-                  <span class="muted">Arquivo:</span>
-                  <code>{{ finding.artifact_path }}</code>
-                </div>
+            {% else %}
+              <p class="muted">Sem descrição adicional.</p>
+            {% endif %}
+          </div>
+          {% if finding.top_cves %}
+            <div class="chip-group" role="list">
+              <span class="chip chip-label" role="listitem">CVEs correlacionadas</span>
+              {% for cve in finding.top_cves|slice:":6" %}
+                <span class="chip" role="listitem">{{ cve }}</span>
+              {% endfor %}
+              {% if finding.top_cves|length > 6 %}
+                <span class="chip chip-muted" role="listitem">+{{ finding.top_cves|length|add:"-6" }}</span>
               {% endif %}
             </div>
-          </details>
-        {% endfor %}
-      </div>
-    {% else %}
-      <p class="empty">Nenhum achado consolidado para esta sessão.</p>
-    {% endif %}
+          {% endif %}
+          {% if finding.cvss_samples_display %}
+            <div class="chip-group" role="list">
+              <span class="chip chip-label" role="listitem">Amostras CVSS</span>
+              {% for score in finding.cvss_samples_display %}
+                <span class="chip chip-score" role="listitem">{{ score }}</span>
+              {% endfor %}
+            </div>
+          {% endif %}
+          <dl class="finding-meta">
+            {% if finding.host %}<div><dt>Host</dt><dd>{{ finding.host }}</dd></div>{% endif %}
+            {% if finding.service %}<div><dt>Serviço</dt><dd>{{ finding.service }}</dd></div>{% endif %}
+            {% if finding.port_display %}<div><dt>Porta</dt><dd>{{ finding.port_display }}</dd></div>{% endif %}
+            {% if finding.source_label %}<div><dt>Fonte</dt><dd>{{ finding.source_label }}</dd></div>{% endif %}
+            {% if finding.scanner %}<div><dt>Scanner</dt><dd>{{ finding.scanner }}</dd></div>{% endif %}
+            {% if finding.artifact_path %}<div><dt>Artefato</dt><dd title="{{ finding.artifact_path }}">{{ finding.artifact_path }}</dd></div>{% endif %}
+            {% if finding.task %}<div><dt>Etapa</dt><dd>{{ finding.task.name }}</dd></div>{% endif %}
+          </dl>
+          {% if finding.all_cves|length > 1 %}
+            <p class="muted cve-list">Outras CVEs: {{ finding.all_cves|join:", " }}</p>
+          {% endif %}
+          {% if finding.references %}
+            <div class="reference-list">
+              {% for ref in finding.references %}
+                <a href="{{ ref }}" target="_blank" rel="noopener noreferrer">Referência {{ forloop.counter }}</a>
+              {% endfor %}
+            </div>
+          {% endif %}
+          {% if finding.raw_output %}
+            <details class="raw-output">
+              <summary>Ver saída bruta</summary>
+              <pre>{{ finding.raw_output }}</pre>
+            </details>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+    <div class="empty{% if display_findings %} hidden{% endif %}" id="findings-empty">Nenhum achado consolidado.</div>
   </article>
-
-  <aside class="card side-panel">
-    <h3>CVEs observadas</h3>
-    {% if top_cves %}
-      <ul class="tag-list">
-        {% for cve in top_cves %}
-          <li>
-            <a href="https://nvd.nist.gov/vuln/detail/{{ cve }}" target="_blank" rel="noopener noreferrer">{{ cve }}</a>
-          </li>
-        {% endfor %}
-      </ul>
-    {% else %}
-      <p class="muted">Nenhuma CVE mapeada até o momento.</p>
-    {% endif %}
-
-    <h3>Fontes</h3>
-    {% if sources %}
-      <ul class="simple-list">
-        {% for source in sources %}
-          <li>{{ source }}</li>
-        {% endfor %}
-      </ul>
-    {% else %}
-      <p class="muted">Nenhuma origem registrada.</p>
-    {% endif %}
-
-    <h3>Artefatos</h3>
-    {% if artifact_entries %}
-      <ul class="simple-list artifacts">
-        {% for item in artifact_entries %}
-          <li>
-            <span class="path">{{ item.path }}</span>
-            {% if item.source %}
-              <span class="muted source">{{ item.source }}</span>
-            {% endif %}
-          </li>
-        {% endfor %}
-      </ul>
-    {% else %}
-      <p class="muted">Nenhum artefato indexado.</p>
-    {% endif %}
-
-    <details class="snapshot-details">
-      <summary>Snapshot bruto</summary>
-      {% if report_json %}
-        <pre class="snapshot-json">{{ report_json }}</pre>
-      {% else %}
-        <p class="muted">Nenhum snapshot disponível.</p>
-      {% endif %}
-    </details>
-  </aside>
 </section>
 
 <style>
 .page-heading{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.6rem;gap:1rem;}
 .page-heading h1{margin:.3rem 0;font-size:1.9rem;color:var(--text);}
-.page-subtitle{margin:.3rem 0 0;color:var(--muted);font-size:.95rem;}
+.page-subtitle{margin:.35rem 0 0;color:var(--muted);font-size:.95rem;}
+.page-actions{display:flex;flex-wrap:wrap;gap:.6rem;margin-top:.8rem;}
+.primary-link{display:inline-flex;align-items:center;gap:.35rem;margin-top:.8rem;padding:.45rem 1rem;border-radius:999px;background:#4c94ff;color:#031a36;font-weight:600;font-size:.85rem;text-decoration:none;box-shadow:0 8px 18px rgba(44,120,226,0.35);transition:transform .15s ease,box-shadow .15s ease;}
+.primary-link:hover{transform:translateY(-1px);box-shadow:0 10px 22px rgba(44,120,226,0.45);}
+.primary-link:focus{outline:2px solid rgba(255,255,255,0.35);outline-offset:3px;}
 .back-link{text-decoration:none;color:var(--muted);font-size:.9rem;}
 .back-link:hover{color:var(--text);}
-.session-status{display:flex;flex-direction:column;align-items:flex-end;gap:.35rem;text-align:right;}
+.session-status{display:flex;flex-direction:column;gap:.35rem;align-items:flex-end;}
 .session-status .label{font-size:.75rem;text-transform:uppercase;color:var(--muted);letter-spacing:.08em;}
-.session-status .meta-line{font-size:.82rem;color:var(--muted);}
-.status-pill{display:inline-flex;align-items:center;padding:.3rem .9rem;border-radius:999px;font-weight:600;font-size:.85rem;color:var(--text);background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);}
-.report-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:1rem;margin-bottom:1.6rem;}
-.card{background:rgba(8,23,43,0.82);border-radius:14px;padding:1.3rem;border:1px solid rgba(255,255,255,0.05);box-shadow:0 18px 34px rgba(5,16,32,0.33);}
-.card.metric h2{margin:0 0 .4rem;font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
-.card.metric .metric-value{margin:0;font-size:2rem;font-weight:700;color:var(--text);}
-.card.metric .metric-caption{margin:.35rem 0 0;color:var(--muted);font-size:.85rem;}
-.severity-overview{margin-bottom:1.6rem;}
-.severity-overview h2{margin:0;color:var(--text);}
-.severity-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.9rem;margin-top:1.1rem;}
-.severity-chip{display:flex;flex-direction:column;gap:.35rem;padding:.85rem;border-radius:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.06);}
-.severity-chip .chip-label{font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
-.severity-chip .chip-value{font-size:1.4rem;font-weight:700;color:var(--text);}
-.severity-chip .chip-extra{font-size:.8rem;color:var(--muted);}
-.report-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(240px,320px);gap:1.6rem;align-items:start;margin-bottom:2rem;}
-.card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.1rem;}
-.card-header h2{margin:0;font-size:1.2rem;color:var(--text);}
-.card-header .muted{font-size:.85rem;}
-.findings-accordion{display:flex;flex-direction:column;gap:.8rem;}
-.finding-item{border:1px solid rgba(255,255,255,0.08);border-radius:12px;background:rgba(0,10,24,0.45);overflow:hidden;transition:box-shadow .2s ease;}
-.finding-item[open]{box-shadow:0 12px 32px rgba(5,16,32,0.28);}
-.finding-summary-row{cursor:pointer;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:.9rem;align-items:center;padding:.85rem 1rem;background:rgba(255,255,255,0.03);}
-.finding-summary-row::-webkit-details-marker{display:none;}
-.finding-headline{display:flex;flex-wrap:wrap;gap:.45rem;color:var(--text);font-size:.95rem;}
-.finding-headline strong{font-weight:600;}
-.finding-meta{display:flex;flex-wrap:wrap;gap:.4rem;justify-content:flex-end;font-size:.8rem;color:var(--muted);}
-.meta-chip{display:inline-flex;align-items:center;justify-content:center;padding:.25rem .55rem;border-radius:999px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);}
-.finding-body{padding:1rem;border-top:1px solid rgba(255,255,255,0.05);display:flex;flex-direction:column;gap:1rem;font-size:.92rem;color:var(--text);}
-.finding-description{margin:0;color:var(--muted);font-size:.9rem;}
-.finding-details{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.8rem;}
-.finding-details div{display:flex;flex-direction:column;gap:.25rem;}
-.finding-details dt{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
-.finding-details dd{margin:0;font-weight:600;}
-.reference-list{display:flex;flex-wrap:wrap;gap:.45rem;}
-.reference-list a{font-size:.78rem;color:#8bc5ff;text-decoration:none;background:rgba(76,148,255,0.16);padding:.28rem .6rem;border-radius:999px;border:1px solid rgba(76,148,255,0.28);}
+.session-status .session-meta{font-size:.78rem;}
+.status-pill{display:inline-flex;align-items:center;padding:.25rem .75rem;border-radius:999px;font-weight:600;font-size:.8rem;color:var(--text);background:rgba(255,255,255,0.08);}
+.report-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1.4rem;align-items:start;margin-bottom:1.6rem;}
+.card{background:rgba(8,23,43,0.8);border-radius:16px;padding:1.4rem;border:1px solid rgba(255,255,255,0.05);box-shadow:0 18px 38px rgba(5,16,32,0.35);}
+.card header h2{margin:0;color:var(--text);font-size:1.2rem;}
+.card header p{margin:.25rem 0 0;color:var(--muted);font-size:.9rem;}
+.quick-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1rem;margin:0;}
+.quick-metrics dt{font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
+.quick-metrics dd{margin:0;color:var(--text);font-weight:600;}
+.metrics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.9rem;margin-bottom:1rem;}
+.metric-value{display:block;font-size:1.5rem;font-weight:700;color:#8bc5ff;}
+.metric-label{display:block;font-size:.82rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;}
+.chip-group{display:flex;flex-wrap:wrap;gap:.4rem;margin:.2rem 0 .8rem;align-items:center;}
+.chip{display:inline-flex;align-items:center;padding:.25rem .65rem;border-radius:999px;font-size:.75rem;font-weight:600;background:rgba(255,255,255,0.06);color:#d5ecff;border:1px solid rgba(255,255,255,0.08);}
+.chip-label{background:rgba(127,181,255,0.18);color:#e0f1ff;}
+.chip-score{background:rgba(118,221,174,0.16);color:#daf7e7;}
+.chip-muted{background:rgba(255,255,255,0.04);color:#a9b9d1;font-weight:500;}
+.severity-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.8rem;}
+.severity-list li{display:flex;flex-direction:column;gap:.25rem;}
+.severity-label{font-size:.85rem;font-weight:600;color:var(--text);text-transform:uppercase;letter-spacing:.05em;}
+.severity-progress{width:100%;height:.45rem;border-radius:999px;background:rgba(255,255,255,0.08);overflow:hidden;}
+.severity-progress span{display:block;height:100%;background:linear-gradient(90deg,#7fb5ff,#52d2ff);}
+.severity-meta{font-size:.78rem;color:var(--muted);}
+.snapshot-card details summary{cursor:pointer;color:#8bc5ff;font-weight:600;}
+.snapshot-json{margin:.8rem 0 0;background:rgba(0,0,0,0.42);padding:1rem;border-radius:10px;max-height:420px;overflow:auto;font-family:"Fira Code",monospace;font-size:.82rem;color:#dceeff;white-space:pre-wrap;word-break:break-word;}
+.findings-section{display:flex;flex-direction:column;gap:1.6rem;}
+.findings-card .section-header{display:flex;flex-direction:column;gap:.35rem;margin-bottom:1rem;}
+.findings-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1.1rem;}
+.findings-list li{padding:1.2rem;border-radius:14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);box-shadow:0 10px 24px rgba(5,16,32,0.2);}
+.finding-head{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin-bottom:.35rem;}
+.badge{display:inline-flex;align-items:center;gap:.3rem;padding:.2rem .6rem;border-radius:999px;font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;}
+.badge.severity-critical{background:rgba(255,86,86,0.15);color:#ffb3b3;}
+.badge.severity-high{background:rgba(255,138,76,0.18);color:#ffd4b8;}
+.badge.severity-medium{background:rgba(255,214,102,0.18);color:#ffe8b3;}
+.badge.severity-low{background:rgba(118,221,174,0.18);color:#daf7e7;}
+.badge.severity-info{background:rgba(118,187,255,0.18);color:#d5ecff;}
+.badge.severity-unknown{background:rgba(255,255,255,0.08);color:#f0f6ff;}
+.badge.status-open{background:rgba(255,255,255,0.08);color:#f0f6ff;}
+.badge.status-ack{background:rgba(118,187,255,0.18);color:#d5ecff;}
+.badge.status-resolved{background:rgba(118,221,174,0.18);color:#daf7e7;}
+.badge.cve{background:rgba(127,181,255,0.18);color:#e0f1ff;font-weight:600;}
+.badge.score{background:rgba(255,255,255,0.1);color:#f6fbff;}
+.findings-list h3{margin:.1rem 0 .6rem;font-size:1.15rem;color:var(--text);}
+.finding-summary{display:flex;flex-direction:column;gap:.6rem;margin:.4rem 0 .8rem;}
+.finding-summary .summary-preview{font-size:.9rem;color:var(--muted);line-height:1.5;}
+.finding-summary .summary-details summary{cursor:pointer;color:#8bc5ff;font-weight:600;margin-bottom:.3rem;}
+.finding-summary .summary-details pre{margin:0;background:rgba(0,0,0,0.45);padding:.8rem;border-radius:8px;max-height:260px;overflow:auto;font-family:"Fira Code",monospace;font-size:.78rem;color:#e8f2ff;}
+.finding-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.6rem;margin:.6rem 0;}
+.finding-meta div{display:flex;flex-direction:column;gap:.15rem;font-size:.8rem;color:var(--muted);}
+.finding-meta dt{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
+.finding-meta dd{margin:0;color:var(--text);font-weight:600;}
+.cve-list{font-size:.82rem;color:var(--muted);margin:.4rem 0;}
+.reference-list{display:flex;flex-wrap:wrap;gap:.45rem;margin-top:.4rem;}
+.reference-list a{font-size:.78rem;color:#8bc5ff;text-decoration:none;background:rgba(76,148,255,0.18);padding:.28rem .6rem;border-radius:999px;border:1px solid rgba(76,148,255,0.28);}
 .reference-list a:hover{background:rgba(76,148,255,0.24);}
-.finding-task,.finding-artifact{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;font-size:.85rem;}
-.finding-artifact code{background:rgba(255,255,255,0.07);padding:.25rem .5rem;border-radius:6px;font-size:.8rem;}
-.severity-pill{display:inline-flex;align-items:center;justify-content:center;padding:.28rem .7rem;border-radius:999px;font-weight:600;font-size:.8rem;color:#fff;}
-.severity-pill.severity-critical{background:#d83b4a;}
-.severity-pill.severity-high{background:#f28b3c;}
-.severity-pill.severity-medium{background:#f2c94c;color:#1d1f2b;}
-.severity-pill.severity-low{background:#2d9cdb;}
-.severity-pill.severity-info{background:#6c6cff;}
-.severity-pill.severity-unknown{background:#6f7a89;}
-.side-panel{display:flex;flex-direction:column;gap:1.3rem;}
-.side-panel h3{margin:0;color:var(--text);font-size:1rem;}
-.tag-list{list-style:none;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:.45rem;}
-.tag-list li a{display:inline-flex;align-items:center;padding:.25rem .55rem;background:rgba(255,255,255,0.08);border-radius:999px;color:#f2f6ff;font-size:.8rem;text-decoration:none;border:1px solid rgba(255,255,255,0.12);}
-.tag-list li a:hover{background:rgba(255,255,255,0.14);}
-.simple-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:.45rem;font-size:.9rem;color:var(--text);}
-.simple-list.artifacts .path{display:block;}
-.simple-list.artifacts .source{font-size:.8rem;}
-.snapshot-details summary{cursor:pointer;font-weight:600;color:var(--text);}
-.snapshot-details pre{margin-top:.7rem;background:rgba(0,0,0,0.35);padding:1rem;border-radius:10px;max-height:320px;overflow:auto;font-family:"Fira Code",monospace;font-size:.8rem;color:#dceeff;white-space:pre-wrap;word-break:break-word;}
-.empty{color:var(--muted);margin:0;}
-@media (max-width:960px){.page-heading{flex-direction:column;align-items:flex-start;}.session-status{align-items:flex-start;text-align:left;}.report-body{grid-template-columns:1fr;}.finding-summary-row{grid-template-columns:minmax(0,1fr);gap:.6rem;justify-items:flex-start;}.finding-meta{justify-content:flex-start;}}
-@media (max-width:720px){.report-metrics{grid-template-columns:repeat(auto-fit,minmax(160px,1fr));}.severity-grid{grid-template-columns:repeat(auto-fit,minmax(130px,1fr));}}
+.raw-output summary{cursor:pointer;color:#8bc5ff;font-weight:600;margin-top:.6rem;}
+.raw-output pre{margin:.4rem 0 0;background:rgba(0,0,0,0.45);padding:.8rem;border-radius:8px;max-height:320px;overflow:auto;font-family:"Fira Code",monospace;font-size:.78rem;color:#e8f2ff;}
+.empty{padding:1rem;background:rgba(255,255,255,0.02);border-radius:10px;color:var(--muted);}
+.hidden{display:none!important;}
+@media (max-width:900px){
+  .page-heading{flex-direction:column;align-items:flex-start;}
+  .session-status{align-items:flex-start;}
+}
 </style>
 {% endblock %}
