@@ -12,6 +12,33 @@ detect_host_ip(){
   echo "${ip:-127.0.0.1}"
 }
 
+append_unique(){
+  local list="${1:-}"
+  local value="$2"
+  list="${list//$'\n'/,}"
+  list="${list//;/,}"
+  list="${list// /}"
+  if [ -z "$list" ]; then
+    printf '%s' "$value"
+    return
+  fi
+  case ",${list}," in
+    *,"$value",*) printf '%s' "$list" ;;
+    *) printf '%s,%s' "$list" "$value" ;;
+  esac
+}
+
+ensure_list_contains(){
+  local var_name="$1"
+  shift
+  local current="${!var_name:-}"
+  local value
+  for value in "$@"; do
+    current="$(append_unique "$current" "$value")"
+  done
+  printf -v "$var_name" '%s' "$current"
+}
+
 CMD="${1:-}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT_DIR"
@@ -46,13 +73,37 @@ load_env(){
 }
 
 ensure_runtime_env(){
-  if [ -z "${ALLOWED_HOSTS:-}" ]; then
-    export ALLOWED_HOSTS="$DEFAULT_HOST_IP,127.0.0.1,localhost"
-    echo "[info] ALLOWED_HOSTS não definido. Usando '$ALLOWED_HOSTS'."
+  local ip="$DEFAULT_HOST_IP"
+  local previous_bind="${BIND:-}"
+
+  if [ -z "$previous_bind" ] || [[ "${previous_bind,,}" == "auto" ]]; then
+    BIND="$DEFAULT_BIND"
+    echo "[info] BIND configurado automaticamente para $BIND."
+  elif [[ "$previous_bind" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}(:[0-9]{1,5})?$ ]]; then
+    local host_part="${previous_bind%%:*}"
+    local port_part="${previous_bind##*:}"
+    if [ "$port_part" = "$previous_bind" ]; then
+      port_part="8000"
+    fi
+    if [ "$host_part" != "$ip" ] && [ "$host_part" != "0.0.0.0" ]; then
+      BIND="$ip:$port_part"
+      echo "[info] BIND ajustado automaticamente para $BIND (anterior: $previous_bind)."
+    fi
   fi
-  if [ -z "${CSRF_TRUSTED_ORIGINS:-}" ]; then
-    export CSRF_TRUSTED_ORIGINS="http://$DEFAULT_HOST_IP"
-    echo "[info] CSRF_TRUSTED_ORIGINS não definido. Usando '$CSRF_TRUSTED_ORIGINS'."
+  export BIND
+
+  local before_allowed="${ALLOWED_HOSTS:-}"
+  ensure_list_contains ALLOWED_HOSTS "$ip" "127.0.0.1" "localhost"
+  export ALLOWED_HOSTS
+  if [ "$before_allowed" != "$ALLOWED_HOSTS" ]; then
+    echo "[info] ALLOWED_HOSTS atualizado: $ALLOWED_HOSTS"
+  fi
+
+  local before_csrf="${CSRF_TRUSTED_ORIGINS:-}"
+  ensure_list_contains CSRF_TRUSTED_ORIGINS "http://$ip" "https://$ip"
+  export CSRF_TRUSTED_ORIGINS
+  if [ "$before_csrf" != "$CSRF_TRUSTED_ORIGINS" ]; then
+    echo "[info] CSRF_TRUSTED_ORIGINS atualizado: $CSRF_TRUSTED_ORIGINS"
   fi
 }
 

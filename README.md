@@ -25,6 +25,7 @@ Detalhes do script de produção `arpia.sh`:
 - `RUN_MIGRATIONS=false ./arpia.sh start` — pula `migrate`; útil se a step já foi executada previamente.
 - `RUN_COLLECTSTATIC=true ./arpia.sh start` — dispara o `collectstatic` automaticamente.
 - Logs: `logs/gunicorn.log`; PID: `.arpia_gunicorn.pid`.
+- Se `BIND` estiver vazio, definido como `auto` ou apontar para um IP antigo, o script o ajusta para o IP detectado.
 
 Enquanto o serviço estiver rodando, o ARPIA ficará acessível em `http://<IP-do-host>:8000/` (ou na porta configurada em `BIND`).
 
@@ -73,7 +74,7 @@ Scripts úteis
   - Torne executável: `chmod +x arpia.sh`
   - Uso básico: `./arpia.sh start` (carrega `.env.production`, aplica migrações e sobe Gunicorn).
   - `./arpia.sh stop` encerra o processo; `./arpia.sh status` exibe o PID/log; `./arpia.sh restart` aplica stop/start.
-  - Se `ALLOWED_HOSTS` ou `CSRF_TRUSTED_ORIGINS` não estiverem definidos, o script preenche automaticamente com o IP detectado.
+  - Garante que `BIND` utilize o IP atual (mesmo se o `.env` tiver outro valor) e que o IP detectado esteja presente em `ALLOWED_HOSTS` e `CSRF_TRUSTED_ORIGINS`.
 
 Parâmetros e logs (desenvolvimento)
 - HOST (opcional) — define host:porta para `runserver`; por padrão usa `<ip_detectado>:8000`.
@@ -81,13 +82,13 @@ Parâmetros e logs (desenvolvimento)
 - PID do processo fica em `.arpia_runserver.pid`
 
 Parâmetros e logs (produção)
-- `BIND` e `WORKERS` controlam bind e número de workers (`./arpia.sh start`). Se `BIND` não for informado, usa `<ip_detectado>:8000`.
+- `BIND` e `WORKERS` controlam bind e número de workers (`./arpia.sh start`). Use `BIND=auto` (ou deixe vazio) para deixar o script apontar para `<ip_detectado>:8000` automaticamente.
 - Logs do Gunicorn ficam em `logs/gunicorn.log`.
 - PID do Gunicorn fica em `.arpia_gunicorn.pid`.
 
 Atenção
 - Os scripts `arpia-dev.sh` e `arpia.sh` usam o Python do `.venv` se presente; garanta que o `.venv` foi criado pelo `install.sh` ou manualmente.
-- O `arpia.sh` define automaticamente `ALLOWED_HOSTS` e `CSRF_TRUSTED_ORIGINS` com o IP detectado caso não estejam presentes no ambiente.
+- O `arpia.sh` acrescenta o IP detectado em `ALLOWED_HOSTS` e `CSRF_TRUSTED_ORIGINS`, mesmo que existam outros valores no `.env`.
 - Para desenvolvimento, DEBUG=True (configurado via .env). Não use em produção.
 - Se o repositório for privado, garanta que os colaboradores têm acesso SSH/HTTPS conforme preferir.
 - O comando `python manage.py runserver` agora aplica migrações pendentes automaticamente antes de subir o servidor.
