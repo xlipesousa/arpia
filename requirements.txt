@@ -20,6 +20,7 @@ crispy-bootstrap5>=0.7
 # Testes
 pytest>=7.0
 pytest-django>=4.5
+openai>=1.46.0
 
 # Dependências de sistema (instale manualmente quando necessário):
 #   jq .............. sudo apt install -y jq
