@@ -67,6 +67,49 @@
   </div>
   <div class="right-column">
 
+<section class="panel roles-panel">
+  <header class="panel-header">
+    <div>
+      <h2>Visão orientada a perfis</h2>
+      <p class="muted">Como os dados serão apresentados para Blue-Team (protetores) e Red-Team (atacantes).</p>
+    </div>
+  </header>
+  <div class="role-columns">
+    <div class="role-card blue">
+      <h3>Blue-Team · Protetores</h3>
+      <p>Consolidar evidências priorizando mitigação, redução de superfície e recomendações defensivas.</p>
+      <ul>
+        <li>Mapa de vulnerabilidades com criticidade, contexto do ativo e impacto operacional.</li>
+        <li>Integração com MITRE ATT&amp;CK para orientar detecções e controles.</li>
+        <li>Sugestões de correção, compensação e melhoria de monitoramento.</li>
+      </ul>
+    </div>
+    <div class="role-card red">
+      <h3>Red-Team · Atacantes</h3>
+      <p>Organizar TTPs, exploits e caminhos de escalada com base nos achados do Scan e do Vuln.</p>
+      <ul>
+        <li>Correlação com exploits públicos (Vulners, searchsploit, Metasploit).</li>
+        <li>Linhas de ataque por fase (reconhecimento, acesso inicial, movimento lateral).</li>
+        <li>Exportação de dados para alimentar o módulo Pentest.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="panel stats-panel">
+  <header class="panel-header">
+    <div>
+      <h2>Indicadores atuais</h2>
+      <p class="muted">Totais de achados que sustentam os alertas configurados.</p>
+    </div>
+  </header>
+  <dl class="stats-grid">
+    <div><dt>Total de achados</dt><dd>{{ stats.findings_total }}</dd></div>
+    <div><dt>Achados ativos</dt><dd>{{ stats.findings_active }}</dd></div>
+    <div><dt>Com CVE associado</dt><dd>{{ stats.findings_with_cve }}</dd></div>
+  </dl>
+</section>
+
 <section class="panel alert-panel" data-tab-group="hunt-profiles">
   <header class="panel-header alert-header">
     <div>
@@ -194,70 +237,6 @@
       {% endif %}
     </div>
   </div>
-</section>
-
-<section class="panel-stack">
-  <article class="panel">
-    <header class="panel-header">
-      <div>
-        <h2>Fontes de dados</h2>
-        <p class="muted">Bases ativas que alimentam correlação e disparo de alertas.</p>
-      </div>
-    </header>
-    <ul class="data-sources">
-      {% for source in data_sources %}
-        <li>
-          <strong>{{ source.label }}</strong>
-          <p>{{ source.description }}</p>
-        </li>
-      {% endfor %}
-    </ul>
-  </article>
-
-  <article class="panel">
-    <header class="panel-header">
-      <div>
-        <h2>Indicadores atuais</h2>
-        <p class="muted">Totais de achados que sustentam os alertas configurados.</p>
-      </div>
-    </header>
-    <dl class="stats-grid">
-      <div><dt>Total de achados</dt><dd>{{ stats.findings_total }}</dd></div>
-      <div><dt>Achados ativos</dt><dd>{{ stats.findings_active }}</dd></div>
-      <div><dt>Com CVE associado</dt><dd>{{ stats.findings_with_cve }}</dd></div>
-    </dl>
-  </article>
-</section>
-
-<section class="panel roles-panel">
-  <header class="panel-header">
-    <div>
-      <h2>Visão orientada a perfis</h2>
-      <p class="muted">Como os dados serão apresentados para Blue-Team (protetores) e Red-Team (atacantes).</p>
-    </div>
-  </header>
-  <div class="role-columns">
-    <div class="role-card blue">
-      <h3>Blue-Team · Protetores</h3>
-      <p>Consolidar evidências priorizando mitigação, redução de superfície e recomendações defensivas.</p>
-      <ul>
-        <li>Mapa de vulnerabilidades com criticidade, contexto do ativo e impacto operacional.</li>
-        <li>Integração com MITRE ATT&amp;CK para orientar detecções e controles.</li>
-        <li>Sugestões de correção, compensação e melhoria de monitoramento.</li>
-      </ul>
-    </div>
-    <div class="role-card red">
-      <h3>Red-Team · Atacantes</h3>
-      <p>Organizar TTPs, exploits e caminhos de escalada com base nos achados do Scan e do Vuln.</p>
-      <ul>
-        <li>Correlação com exploits públicos (Vulners, searchsploit, Metasploit).</li>
-        <li>Linhas de ataque por fase (reconhecimento, acesso inicial, movimento lateral).</li>
-        <li>Exportação de dados para alimentar o módulo Pentest.</li>
-      </ul>
-    </div>
-  </div>
-</section>
-
 <section class="panel profile-panel">
   <header class="panel-header">
     <div>
@@ -387,90 +366,21 @@
   </div>
 </section>
 
-<section class="panel notes-panel">
+<section class="panel data-panel">
   <header class="panel-header">
     <div>
-      <h2>Notas rápidas</h2>
-      <p class="muted">Pontos de atenção práticos enquanto integrarmos os catálogos externos.</p>
+      <h2>Fontes de dados</h2>
+      <p class="muted">Bases ativas que alimentam correlação e disparo de alertas.</p>
     </div>
   </header>
-  <ul class="notes-list">
-    <li>Respeitar limites de rate das APIs NVD e Vulners usando cache local incremental.</li>
-    <li>Definir formato canônico para armazenar resultados do searchsploit sem exigir parsing manual a cada consulta.</li>
-    <li>Garantir que dados sensíveis (creds, PoCs) sejam tratados com controles de acesso adequados.</li>
-    <li>Registrar cada tentativa no arpia_log para facilitar auditoria e troubleshooting.</li>
+  <ul class="data-sources">
+    {% for source in data_sources %}
+      <li>
+        <strong>{{ source.label }}</strong>
+        <p>{{ source.description }}</p>
+      </li>
+    {% endfor %}
   </ul>
-</section>
-
-<section class="panel sync-panel">
-  <header class="panel-header">
-    <div>
-      <h2>Histórico de sincronizações</h2>
-      <p class="muted">Últimas execuções do pipeline de ingestão Hunt.</p>
-    </div>
-  </header>
-  {% if recent_syncs %}
-    <table class="sync-table">
-      <thead>
-        <tr>
-          <th>Iniciada</th>
-          <th>Status</th>
-          <th>Total</th>
-          <th>Criados</th>
-          <th>Atualizados</th>
-          <th>Ignorados</th>
-          <th>Duração (ms)</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for run in recent_syncs %}
-          <tr>
-            <td>{{ run.started_at|date:"d/m/Y H:i" }}</td>
-            <td><span class="badge status-{{ run.status }}">{{ run.get_status_display }}</span></td>
-            <td>{{ run.total_processed }}</td>
-            <td>{{ run.created_count }}</td>
-            <td>{{ run.updated_count }}</td>
-            <td>{{ run.skipped_count }}</td>
-            <td>{{ run.duration_ms }}</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  {% else %}
-    <p class="muted">Nenhuma sincronização registrada ainda. Execute <code>python manage.py hunt_sync</code> para iniciar.</p>
-  {% endif %}
-</section>
-
-<section class="panel log-panel">
-  <header class="panel-header">
-    <div>
-      <h2>Eventos recentes do Hunt</h2>
-      <p class="muted">Recortes do arpia_log para acompanhar sincronizações e enriquecimentos.</p>
-    </div>
-  </header>
-  {% if recent_logs %}
-    <ul class="log-feed">
-      {% for entry in recent_logs %}
-        <li>
-          <header>
-            <span class="badge severity-{{ entry.severity|lower }}">{{ entry.severity }}</span>
-            <span class="timestamp">{{ entry.timestamp|date:"d/m/Y H:i" }}</span>
-            <span class="event-type">{{ entry.event_type }}</span>
-          </header>
-          <p class="message">{{ entry.message }}</p>
-          {% if entry.details %}
-            <dl class="details">
-              {% for key, value in entry.details.items %}
-                <div><dt>{{ key }}</dt><dd>{{ value }}</dd></div>
-              {% endfor %}
-            </dl>
-          {% endif %}
-        </li>
-      {% endfor %}
-    </ul>
-  {% else %}
-    <p class="muted">Sem eventos registrados ainda. Rode o sincronizador ou enriquecimentos para popular esta área.</p>
-  {% endif %}
 </section>
 
   </div>
