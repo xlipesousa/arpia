@@ -306,6 +306,7 @@
           return;
         }
 
+        const payload = await response.json();
         const credentialPayload = payload.credential || {};
         const validation = credentialPayload.validation || null;
 

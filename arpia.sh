@@ -50,6 +50,7 @@ PIDFILE=".arpia_gunicorn.pid"
 LOGDIR="logs"
 LOGFILE="$LOGDIR/gunicorn.log"
 ENV_FILE="${ENV_FILE:-.env.production}"
+GUNICORN_PATTERN="gunicorn.*arpia_project.wsgi:application"
 mapfile -t HOST_IPS < <(detect_host_ips)
 DEFAULT_HOST_IP="${HOST_IPS[0]:-127.0.0.1}"
 DEFAULT_BIND="0.0.0.0:8000"
@@ -193,19 +194,56 @@ start_service(){
   fi
 }
 
-stop_service(){
-  if [ ! -f "$PIDFILE" ]; then
-    echo "Serviço não está em execução (sem $PIDFILE)."
+kill_residual_gunicorn(){
+  local pids=()
+  mapfile -t pids < <(pgrep -f "$GUNICORN_PATTERN" 2>/dev/null || true)
+  if [ "${#pids[@]}" -eq 0 ]; then
     return
   fi
-  local PID
-  PID="$(cat "$PIDFILE")"
-  if kill "$PID" 2>/dev/null; then
-    rm -f "$PIDFILE"
-    echo "Processo gunicorn $PID encerrado."
+
+  echo "[info] Processos gunicorn adicionais detectados: ${pids[*]} — tentando encerrar."
+  kill "${pids[@]}" 2>/dev/null || true
+  sleep 1
+
+  mapfile -t pids < <(pgrep -f "$GUNICORN_PATTERN" 2>/dev/null || true)
+  if [ "${#pids[@]}" -eq 0 ]; then
+    echo "[info] Processos gunicorn encerrados com sucesso."
+    return
+  fi
+
+  echo "[aviso] Processos gunicorn persistem apos sinal TERM: ${pids[*]} — aplicando kill -9."
+  kill -9 "${pids[@]}" 2>/dev/null || true
+  sleep 1
+
+  mapfile -t pids < <(pgrep -f "$GUNICORN_PATTERN" 2>/dev/null || true)
+  if [ "${#pids[@]}" -eq 0 ]; then
+    echo "[info] Processos gunicorn encerrados com kill -9."
   else
+    echo "[aviso] Alguns processos gunicorn ainda estao ativos: ${pids[*]} — verifique manualmente."
+  fi
+}
+
+stop_service(){
+  local had_pidfile=false
+  if [ -f "$PIDFILE" ]; then
+    had_pidfile=true
+    local PID
+    PID="$(cat "$PIDFILE")"
+    if kill "$PID" 2>/dev/null; then
+      echo "Processo gunicorn $PID encerrado."
+    else
+      echo "[aviso] Falha ao enviar sinal para o PID $PID — removendo arquivo pid e prosseguindo."
+    fi
     rm -f "$PIDFILE"
-    die "Falha ao encerrar gunicorn (PID $PID)."
+    sleep 0.5
+  else
+    echo "[info] Nenhum arquivo $PIDFILE encontrado. Verificando processos ativos."
+  fi
+
+  kill_residual_gunicorn
+
+  if [ "$had_pidfile" = false ]; then
+    echo "[info] Stop concluido."
   fi
 }
 
