@@ -152,14 +152,46 @@ def _extract_nested(payload: dict, path: list) -> dict:
 
 
 def _extract_reference_urls(payload: dict) -> list[str]:
-    references = []
+    if not isinstance(payload, dict):
+        return []
+
+    references: list[str] = []
+    seen: set[str] = set()
     vulnerabilities = payload.get("vulnerabilities", [])
+    if not isinstance(vulnerabilities, list):
+        return references
+
     for entry in vulnerabilities:
-        urls = entry.get("cve", {}).get("references", {}).get("reference_data", [])
-        for ref in urls:
-            url = ref.get("url")
-            if url:
-                references.append(url)
+        if isinstance(entry, dict):
+            cve_data = entry.get("cve")
+            candidates = cve_data if isinstance(cve_data, list) else [cve_data]
+        elif isinstance(entry, list):
+            candidates = entry
+        else:
+            continue
+
+        for candidate in candidates:
+            if not isinstance(candidate, dict):
+                continue
+            references_block = candidate.get("references")
+            if isinstance(references_block, dict):
+                reference_data = references_block.get("reference_data", [])
+            elif isinstance(references_block, list):
+                reference_data = references_block
+            else:
+                reference_data = []
+
+            for ref in reference_data:
+                if isinstance(ref, dict):
+                    url = ref.get("url") or ref.get("href")
+                elif isinstance(ref, str):
+                    url = ref
+                else:
+                    url = None
+                if url and url not in seen:
+                    seen.add(url)
+                    references.append(url)
+
     return references
 
 
