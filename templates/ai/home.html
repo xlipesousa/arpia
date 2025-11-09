@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}Assistente IA - ARPIA{% endblock %}
+
+{% block content %}
+<section class="ai-panel">
+  <header class="ai-header">
+    <h1>Assistente inteligente</h1>
+    <p class="muted">Selecione um projeto e faca perguntas para receber recomendacoes rapidas a partir dos dados coletados.</p>
+  </header>
+
+  <div class="ai-layout">
+    <aside class="ai-sidebar">
+      <h2>Projetos</h2>
+      <ul class="ai-project-list">
+        {% for project in projects %}
+          <li class="ai-project-item {% if selected_project and project.id == selected_project.id %}is-active{% endif %}">
+            <a href="?project={{ project.id }}">{{ project.name }}</a>
+          </li>
+        {% empty %}
+          <li class="muted">Nenhum projeto disponivel.</li>
+        {% endfor %}
+      </ul>
+    </aside>
+
+    <main class="ai-main" id="ai-main" data-project-id="{{ selected_project.id|default:"" }}">
+      {% if selected_project %}
+        <section class="ai-context">
+          <h2>Resumo do projeto</h2>
+          <dl>
+            <dt>Nome</dt>
+            <dd>{{ project_context.project.name }}</dd>
+            <dt>Cliente</dt>
+            <dd>{{ project_context.project.client|default:"-" }}</dd>
+            <dt>Descricao</dt>
+            <dd>{{ project_context.project.description|default:"-" }}</dd>
+          </dl>
+
+          <h3>Vulnerabilidades recentes</h3>
+          <ul>
+            {% for finding in project_context.vulnerability_findings %}
+              <li>
+                <strong>{{ finding.cve|default:"Sem CVE" }}</strong>
+                <span class="badge">{{ finding.severity|upper }}</span>
+                <div>{{ finding.summary }}</div>
+              </li>
+            {% empty %}
+              <li class="muted">Nenhuma vulnerabilidade registrada.</li>
+            {% endfor %}
+          </ul>
+
+          <h3>Scripts sugeridos</h3>
+          <ul>
+            {% for script in project_context.available_scripts %}
+              <li>
+                <strong>{{ script.name }}</strong>
+                {% if script.requires_tool %}<span class="badge">Requer ferramenta</span>{% endif %}
+                <div>{{ script.description }}</div>
+              </li>
+            {% empty %}
+              <li class="muted">Nenhum script cadastrado.</li>
+            {% endfor %}
+          </ul>
+        </section>
+
+        <section class="ai-chat">
+          <h2>Converse com o ARPIA IA</h2>
+          <form id="ai-form">
+            {% csrf_token %}
+            <label for="ai-question">Pergunta</label>
+            <textarea id="ai-question" name="question" rows="3" placeholder="Ex.: Como mitigar a CVE critica encontrada?"></textarea>
+            <button type="submit" class="btn-primary">Enviar pergunta</button>
+          </form>
+          <article id="ai-answer" class="ai-answer hidden"></article>
+        </section>
+      {% else %}
+        <div class="empty">
+          <p>Selecione um projeto na coluna a esquerda para habilitar o assistente.</p>
+        </div>
+      {% endif %}
+    </main>
+  </div>
+</section>
+
+<script>
+(function() {
+  const form = document.getElementById("ai-form");
+  if (!form) return;
+
+  const answerBox = document.getElementById("ai-answer");
+  const main = document.getElementById("ai-main");
+  const projectId = main?.dataset.projectId || "";
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!projectId) {
+      alert("Selecione um projeto antes de enviar perguntas.");
+      return;
+    }
+
+    const questionField = document.getElementById("ai-question");
+    const question = questionField.value.trim();
+    if (!question) {
+      alert("Digite uma pergunta.");
+      return;
+    }
+
+    const formData = new FormData(form);
+    formData.append("project_id", projectId);
+
+    answerBox.classList.remove("hidden");
+    answerBox.textContent = "Gerando resposta...";
+
+    try {
+      const response = await fetch("{{ assist_url }}", {
+        method: "POST",
+        headers: {
+          "X-CSRFToken": form.querySelector('[name=csrfmiddlewaretoken]').value,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const payload = await response.json();
+        answerBox.textContent = payload.error || "Nao foi possivel obter resposta.";
+        return;
+      }
+
+      const payload = await response.json();
+      answerBox.textContent = payload.answer;
+    } catch (error) {
+      answerBox.textContent = "Erro inesperado ao consultar o assistente.";
+    }
+  });
+})();
+</script>
+
+<style>
+.ai-panel { display: flex; flex-direction: column; gap: 1.5rem; }
+.ai-header h1 { margin: 0; }
+.ai-layout { display: grid; grid-template-columns: 280px 1fr; gap: 1.5rem; }
+.ai-sidebar { background: rgba(8, 23, 43, 0.78); border-radius: 16px; padding: 1.2rem; }
+.ai-sidebar h2 { margin-top: 0; }
+.ai-project-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.6rem; }
+.ai-project-item a { display: block; padding: 0.6rem 0.8rem; border-radius: 10px; text-decoration: none; color: inherit; background: rgba(255, 255, 255, 0.05); }
+.ai-project-item.is-active a { background: rgba(127, 181, 255, 0.2); }
+.ai-main { background: rgba(8, 23, 43, 0.78); border-radius: 16px; padding: 1.5rem; display: flex; flex-direction: column; gap: 1.5rem; }
+.ai-context ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.8rem; }
+.ai-context li { background: rgba(255, 255, 255, 0.04); padding: 0.8rem 1rem; border-radius: 10px; }
+.ai-context .badge { margin-left: 0.5rem; font-size: 0.75rem; text-transform: uppercase; background: rgba(127, 181, 255, 0.3); padding: 0.1rem 0.45rem; border-radius: 12px; }
+.ai-chat textarea { width: 100%; border-radius: 10px; padding: 0.75rem; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: inherit; }
+.ai-chat button { margin-top: 0.8rem; }
+.ai-answer { white-space: pre-wrap; background: rgba(0, 0, 0, 0.35); padding: 1rem; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1); }
+.ai-answer.hidden { display: none; }
+.empty { background: rgba(255, 255, 255, 0.05); padding: 1.2rem; border-radius: 12px; }
+@media (max-width: 960px) {
+  .ai-layout { grid-template-columns: 1fr; }
+}
+</style>
+{% endblock %}

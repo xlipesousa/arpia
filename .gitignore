@@ -8,6 +8,9 @@ env/
 #*.sqlite3
 /staticfiles/
 /media/
+/tmp/
+.arpia_gunicorn.pid
+*.pid
 .env*
 # editor
 .vscode/

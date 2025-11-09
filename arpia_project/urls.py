@@ -16,23 +16,23 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from django.contrib.auth import views as auth_views
 
 from arpia_pentest.views import PentestDashboardView
-from django.contrib.auth import views as auth_views
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("login/", auth_views.LoginView.as_view(template_name="registration/login.html"), name="login"),
     path("accounts/", include("django.contrib.auth.urls")),
 
-    # delega o root para as URLs da app (contém projects_list, scripts_list, ...)
+    # delega o root para as URLs da app (contem projects_list, scripts_list, ...)
     path("", include("arpia_core.urls")),
+    path("ai/", include(("arpia_ai.urls", "arpia_ai"), namespace="arpia_ai")),
     path("scan/", include(("arpia_scan.urls", "arpia_scan"), namespace="arpia_scan")),
     path("vuln/", include(("arpia_vuln.urls", "arpia_vuln"), namespace="arpia_vuln")),
     path("hunt/", include(("arpia_hunt.urls", "arpia_hunt"), namespace="arpia_hunt")),
     path("reports/", include(("arpia_report.urls", "arpia_report"), namespace="arpia_report")),
     path("pentest/", include(("arpia_pentest.urls", "arpia_pentest"), namespace="arpia_pentest")),
     path("pentest", PentestDashboardView.as_view(), name="pentest_dashboard"),
-    path("ai/", include(("arpia_ai.urls", "arpia_ai"), namespace="arpia_ai")),
     path("api/", include("api.urls")),
 ]

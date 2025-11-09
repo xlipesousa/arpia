@@ -6,7 +6,7 @@ from arpia_log import views as arpia_log_views
 from arpia_ai import views as arpia_ai_views
 
 urlpatterns = [
-    # rota raiz / dashboard (necessária para templates que fazem {% url 'dashboard' %})
+    # rota raiz / dashboard (necessaria para templates que fazem {% url 'dashboard' %})
     path("", views.DashboardView.as_view(), name="dashboard"),
 
     path("projects/", views.projects_list, name="projects_list"),
@@ -18,7 +18,7 @@ urlpatterns = [
 
     # Scripts
     path("scripts/", views.scripts_list, name="scripts_list"),
-    # alias compatível com templates que usam 'scripts_create'
+    # alias compativel com templates que usam 'scripts_create'
     path("scripts/create/", views.scripts_create, name="scripts_create"),
     path("scripts/new/", views.scripts_new, name="scripts_new"),
     path("scripts/<int:pk>/edit/", views.scripts_edit, name="scripts_edit"),
@@ -49,7 +49,7 @@ urlpatterns = [
     path("logs/<int:pk>/download/", arpia_log_views.log_download_api, name="logs_download"),
     path("logs/<int:pk>/delete/", arpia_log_views.log_delete_api, name="logs_delete"),
 
-    # AI: lista inicial (placeholder)
-    path("ai/", arpia_ai_views.AIListView.as_view(), name="ai_list"),
+    # AI: encaminha para a home do assistente
+    path("ai/", arpia_ai_views.AIHomeView.as_view(), name="ai_list"),
     # ...existing app routes...
 ]
