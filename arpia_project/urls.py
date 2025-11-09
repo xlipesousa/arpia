@@ -33,5 +33,6 @@ urlpatterns = [
     path("reports/", include(("arpia_report.urls", "arpia_report"), namespace="arpia_report")),
     path("pentest/", include(("arpia_pentest.urls", "arpia_pentest"), namespace="arpia_pentest")),
     path("pentest", PentestDashboardView.as_view(), name="pentest_dashboard"),
+    path("ai/", include(("arpia_ai.urls", "arpia_ai"), namespace="arpia_ai")),
     path("api/", include("api.urls")),
 ]

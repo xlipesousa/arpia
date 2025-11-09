@@ -1,9 +1,12 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from arpia_core.models import Project
+from arpia_core.models import Project, Script
+from arpia_scan.models import ScanSession
+from arpia_vuln.models import VulnerabilityFinding, VulnScanSession
 
 from .models import ChatMessage, ChatSession, Provider, ProviderCredential
+from .services import build_project_context
 
 
 class ProviderModelTests(TestCase):
@@ -55,3 +58,57 @@ class ChatSessionTests(TestCase):
 		)
 		self.assertEqual(session.messages.count(), 1)
 		self.assertIn("Qual mitigação", str(message))
+
+
+class ProjectContextBuilderTests(TestCase):
+	def setUp(self):
+		self.user = get_user_model().objects.create_user(
+			username="contextor",
+			email="ctx@example.com",
+			password="pass1234",
+		)
+		self.project = Project.objects.create(name="Projeto Demo", slug="projeto-demo", owner=self.user)
+
+		self.scan_session = ScanSession.objects.create(
+			project=self.project,
+			owner=self.user,
+			title="Scan de Rede",
+			status=ScanSession.Status.COMPLETED,
+		)
+
+		self.vuln_session = VulnScanSession.objects.create(
+			project=self.project,
+			owner=self.user,
+			title="Vulnerabilidades",
+		)
+
+		VulnerabilityFinding.objects.create(
+			session=self.vuln_session,
+			title="CVE-2024-1234",
+			summary="Detalhes extensos sobre mitigação" * 5,
+			severity=VulnerabilityFinding.Severity.HIGH,
+			cve="CVE-2024-1234",
+		)
+
+		Script.objects.create(
+			owner=None,
+			name="Script Demo",
+			slug="script-demo",
+			filename="demo.sh",
+			content="#!/bin/sh\necho demo",
+			description="Script de exemplo para exploração",
+			kind=Script.Kind.DEFAULT,
+		)
+
+	def test_build_project_context_returns_expected_sections(self):
+		context = build_project_context(project=self.project, user=self.user)
+
+		self.assertIn("project", context)
+		self.assertIn("macros", context)
+		self.assertIn("vulnerability_findings", context)
+		self.assertTrue(context["vulnerability_findings"])
+		self.assertIn("recent_scan_sessions", context)
+		self.assertIn("available_scripts", context)
+
+		macro_keys = context["macros"].keys()
+		self.assertNotIn("CREDENTIALS_JSON", macro_keys)
