@@ -156,6 +156,8 @@ class HuntSyncIntegrationTests(TestCase):
 		self.finding = VulnerabilityFinding.objects.create(
 			session=self.session,
 			title="Falha de teste",
+			summary="Exploração remota permitida via entrada não sanitizada.",
+			cve="CVE-2025-1000",
 			severity=VulnerabilityFinding.Severity.HIGH,
 		)
 
@@ -165,6 +167,19 @@ class HuntSyncIntegrationTests(TestCase):
 
 		exists = HuntFinding.objects.filter(vulnerability=self.finding).exists()
 		self.assertTrue(exists, "HuntFinding deveria ser criado após sessão finalizar com sucesso")
+
+	@override_settings(ARPIA_HUNT_AUTO_SYNC=True, ARPIA_HUNT_AUTO_PROFILE=True)
+	@patch.dict(os.environ, {"ARPIA_HUNT_ENABLE_REMOTE_ENRICHMENT": "0"}, clear=False)
+	def test_mark_finished_triggers_hunt_enrichment(self):
+		self.session.mark_finished(success=True)
+
+		hunt_entry = HuntFinding.objects.get(vulnerability=self.finding)
+		self.assertGreaterEqual(
+			hunt_entry.profile_version,
+			1,
+			"Perfil Hunt deveria ser gerado automaticamente após sync",
+		)
+		self.assertIsNotNone(hunt_entry.last_profiled_at)
 
 class VulnServicesTests(TestCase):
 	def setUp(self):

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import os
 import uuid
 
 import logging
+from datetime import timedelta
 
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 
 from arpia_core.models import Project
@@ -93,6 +96,7 @@ class VulnScanSession(models.Model):
 		project_id = getattr(self, "project_id", None)
 		if not project_id:
 			return
+		project_id_str = str(project_id)
 		try:
 			from arpia_hunt.services import synchronize_findings
 		except Exception:  # pragma: no cover - import error inesperado
@@ -100,12 +104,62 @@ class VulnScanSession(models.Model):
 			return
 		try:
 			synchronize_findings(
-				project_ids=[str(project_id)],
+				project_ids=[project_id_str],
 				create_log=False,
 				audit_logs=False,
 			)
 		except Exception:  # pragma: no cover - sincronizacao falhou
 			logger.exception("Erro ao sincronizar Hunt apos sessao de vulnerabilidades.")
+			return
+
+		self._trigger_hunt_enrichment(project_id=project_id_str)
+
+	def _trigger_hunt_enrichment(self, *, project_id: str) -> None:
+		if not getattr(settings, "ARPIA_HUNT_AUTO_PROFILE", True):
+			return
+		try:
+			from arpia_hunt.enrichment import enrich_finding
+			from arpia_hunt.models import HuntFinding
+		except Exception:  # pragma: no cover - import error inesperado
+			logger.exception("Falha ao importar enriquecimento Hunt.")
+			return
+
+		try:
+			ttl_hours = int(os.getenv("ARPIA_HUNT_PROFILE_TTL_HOURS", "6"))
+		except (TypeError, ValueError):
+			ttl_hours = 6
+		ttl_hours = max(1, ttl_hours)
+		reprofile_before = timezone.now() - timedelta(hours=ttl_hours)
+
+		queryset = (
+			HuntFinding.objects.select_related("project", "vulnerability")
+			.filter(project_id=project_id, is_active=True)
+			.filter(
+				Q(profile_version=0)
+				| Q(last_profiled_at__isnull=True)
+				| Q(last_profiled_at__lt=reprofile_before)
+			)
+			.filter(cve__isnull=False)
+			.exclude(cve="")
+			.order_by("-detected_at", "-created_at")
+		)
+
+		processed = 0
+		for finding in queryset.iterator():
+			try:
+				enrich_finding(finding, force_refresh=False)
+				processed += 1
+			except Exception:  # pragma: no cover - enriquecimento falhou
+				logger.exception(
+					"Erro ao enriquecer Hunt automaticamente apos sessao de vulnerabilidades.",
+					extra={"finding_id": str(getattr(finding, "pk", "?")), "project_id": project_id},
+				)
+
+		if processed:
+			logger.info(
+				"Enriquecimento Hunt automatico executado",
+				extra={"project_id": project_id, "processed": processed},
+			)
 
 
 class VulnTask(models.Model):

@@ -596,6 +596,11 @@ class HuntDashboardView(LoginRequiredMixin, TemplateView):
 			"findings_with_cve": findings_qs.exclude(Q(cve="") | Q(cve__isnull=True)).count(),
 		}
 
+		latest_findings = list(
+			findings_qs.select_related("vulnerability", "project")
+			.order_by("-detected_at", "-created_at")[:20]
+		)
+
 		syncs_qs = HuntSyncLog.objects.select_related("project").order_by("-started_at", "-id")
 		if selected_project:
 			syncs_qs = syncs_qs.filter(project=selected_project)
@@ -743,6 +748,7 @@ class HuntDashboardView(LoginRequiredMixin, TemplateView):
 					"Preparar workshop de rollout com equipes Blue e Red para revisar responsabilidades.",
 				],
 				"stats": stats,
+				"latest_findings": latest_findings,
 				"recent_syncs": recent_syncs,
 				"recent_logs": recent_logs,
 				"recent_profiles": recent_profiles,

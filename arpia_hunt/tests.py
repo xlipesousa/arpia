@@ -904,6 +904,23 @@ class HuntDashboardViewTests(TestCase):
         self.project = Project.objects.create(owner=self.user, name="Projeto Hunt", slug="projeto-hunt")
         self.session = VulnScanSession.objects.create(project=self.project, owner=self.user, title="Sessão Vuln")
 
+    def _create_vulnerability(self, **overrides) -> VulnerabilityFinding:
+        defaults = {
+            "session": self.session,
+            "title": "Falso positivo em Apache",
+            "summary": "Versão desatualizada expõe RCE.",
+            "severity": VulnerabilityFinding.Severity.HIGH,
+            "status": VulnerabilityFinding.Status.OPEN,
+            "host": "192.168.1.10",
+            "service": "http",
+            "port": 80,
+            "protocol": "tcp",
+            "cve": "CVE-2024-0100",
+            "cvss_score": Decimal("8.5"),
+        }
+        defaults.update(overrides)
+        return VulnerabilityFinding.objects.create(**defaults)
+
     def test_dashboard_cards_link_to_detail_view(self):
         vuln = VulnerabilityFinding.objects.create(
             session=self.session,
@@ -947,6 +964,44 @@ class HuntDashboardViewTests(TestCase):
         detail_url = reverse("arpia_hunt:finding-detail", args=[finding.pk])
         self.assertContains(response, detail_url)
         self.assertContains(response, "Abrir detalhe")
+
+    def test_dashboard_context_includes_latest_findings(self):
+        base_time = timezone.now()
+        older_vuln = self._create_vulnerability(
+            title="Biblioteca OpenSSL desatualizada",
+            cve="CVE-2024-0101",
+            detected_at=base_time - timedelta(hours=4),
+            cvss_score=Decimal("7.8"),
+        )
+        newer_vuln = self._create_vulnerability(
+            title="Apache HTTPD outdated",
+            cve="CVE-2024-0102",
+            detected_at=base_time - timedelta(hours=1),
+            cvss_score=Decimal("9.0"),
+        )
+
+        synchronize_findings()
+
+        older_finding = HuntFinding.objects.get(vulnerability=older_vuln)
+        newer_finding = HuntFinding.objects.get(vulnerability=newer_vuln)
+
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse("arpia_hunt:dashboard"),
+            {"project": str(self.project.pk)},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        latest_findings = response.context["latest_findings"]
+        self.assertEqual([finding.pk for finding in latest_findings], [newer_finding.pk, older_finding.pk])
+        self.assertTrue(all(finding.project_id == self.project.pk for finding in latest_findings))
+        self.assertEqual(response.context["stats"], {
+            "findings_total": 2,
+            "findings_active": 2,
+            "findings_with_cve": 2,
+        })
+        self.assertContains(response, newer_vuln.title)
+        self.assertContains(response, older_vuln.title)
 
 
 class HuntDashboardExportTests(TestCase):

@@ -110,6 +110,56 @@
   </dl>
 </section>
 
+<section class="panel findings-panel">
+  <header class="panel-header">
+    <div>
+      <h2>Achados recentes</h2>
+      <p class="muted">Últimos registros sincronizados a partir do módulo de vulnerabilidades.</p>
+    </div>
+  </header>
+  {% if latest_findings %}
+    <div class="findings-table-wrapper">
+      <table class="findings-table">
+        <thead>
+          <tr>
+            <th>Severidade</th>
+            <th>Título</th>
+            <th>CVE</th>
+            <th>Host</th>
+            <th>Serviço</th>
+            <th>CVSS</th>
+            <th>Detectado em</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for finding in latest_findings %}
+            <tr>
+              <td><span class="badge severity-{{ finding.severity }}">{{ finding.get_severity_display }}</span></td>
+              <td>
+                <a href="{% url 'arpia_hunt:finding-detail' finding.id %}">{{ finding.vulnerability.title|default:finding.summary|default:"Sem título" }}</a>
+              </td>
+              <td>{{ finding.cve|default:"—" }}</td>
+              <td>{{ finding.host|default:"—" }}</td>
+              <td>
+                {% if finding.service %}{{ finding.service }}{% if finding.port %} · {{ finding.port }}{% endif %}
+                {% elif finding.port %}Porta {{ finding.port }}{% else %}—{% endif %}
+              </td>
+              <td>
+                {% if finding.cvss_score %}{{ finding.cvss_score|floatformat:1 }}{% else %}—{% endif %}
+              </td>
+              <td>
+                {% if finding.detected_at %}{{ finding.detected_at|date:"d/m/Y H:i" }}{% else %}—{% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="muted">Nenhum achado sincronizado ainda. Execute uma sessão de vulnerabilidades ou o comando <code>python manage.py hunt_sync</code>.</p>
+  {% endif %}
+</section>
+
 <section class="panel alert-panel" data-tab-group="hunt-profiles">
   <header class="panel-header alert-header">
     <div>
@@ -476,6 +526,13 @@ document.addEventListener("DOMContentLoaded",function(){const group=document.que
 .stats-grid div{display:flex;flex-direction:column;gap:.25rem;padding:.85rem 1rem;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);}
 .stats-grid dt{margin:0;color:var(--muted);font-size:.8rem;text-transform:uppercase;letter-spacing:.08em;}
 .stats-grid dd{margin:0;color:var(--text);font-weight:700;font-size:1.2rem;}
+.findings-table-wrapper{overflow-x:auto;margin-top:.8rem;border-radius:12px;border:1px solid rgba(255,255,255,0.06);background:rgba(0,0,0,0.18);}
+.findings-table{width:100%;border-collapse:collapse;font-size:.9rem;min-width:720px;}
+.findings-table th,.findings-table td{padding:.75rem 1rem;text-align:left;border-bottom:1px solid rgba(255,255,255,0.05);white-space:nowrap;}
+.findings-table th{font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.02);}
+.findings-table tbody tr:hover{background:rgba(255,255,255,0.04);}
+.findings-table a{color:inherit;text-decoration:none;}
+.findings-table a:hover{text-decoration:underline;}
 .roles-panel{margin-bottom:1.6rem;}
 .role-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.2rem;}
 .role-card{padding:1.2rem;border-radius:14px;border:1px solid rgba(255,255,255,0.05);background:rgba(255,255,255,0.02);display:flex;flex-direction:column;gap:.8rem;}

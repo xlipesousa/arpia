@@ -255,6 +255,7 @@ def _env_flag(name: str, default: str = "0") -> bool:
 
 ARPIA_HUNT_API_BETA = _env_flag("ARPIA_HUNT_API_BETA")
 ARPIA_HUNT_UI_METRICS_ENABLED = _env_flag("ARPIA_HUNT_UI_METRICS_ENABLED")
+ARPIA_HUNT_AUTO_PROFILE = _env_flag("ARPIA_HUNT_AUTO_PROFILE", "1")
 
 # Validacao opcional de chaves OpenAI.
 # Em ambientes com DEBUG desativado, habilitamos por padrao para evitar "validacao pendente" em producao.
