@@ -2,11 +2,16 @@ from __future__ import annotations
 
 import uuid
 
+import logging
+
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
 from arpia_core.models import Project
+
+
+logger = logging.getLogger(__name__)
 
 
 def _default_reference() -> str:
@@ -78,6 +83,29 @@ class VulnScanSession(models.Model):
 		self.finished_at = timezone.now()
 		self.last_error = error
 		self.save(update_fields=["status", "finished_at", "last_error", "updated_at"])
+		self._trigger_hunt_sync(success=success)
+
+	def _trigger_hunt_sync(self, *, success: bool) -> None:
+		if not success:
+			return
+		if not getattr(settings, "ARPIA_HUNT_AUTO_SYNC", True):
+			return
+		project_id = getattr(self, "project_id", None)
+		if not project_id:
+			return
+		try:
+			from arpia_hunt.services import synchronize_findings
+		except Exception:  # pragma: no cover - import error inesperado
+			logger.exception("Falha ao importar sincronizacao Hunt.")
+			return
+		try:
+			synchronize_findings(
+				project_ids=[str(project_id)],
+				create_log=False,
+				audit_logs=False,
+			)
+		except Exception:  # pragma: no cover - sincronizacao falhou
+			logger.exception("Erro ao sincronizar Hunt apos sessao de vulnerabilidades.")
 
 
 class VulnTask(models.Model):

@@ -10,13 +10,14 @@ from unittest.mock import Mock, patch
 import xml.etree.ElementTree as ET
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
 from arpia_core.models import Project, ProjectMembership
 from arpia_scan.models import ScanSession
 from arpia_report.services import ReportAggregator
+from arpia_hunt.models import HuntFinding
 
 from .models import VulnScanSession, VulnTask, VulnerabilityFinding
 from .reporting import MAX_EVIDENCE_LENGTH, upsert_vulnerability_report_entry
@@ -140,6 +141,30 @@ class VulnViewsSmokeTests(TestCase):
 		response = self.client.get(url, {"project": "00000000-0000-0000-0000-000000000000"})
 		self.assertEqual(response.status_code, 404)
 
+
+class HuntSyncIntegrationTests(TestCase):
+	def setUp(self):
+		user_model = get_user_model()
+		self.owner = user_model.objects.create_user("hunter", password="test1234")
+		self.project = Project.objects.create(owner=self.owner, name="Projeto Hunt", slug="projeto-hunt")
+		self.session = VulnScanSession.objects.create(
+			project=self.project,
+			owner=self.owner,
+			title="Sessão Hunt",
+			status=VulnScanSession.Status.RUNNING,
+		)
+		self.finding = VulnerabilityFinding.objects.create(
+			session=self.session,
+			title="Falha de teste",
+			severity=VulnerabilityFinding.Severity.HIGH,
+		)
+
+	@override_settings(ARPIA_HUNT_AUTO_SYNC=True)
+	def test_mark_finished_triggers_hunt_sync(self):
+		self.session.mark_finished(success=True)
+
+		exists = HuntFinding.objects.filter(vulnerability=self.finding).exists()
+		self.assertTrue(exists, "HuntFinding deveria ser criado após sessão finalizar com sucesso")
 
 class VulnServicesTests(TestCase):
 	def setUp(self):
