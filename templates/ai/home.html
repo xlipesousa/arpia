@@ -260,7 +260,7 @@
           if (validation.status === "ok") {
             statusText += " · validacao OK";
           } else if (validation.status === "skipped") {
-            statusText += " · validacao pendente";
+            statusText += " · validacao desativada";
           } else if (validation.message) {
             statusText += ` · ${validation.message}`;
           }
@@ -314,7 +314,7 @@
           if (validation.status === "ok") {
             providerFeedback.textContent = validation.message || "Chave registrada com sucesso.";
           } else if (validation.status === "skipped") {
-            providerFeedback.textContent = "Chave salva. Validacao externa nao executada.";
+            providerFeedback.textContent = "Chave salva. Validacao desativada neste ambiente (defina ARPIA_AI_VALIDATE_PROVIDER_KEYS=true para validar).";
           } else {
             providerFeedback.textContent = validation.message || "Chave salva, mas a validacao falhou.";
           }

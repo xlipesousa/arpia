@@ -256,8 +256,15 @@ def _env_flag(name: str, default: str = "0") -> bool:
 ARPIA_HUNT_API_BETA = _env_flag("ARPIA_HUNT_API_BETA")
 ARPIA_HUNT_UI_METRICS_ENABLED = _env_flag("ARPIA_HUNT_UI_METRICS_ENABLED")
 
-# Validacao opcional de chaves OpenAI (desativada por padrao para evitar chamadas externas em testes)
-ARPIA_AI_VALIDATE_PROVIDER_KEYS = _env_flag("ARPIA_AI_VALIDATE_PROVIDER_KEYS")
+# Validacao opcional de chaves OpenAI.
+# Em ambientes com DEBUG desativado, habilitamos por padrao para evitar "validacao pendente" em producao.
+_ai_validation_default = "0"
+if not DEBUG:
+    _ai_validation_default = "1"
+ARPIA_AI_VALIDATE_PROVIDER_KEYS = _env_flag(
+    "ARPIA_AI_VALIDATE_PROVIDER_KEYS",
+    _ai_validation_default,
+)
 
 GRAPHENE = {
     "SCHEMA": "api.schema.schema",
