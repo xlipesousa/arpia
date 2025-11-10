@@ -1,10 +1,14 @@
 import json
+import os
 from collections import Counter
+from io import BytesIO
 from typing import Any, Iterable
 
+from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
-from django.http import Http404, JsonResponse
+from django.contrib.staticfiles import finders
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
@@ -46,6 +50,209 @@ def _format_metric_value(value: Any) -> str:
 	if isinstance(value, float):
 		return (f"{value:.1f}").rstrip("0").rstrip(".") or "0"
 	return str(value)
+
+
+def _format_datetime_local(value) -> str:
+	if not value:
+		return "—"
+	try:
+		localized = timezone.localtime(value)
+	except Exception:
+		return str(value)
+	return localized.strftime("%d/%m/%Y %H:%M")
+
+
+def _coerce_string(value: Any, empty_placeholder: str = "—") -> str:
+	if value is None:
+		return empty_placeholder
+	if isinstance(value, (list, tuple, set)):
+		items = [str(item).strip() for item in value if str(item).strip()]
+		return ", ".join(items) if items else empty_placeholder
+	text = str(value).strip()
+	return text or empty_placeholder
+
+
+def _wrap_text(text: str, font: str, size: int, max_width: float) -> list[str]:
+	if text is None:
+		return [""]
+	try:
+		from reportlab.pdfbase import pdfmetrics
+	except ImportError:
+		return [str(text)]
+	words = str(text).split()
+	if not words:
+		return [""]
+	lines: list[str] = []
+	current = ""
+	for word in words:
+		candidate = f"{current} {word}".strip()
+		width = pdfmetrics.stringWidth(candidate, font, size)
+		if width <= max_width or not current:
+			current = candidate
+		else:
+			lines.append(current)
+			current = word
+	if current:
+		lines.append(current)
+	return lines or [""]
+
+
+class _PdfCanvasWriter:
+	def __init__(
+		self,
+		canvas,
+		*,
+		width: float,
+		height: float,
+		margin: float,
+		header_title: str,
+		header_right: str,
+		footer_left: str,
+		header_logo_path: str | None = None,
+		header_logo_width: float | None = None,
+		header_logo_height: float | None = None,
+	):
+		self.canvas = canvas
+		self.width = width
+		self.height = height
+		self.margin = margin
+		self.header_title = header_title
+		self.header_right = header_right
+		self.footer_left = footer_left
+		self.header_logo_path = header_logo_path
+		self.header_logo_width = header_logo_width or 0
+		self.header_logo_height = header_logo_height or 0
+		self.body_font = "Helvetica"
+		self.body_size = 10
+		self.heading_font = "Helvetica-Bold"
+		self.heading_sizes = {1: 16, 2: 13, 3: 11}
+		self.line_height = 14
+		self.bullet_indent = self.margin + 14
+		self.page_number = 1
+		self._new_page(initial=True)
+
+	def _new_page(self, *, initial: bool = False) -> None:
+		if not initial:
+			self._draw_footer()
+			self.canvas.showPage()
+			self.page_number += 1
+		self.canvas.setFont(self.heading_font, 12)
+		header_x = self.margin
+		if self.header_logo_path and self.header_logo_width and self.header_logo_height:
+			try:
+				self.canvas.drawImage(
+					self.header_logo_path,
+					x=self.margin,
+					y=self.height - self.margin + 6 - self.header_logo_height,
+					width=self.header_logo_width,
+					height=self.header_logo_height,
+					preserveAspectRatio=True,
+					mask="auto",
+				)
+				header_x += self.header_logo_width + 6
+			except Exception:
+				self.header_logo_path = None
+		if self.header_title:
+			self.canvas.drawString(header_x, self.height - self.margin + 6, self.header_title)
+		if self.header_right:
+			self.canvas.setFont(self.body_font, 9)
+			right_width = self.canvas.stringWidth(self.header_right, self.body_font, 9)
+			self.canvas.drawString(self.width - self.margin - right_width, self.height - self.margin + 6, self.header_right)
+		self.y = self.height - self.margin - 30
+
+	def _draw_footer(self) -> None:
+		self.canvas.setFont(self.body_font, 9)
+		if self.footer_left:
+			self.canvas.drawString(self.margin, self.margin - 10, self.footer_left)
+		page_label = f"Página {self.page_number}"
+		page_width = self.canvas.stringWidth(page_label, self.body_font, 9)
+		self.canvas.drawString(self.width - self.margin - page_width, self.margin - 10, page_label)
+
+	def _ensure_space(self, lines: float = 1.0, extra: float = 0.0) -> None:
+		required = lines * self.line_height + extra
+		if self.y - required < self.margin + 20:
+			self._new_page()
+
+	def _advance(self, lines: float = 1.0) -> None:
+		self.y -= self.line_height * lines
+		if self.y < self.margin + 20:
+			self._new_page()
+
+	def draw_heading(self, text: str, *, level: int = 1) -> None:
+		if not text:
+			return
+		size = self.heading_sizes.get(level, self.heading_sizes[3])
+		self._ensure_space(1.5)
+		self.canvas.setFont(self.heading_font, size)
+		self.canvas.drawString(self.margin, self.y, text)
+		self._advance(1.2 if level == 1 else 1.0)
+
+	def _write_wrapped(self, text: str, *, x: float, font: str, size: int) -> int:
+		lines = _wrap_text(text, font, size, self.width - x - self.margin)
+		self._ensure_space(len(lines))
+		self.canvas.setFont(font, size)
+		for line in lines:
+			self.canvas.drawString(x, self.y, line)
+			self._advance()
+		return len(lines)
+
+	def draw_paragraph(self, text: str) -> None:
+		if not text:
+			return
+		self._write_wrapped(text, x=self.margin, font=self.body_font, size=self.body_size)
+		self._advance(0.3)
+
+	def draw_bullet_list(self, items: Iterable[str]) -> None:
+		entries = [entry for entry in items if entry]
+		if not entries:
+			return
+		for entry in entries:
+			lines = _wrap_text(entry, self.body_font, self.body_size, self.width - self.bullet_indent - self.margin)
+			self._ensure_space(len(lines))
+			self.canvas.setFont(self.body_font, self.body_size)
+			self.canvas.drawString(self.margin, self.y, "•")
+			self.canvas.drawString(self.bullet_indent, self.y, lines[0])
+			self._advance()
+			for line in lines[1:]:
+				self.canvas.drawString(self.bullet_indent, self.y, line)
+				self._advance()
+			self._advance(0.2)
+		self._advance(0.3)
+
+	def draw_key_value_block(self, entries: Iterable[tuple[str, Any]]) -> None:
+		rows = [(label, _coerce_string(value)) for label, value in entries if value not in (None, "")]
+		if not rows:
+			return
+		for label, value in rows:
+			label_text = f"{label}: "
+			label_width = self.canvas.stringWidth(label_text, self.heading_font, self.body_size)
+			max_width = max(self.width - self.margin - label_width - self.margin, 120)
+			value_lines = _wrap_text(value, self.body_font, self.body_size, max_width)
+			required_lines = max(1, len(value_lines))
+			self._ensure_space(required_lines)
+			self.canvas.setFont(self.heading_font, self.body_size)
+			self.canvas.drawString(self.margin, self.y, label_text)
+			self.canvas.setFont(self.body_font, self.body_size)
+			x_value = self.margin + label_width
+			if value_lines:
+				self.canvas.drawString(x_value, self.y, value_lines[0])
+			for line in value_lines[1:]:
+				self._advance()
+				self.canvas.drawString(x_value, self.y, line)
+			self._advance()
+			self._advance(0.1)
+
+	def draw_signature_line(self, label: str) -> None:
+		self._ensure_space(2, extra=10)
+		self.canvas.line(self.margin, self.y, self.width - self.margin, self.y)
+		self._advance(0.5)
+		self.canvas.setFont(self.body_font, self.body_size)
+		self.canvas.drawString(self.margin, self.y, label)
+		self._advance(1.5)
+
+	def finish(self) -> None:
+		self._draw_footer()
+		self.canvas.save()
 
 
 def _summarize_scan_payload(scan_summary: dict, scan_services: dict, scan_hosts: list[str]) -> tuple[list[dict], list[dict], int]:
@@ -873,6 +1080,398 @@ def _build_project_consolidated_context(*, request, project: Project, session: S
 	return context
 
 
+def _build_project_consolidated_pdf(*, project: Project, context: dict[str, Any], user) -> bytes:
+	try:
+		from reportlab.lib.pagesizes import A4
+		from reportlab.lib.units import cm
+		from reportlab.lib.utils import ImageReader
+		from reportlab.pdfgen import canvas
+	except ImportError as exc:
+		raise RuntimeError(
+			"Dependência opcional 'reportlab' ausente. Instale-a para habilitar exportação em PDF."
+		) from exc
+
+	buffer = BytesIO()
+	pdf = canvas.Canvas(buffer, pagesize=A4)
+	width, height = A4
+	margin = 2 * cm
+	generated_at = context.get("generated_at") or timezone.now()
+	generated_at_str = _format_datetime_local(generated_at)
+	client_name = _coerce_string(getattr(project, "client_name", ""))
+	logo_path: str | None = None
+	logo_width: float | None = None
+	logo_height: float | None = None
+	logo_candidates = ["img/logo.png", "img/logo-40x40.png"]
+	for candidate in logo_candidates:
+		found = finders.find(candidate)
+		if found:
+			logo_path = found
+			break
+	if not logo_path:
+		static_dirs = list(getattr(settings, "STATICFILES_DIRS", []))
+		static_root = getattr(settings, "STATIC_ROOT", None)
+		if static_root:
+			static_dirs.append(static_root)
+		for base in static_dirs:
+			if not base:
+				continue
+			for candidate in logo_candidates:
+				candidate_path = os.path.join(base, candidate)
+				if os.path.exists(candidate_path):
+					logo_path = candidate_path
+					break
+			if logo_path:
+				break
+	if logo_path:
+		try:
+			image = ImageReader(logo_path)
+			iw, ih = image.getSize()
+			if iw and ih:
+				logo_height = 2.2 * cm
+				logo_width = (iw / ih) * logo_height
+		except Exception:
+			logo_path = None
+	header_title = "ARPIA · Relatório Consolidado"
+	header_right = f"Gerado em {generated_at_str}"
+	footer_left = f"Projeto: {project.name} · Cliente: {client_name}"
+	writer = _PdfCanvasWriter(
+		pdf,
+		width=width,
+		height=height,
+		margin=margin,
+		header_title=header_title,
+		header_right=header_right,
+		footer_left=footer_left,
+		header_logo_path=logo_path,
+		header_logo_width=logo_width,
+		header_logo_height=logo_height,
+	)
+
+	owner_name = project.owner_display if hasattr(project, "owner_display") else _coerce_string(project.owner)
+	responsible_user = getattr(user, "get_full_name", lambda: "")() or user.get_username()
+	project_description = getattr(project, "description", "")
+
+	writer.draw_heading("Relatório Executivo Consolidado", level=1)
+	writer.draw_paragraph(f"Projeto: {project.name}")
+	if client_name and client_name != "—":
+		writer.draw_paragraph(f"Cliente: {client_name}")
+	writer.draw_paragraph(f"Responsável do projeto: {owner_name}")
+	writer.draw_paragraph(f"Data de geração: {generated_at_str}")
+	if project_description:
+		writer.draw_paragraph(f"Descrição: {project_description}")
+
+	executive_overview = context.get("executive_overview") or []
+	if executive_overview:
+		writer.draw_heading("Indicadores consolidados", level=2)
+		metrics_lines: list[str] = []
+		for metric in executive_overview:
+			label = metric.get("label") or "Indicador"
+			value = metric.get("value")
+			description = metric.get("description")
+			line = f"{label}: {value}"
+			if description:
+				line += f" — {description}"
+			metrics_lines.append(line)
+		writer.draw_bullet_list(metrics_lines)
+
+	executive_highlights = context.get("executive_highlights") or []
+	if executive_highlights:
+		writer.draw_heading("Destaques executivos", level=2)
+		highlight_lines: list[str] = []
+		for item in executive_highlights[:8]:
+			if isinstance(item, dict):
+				message = item.get("message") or item.get("text")
+			else:
+				message = str(item)
+			if message:
+				highlight_lines.append(message)
+		writer.draw_bullet_list(highlight_lines)
+
+	writer.draw_heading("Dados do projeto", level=2)
+	project_entries = [
+		("Cliente", client_name),
+		("Status", project.get_status_display() if hasattr(project, "get_status_display") else getattr(project, "status", "—")),
+		("Início previsto", _format_datetime_local(getattr(project, "start_at", None))),
+		("Término previsto", _format_datetime_local(getattr(project, "end_at", None))),
+		("Gerado em", generated_at_str),
+	]
+	writer.draw_key_value_block(project_entries)
+
+	memberships = context.get("memberships") or []
+	team_members = [f"{owner_name} (Owner)"]
+	for membership in memberships:
+		user_obj = getattr(membership, "user", None)
+		if not user_obj or user_obj == project.owner:
+			continue
+		member_name = getattr(user_obj, "get_full_name", lambda: "")() or user_obj.get_username()
+		role_label = getattr(membership, "get_role_display", lambda: getattr(membership, "role", ""))()
+		team_members.append(f"{member_name} ({role_label})")
+	if team_members:
+		writer.draw_paragraph("Equipe envolvida:")
+		writer.draw_bullet_list(team_members)
+
+	findings_totals = context.get("findings_totals") or {}
+	if findings_totals:
+		writer.draw_heading("Totais de artefatos consolidados", level=3)
+		totals_lines = [f"{label.title()}: {value}" for label, value in findings_totals.items()]
+		writer.draw_bullet_list(totals_lines)
+
+	project_report = context.get("project_report") or {}
+	if isinstance(project_report, dict) and project_report.get("summary"):
+		writer.draw_paragraph(f"Resumo executivo: {project_report['summary']}")
+
+	scan_key_metrics = context.get("scan_key_metrics") or []
+	vuln_key_metrics = context.get("vuln_key_metrics") or []
+	hunt_key_metrics = context.get("hunt_key_metrics") or []
+	if scan_key_metrics or vuln_key_metrics or hunt_key_metrics:
+		writer.draw_heading("Indicadores por módulo", level=2)
+		if scan_key_metrics:
+			writer.draw_paragraph("Scan:")
+			writer.draw_bullet_list([f"{metric.get('label')}: {metric.get('value')}" for metric in scan_key_metrics])
+		if vuln_key_metrics:
+			writer.draw_paragraph("Vulnerabilidades:")
+			writer.draw_bullet_list([f"{metric.get('label')}: {metric.get('value')}" for metric in vuln_key_metrics])
+		if hunt_key_metrics:
+			writer.draw_paragraph("Threat Hunt:")
+			writer.draw_bullet_list([f"{metric.get('label')}: {metric.get('value')}" for metric in hunt_key_metrics])
+
+	writer.draw_heading("Escopo e restrições", level=2)
+	macro_hosts = context.get("macro_hosts") or []
+	macro_networks = context.get("macro_networks") or []
+	macro_ports = context.get("macro_ports") or []
+	protected_hosts = context.get("protected_hosts") or []
+	credential_table = context.get("credential_table") or []
+	if macro_hosts:
+		writer.draw_paragraph("Alvos declarados:")
+		writer.draw_bullet_list([str(host) for host in macro_hosts[:12]])
+	if macro_networks:
+		writer.draw_paragraph("Redes monitoradas:")
+		writer.draw_bullet_list([str(network) for network in macro_networks[:10]])
+	if macro_ports:
+		writer.draw_paragraph("Portas observadas:")
+		writer.draw_bullet_list([str(port) for port in macro_ports[:20]])
+	if protected_hosts:
+		writer.draw_paragraph("Restrições de escopo:")
+		writer.draw_bullet_list([str(item) for item in protected_hosts[:10]])
+	if credential_table:
+		writer.draw_paragraph("Credenciais operacionais:")
+		credential_lines: list[str] = []
+		for cred in credential_table[:8]:
+			if isinstance(cred, dict):
+				username = cred.get("username") or "—"
+				password = cred.get("password") or "—"
+				context_text = cred.get("context") or cred.get("description")
+			else:
+				username = getattr(cred, "username", "—")
+				password = getattr(cred, "password", "—")
+				context_text = getattr(cred, "context", None)
+			entry = f"Usuário {username} / Senha {password}"
+			if context_text:
+				entry += f" — {context_text}"
+			credential_lines.append(entry)
+		writer.draw_bullet_list(credential_lines)
+
+	assets = context.get("assets") or []
+	if assets:
+		writer.draw_heading("Ativos consolidados", level=2)
+		asset_lines: list[str] = []
+		for asset in assets[:10]:
+			identifier = getattr(asset, "identifier", getattr(asset, "id", "Ativo"))
+			name = getattr(asset, "name", "")
+			category = getattr(asset, "category", "")
+			hostnames = _coerce_string(getattr(asset, "hostnames", []))
+			ips = _coerce_string(getattr(asset, "ips", []))
+			last_seen = _format_datetime_local(getattr(asset, "last_seen", None) or getattr(asset, "created", None))
+			line = f"{identifier}"
+			if name:
+				line += f" · {name}"
+			if category:
+				line += f" · Categoria: {category}"
+			if hostnames and hostnames != "—":
+				line += f" · Hostnames: {hostnames}"
+			if ips and ips != "—":
+				line += f" · IPs: {ips}"
+			line += f" · Última observação: {last_seen}"
+			asset_lines.append(line)
+		writer.draw_bullet_list(asset_lines)
+
+	writer.draw_heading("Atividades de scan", level=2)
+	scan_metadata = context.get("scan_metadata") or {}
+	scan_stats = context.get("scan_stats") or {}
+	scan_highlights = context.get("scan_highlights") or []
+	scan_host_entries = context.get("scan_host_entries") or []
+	scan_service_entries = context.get("scan_service_entries") or []
+	scan_display_findings = context.get("scan_display_findings") or []
+	scan_entry = context.get("scan_entry")
+	if scan_entry and not scan_metadata.get("title"):
+		scan_metadata = {**scan_metadata, "title": getattr(scan_entry, "title", None)}
+	if scan_metadata:
+		metadata_entries = [
+			("Sessão", scan_metadata.get("title") or scan_metadata.get("reference") or "—"),
+			("Status", scan_metadata.get("status") or "—"),
+			("Início", _format_datetime_local(scan_metadata.get("started_at"))),
+			("Término", _format_datetime_local(scan_metadata.get("finished_at"))),
+		]
+		writer.draw_key_value_block(metadata_entries)
+	if scan_stats:
+		stats_lines: list[str] = []
+		for key, label in (
+			("total_tasks", "Tarefas totais"),
+			("completed_tasks", "Etapas concluídas"),
+			("failed_tasks", "Falhas"),
+			("total_findings", "Achados registrados"),
+		):
+			if key in scan_stats:
+				stats_lines.append(f"{label}: {scan_stats.get(key)}")
+		if stats_lines:
+			writer.draw_bullet_list(stats_lines)
+	if scan_highlights:
+		writer.draw_paragraph("Observações do scan:")
+		highlights_lines: list[str] = []
+		for highlight in scan_highlights[:6]:
+			if isinstance(highlight, dict):
+				message = highlight.get("message") or highlight.get("text") or str(highlight)
+			else:
+				message = str(highlight)
+			if message:
+				highlights_lines.append(message)
+		writer.draw_bullet_list(highlights_lines)
+	if scan_host_entries:
+		writer.draw_paragraph("Hosts analisados:")
+		host_lines: list[str] = []
+		for host in scan_host_entries[:8]:
+			host_id = host.get("host") or "—"
+			reachable = "Sim" if host.get("reachable") else "Não"
+			open_ports = host.get("open_ports") or []
+			notes = host.get("notes") or ""
+			open_repr = ", ".join(str(port) for port in open_ports) if open_ports else "Nenhuma"
+			line = f"{host_id} · Alcançável: {reachable} · Portas abertas: {open_repr}"
+			if notes:
+				line += f" · Observações: {notes}"
+			host_lines.append(line)
+		writer.draw_bullet_list(host_lines)
+	if scan_service_entries:
+		writer.draw_paragraph("Serviços destacados:")
+		service_lines = [
+			f"{entry.get('service', 'Serviço')} — {entry.get('occurrences', 0)} host(s)"
+			for entry in scan_service_entries[:6]
+		]
+		writer.draw_bullet_list(service_lines)
+	if scan_display_findings:
+		writer.draw_paragraph("Achados relevantes:")
+		finding_lines: list[str] = []
+		for finding in scan_display_findings[:6]:
+			title = finding.get("title") or "Achado"
+			severity = (finding.get("severity") or "").upper() or "—"
+			host = finding.get("host") or "—"
+			summary = finding.get("summary") or ""
+			line = f"{title} · Severidade: {severity} · Host: {host}"
+			if summary:
+				line += f" — {summary}"
+			finding_lines.append(line)
+		writer.draw_bullet_list(finding_lines)
+
+	writer.draw_heading("Vulnerabilidades consolidadas", level=2)
+	vuln_severity_breakdown = context.get("vuln_severity_breakdown") or []
+	vuln_status_overview = context.get("vuln_status_overview") or {}
+	vuln_display_findings = context.get("vuln_display_findings") or []
+	vuln_top_hosts = context.get("vuln_top_hosts") or []
+	vuln_top_services = context.get("vuln_top_services") or []
+	if vuln_severity_breakdown:
+		writer.draw_paragraph("Distribuição por severidade:")
+		severity_lines = [
+			f"{item.get('label') or item.get('key')}: {item.get('count', 0)} ({item.get('percentage', 0)}%)"
+			for item in vuln_severity_breakdown
+		]
+		writer.draw_bullet_list(severity_lines)
+	if vuln_status_overview:
+		status_lines: list[str] = []
+		if "open_total" in vuln_status_overview:
+			status_lines.append(f"Vulnerabilidades abertas: {vuln_status_overview.get('open_total')}")
+		if "resolved_total" in vuln_status_overview:
+			status_lines.append(f"Vulnerabilidades resolvidas: {vuln_status_overview.get('resolved_total')}")
+		if status_lines:
+			writer.draw_bullet_list(status_lines)
+	if vuln_top_hosts:
+		writer.draw_paragraph("Hosts mais impactados:")
+		writer.draw_bullet_list([f"{item.get('label')}: {item.get('count')} ocorrência(s)" for item in vuln_top_hosts])
+	if vuln_top_services:
+		writer.draw_paragraph("Serviços mais impactados:")
+		writer.draw_bullet_list([f"{item.get('label')}: {item.get('count')} ocorrência(s)" for item in vuln_top_services])
+	if vuln_display_findings:
+		writer.draw_paragraph("Principais vulnerabilidades:")
+		vuln_lines: list[str] = []
+		for finding in vuln_display_findings[:8]:
+			title = finding.get("title") or "Vulnerabilidade"
+			severity = finding.get("severity_display") or finding.get("severity") or "—"
+			host = finding.get("host") or "—"
+			service = finding.get("service") or "—"
+			cvss = finding.get("cvss")
+			summary = finding.get("summary") or ""
+			line = f"{title} · Severidade: {severity} · Host: {host} · Serviço: {service}"
+			if cvss is not None:
+				line += f" · CVSS: {cvss}"
+			if summary:
+				line += f" — {summary}"
+			vuln_lines.append(line)
+		writer.draw_bullet_list(vuln_lines)
+
+	writer.draw_heading("Threat hunt", level=2)
+	hunt_indicators = context.get("hunt_indicators") or []
+	hunt_notes = context.get("hunt_notes") or []
+	hunt_artifacts = context.get("hunt_artifacts") or []
+	if hunt_indicators:
+		writer.draw_paragraph("Indicadores de ameaça coletados:")
+		indicator_lines: list[str] = []
+		for indicator in hunt_indicators[:8]:
+			if isinstance(indicator, dict):
+				value = indicator.get("indicator") or indicator.get("value") or indicator.get("hash")
+				description = indicator.get("description") or indicator.get("context")
+				line = value or str(indicator)
+				if description:
+					line += f" — {description}"
+				indicator_lines.append(line)
+			else:
+				indicator_lines.append(str(indicator))
+		writer.draw_bullet_list(indicator_lines)
+	if hunt_notes:
+		writer.draw_paragraph("Notas de inteligência:")
+		writer.draw_bullet_list([str(note) for note in hunt_notes[:8]])
+	if hunt_artifacts:
+		writer.draw_paragraph("Artefatos correlacionados:")
+		artifact_lines: list[str] = []
+		for artifact in hunt_artifacts[:6]:
+			if isinstance(artifact, dict):
+				title = artifact.get("name") or artifact.get("label") or "Artefato"
+				type_label = artifact.get("type") or artifact.get("category")
+				source = artifact.get("source")
+				line = title
+				if type_label:
+					line += f" · Tipo: {type_label}"
+				if source:
+					line += f" · Origem: {source}"
+				artifact_lines.append(line)
+			else:
+				artifact_lines.append(str(artifact))
+		writer.draw_bullet_list(artifact_lines)
+
+	writer.draw_heading("Termo de encerramento e entrega", level=2)
+	closing_text = (
+		f"Declaramos que o relatório executivo referente ao projeto {project.name} foi consolidado e disponibilizado ao cliente {client_name if client_name != '—' else 'designado'} em {generated_at_str}. "
+		"O documento reúne os achados, indicadores e recomendações provenientes das atividades de scan, gestão de vulnerabilidades e threat hunt conduzidas pelo time ARPIA."
+	)
+	writer.draw_paragraph(closing_text)
+	writer.draw_paragraph(
+		"O responsável abaixo assina a entrega e atesta a veracidade das informações consolidadas."
+	)
+	writer.draw_signature_line(f"Assinatura do responsável ARPIA — {responsible_user}")
+	writer.draw_paragraph(f"Data: {generated_at_str}")
+
+	writer.finish()
+	buffer.seek(0)
+	return buffer.getvalue()
+
+
 class ProjectConsolidatedReportView(LoginRequiredMixin, TemplateView):
 	template_name = "reports/project_consolidated.html"
 
@@ -884,6 +1483,27 @@ class ProjectConsolidatedReportView(LoginRequiredMixin, TemplateView):
 		if not _user_has_access(request.user, self.project):
 			raise Http404("Projeto não encontrado")
 		return super().dispatch(request, *args, **kwargs)
+
+	def get(self, request, *args, **kwargs):  # type: ignore[override]
+		if request.GET.get("format") == "pdf":
+			context = _build_project_consolidated_context(
+				request=request,
+				project=self.project,
+				session=None,
+			)
+			try:
+				pdf_bytes = _build_project_consolidated_pdf(
+					project=self.project,
+					context=context,
+					user=request.user,
+				)
+			except RuntimeError as exc:
+				return HttpResponse(str(exc), content_type="text/plain", status=503)
+			filename = f"arpia-relatorio-{getattr(self.project, 'slug', None) or self.project.pk}.pdf"
+			response = HttpResponse(pdf_bytes, content_type="application/pdf")
+			response["Content-Disposition"] = f'attachment; filename="{filename}"'
+			return response
+		return super().get(request, *args, **kwargs)
 
 	def get_context_data(self, **kwargs):  # type: ignore[override]
 		context = super().get_context_data(**kwargs)
