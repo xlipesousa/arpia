@@ -3,7 +3,7 @@
 {% block title %}Hunt · {{ finding.vulnerability.title }}{% endblock %}
 
 {% block content %}
-<nav class="breadcrumbs">
+<nav class="finding-breadcrumbs">
   <a href="{% url 'dashboard' %}">Painel</a>
   <span aria-hidden="true">›</span>
   {% if project_url %}
@@ -13,53 +13,55 @@
   <span>{{ finding.vulnerability.title }}</span>
 </nav>
 
-<section class="panel hero-panel">
-  <header class="hero-header">
-    <div class="hero-text">
-      <div class="hero-title-row">
-        <span class="badge severity-{{ finding.severity }}">{{ finding.get_severity_display }}</span>
+<section class="finding-page">
+  <header class="finding-hero">
+    <div class="finding-hero__primary">
+      <div class="finding-hero__headline">
+        <span class="severity-badge severity-badge--{{ finding.severity|default:'unknown' }}">{{ finding.get_severity_display }}</span>
         <h1>{{ finding.vulnerability.title }}</h1>
       </div>
-      <p class="hero-subtitle">Projeto: {{ finding.project.name }}{% if finding.detected_at %} · Detectado em {{ finding.detected_at|date:"d/m/Y H:i" }}{% endif %}</p>
+      <p class="finding-hero__context">
+        Projeto: {{ finding.project.name }}
+        {% if finding.detected_at %} · Detectado em {{ finding.detected_at|date:"d/m/Y H:i" }}{% endif %}
+      </p>
+      {% if finding.tags %}
+        <ul class="chip-list">
+          {% for tag in finding.tags %}
+            <li>{{ tag }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
     </div>
-    <div class="hero-actions">
+    <div class="finding-hero__actions">
       {% if project_url %}
-        <a class="btn-secondary" href="{{ project_url }}">Voltar ao projeto</a>
+        <a class="ghost-button" href="{{ project_url }}">Voltar ao projeto</a>
       {% endif %}
       {% if vulnerability_url %}
-        <a class="btn-tertiary" href="{{ vulnerability_url }}">Ver sessão de vulnerabilidades</a>
+        <a class="ghost-button" href="{{ vulnerability_url }}">Sessão de vulnerabilidades</a>
       {% endif %}
     </div>
   </header>
 
-  <ul class="hero-chips">
+  <ul class="stat-badges">
     {% if finding.cve %}
-      <li class="hero-chip"><span>CVE</span><strong>{{ finding.cve }}</strong></li>
+      <li><span>CVE</span><strong>{{ finding.cve }}</strong></li>
     {% endif %}
     {% if finding.cvss_score %}
-      <li class="hero-chip"><span>CVSS</span><strong>{{ finding.cvss_score|floatformat:1 }}</strong></li>
+      <li><span>CVSS</span><strong>{{ finding.cvss_score|floatformat:1 }}</strong></li>
     {% endif %}
     {% if finding.cvss_vector %}
-      <li class="hero-chip"><span>Vetor</span><strong>{{ finding.cvss_vector }}</strong></li>
+      <li><span>Vetor</span><strong>{{ finding.cvss_vector }}</strong></li>
     {% endif %}
     {% if finding.last_profiled_at %}
-      <li class="hero-chip"><span>Perfil</span><strong>{{ finding.last_profiled_at|date:"d/m/Y H:i" }}</strong></li>
+      <li><span>Perfil</span><strong>{{ finding.last_profiled_at|date:"d/m/Y H:i" }}</strong></li>
     {% endif %}
-    <li class="hero-chip {% if finding.is_active %}is-active{% else %}is-closed{% endif %}"><span>Status</span><strong>{% if finding.is_active %}Ativo{% else %}Encerrado{% endif %}</strong></li>
+    <li class="{% if finding.is_active %}is-open{% else %}is-closed{% endif %}"><span>Status</span><strong>{% if finding.is_active %}Ativo{% else %}Encerrado{% endif %}</strong></li>
     {% if finding.last_synced_at %}
-      <li class="hero-chip"><span>Último sync</span><strong>{{ finding.last_synced_at|date:"d/m/Y H:i" }}</strong></li>
+      <li><span>Último sync</span><strong>{{ finding.last_synced_at|date:"d/m/Y H:i" }}</strong></li>
     {% endif %}
   </ul>
 
-  {% if finding.tags %}
-    <div class="hero-tags">
-      {% for tag in finding.tags %}
-        <span class="tag-pill">{{ tag }}</span>
-      {% endfor %}
-    </div>
-  {% endif %}
-
-  <dl class="meta-grid hero-meta-grid">
+  <dl class="finding-meta">
     <div><dt>Host</dt><dd>{{ finding.host|default:"—" }}</dd></div>
     <div><dt>Serviço</dt><dd>{{ finding.service|default:"—" }}</dd></div>
     <div><dt>Porta</dt><dd>{{ finding.port|default:"—" }}</dd></div>
@@ -70,168 +72,175 @@
     <div><dt>Snapshots</dt><dd>{{ finding.state_version|default:"—" }}</dd></div>
   </dl>
 
-  {% if finding_summary_lines %}
-    <ul class="summary-list hero-summary">
-      {% for line in finding_summary_lines|slice:":6" %}
-        <li>{{ line }}</li>
-      {% endfor %}
-    </ul>
-  {% else %}
-    <p class="finding-summary">{{ finding.summary|default:"Sem resumo disponível." }}</p>
+  {% if finding_summary_lines or finding.summary %}
+    <section class="finding-section finding-section--summary">
+      <header class="finding-section__header">
+        <h2>Resumo rápido</h2>
+        <p class="muted">Os principais pontos destacados durante a triagem deste achado.</p>
+      </header>
+      <div class="finding-section__body">
+        {% if finding_summary_lines %}
+          <ul class="summary-list">
+            {% for line in finding_summary_lines|slice:":8" %}
+              <li>{{ line }}</li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="finding-summary">{{ finding.summary|default:"Sem resumo disponível." }}</p>
+        {% endif %}
+      </div>
+    </section>
   {% endif %}
-</section>
 
-<section class="profiles-panel">
-  <div class="profiles-grid">
-    <article class="profile-card blue">
-      <header>
-        <h2>Blue Team</h2>
-        <span class="profile-tag">Defensivo</span>
-      </header>
-      {% if blue_summary_lines %}
-        <ul class="summary-list">
-          {% for line in blue_summary_lines|slice:":8" %}
-            <li>{{ line }}</li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        <p class="profile-summary">{{ blue_profile.summary|default:finding.summary|default:"Sem resumo Blue." }}</p>
-      {% endif %}
-
-      {% if blue_profile.references %}
-        <div class="profile-section">
-          <h4>Referências</h4>
-          <ul class="reference-list">
-            {% for ref in blue_profile.references|slice:":6" %}
-              <li><a href="{{ ref }}" target="_blank" rel="noopener">{{ ref }}</a></li>
+  <section class="finding-section finding-section--profiles">
+    <header class="finding-section__header">
+      <h2>Perfis operacionais</h2>
+      <p class="muted">Visão correlata das frentes defensiva e ofensiva construídas pelo Hunt.</p>
+    </header>
+    <div class="profile-grid">
+      <article class="profile-card profile-card--blue">
+        <header class="profile-card__header">
+          <h3>Blue Team</h3>
+          <span class="profile-tag">Defensivo</span>
+        </header>
+        {% if blue_summary_lines %}
+          <ul class="summary-list">
+            {% for line in blue_summary_lines|slice:":8" %}
+              <li>{{ line }}</li>
             {% endfor %}
           </ul>
-        </div>
-      {% endif %}
-
-      <div class="profile-section">
-        <h4>Heurísticas ATT&amp;CK</h4>
-        {% include "hunt/components/heuristic_chips.html" with heuristics=blue_heuristics %}
-        {% if not blue_heuristics %}
-          <p class="muted">Nenhuma heurística aplicada ainda.</p>
+        {% else %}
+          <p class="profile-summary">{{ blue_profile.summary|default:finding.summary|default:"Sem resumo Blue." }}</p>
         {% endif %}
-      </div>
 
-      <div class="profile-section">
-        <h4>Recomendações prioritárias</h4>
-        {% include "hunt/components/recommendation_list.html" with recommendations=blue_recommendations tone="blue" empty_message="Nenhuma recomendação Blue disponível." %}
-      </div>
-    </article>
+        {% if blue_profile.references %}
+          <div class="profile-section">
+            <h4>Referências</h4>
+            <ul class="reference-list">
+              {% for ref in blue_profile.references|slice:":6" %}
+                <li><a href="{{ ref }}" target="_blank" rel="noopener">{{ ref }}</a></li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
 
-    <article class="profile-card red">
-      <header>
-        <h2>Red Team</h2>
-        <span class="profile-tag">Ofensivo</span>
-      </header>
-      {% if red_summary_lines %}
-        <ul class="summary-list">
-          {% for line in red_summary_lines|slice:":8" %}
-            <li>{{ line }}</li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        <p class="profile-summary">{{ red_profile.summary|default:"Sem resumo Red." }}</p>
-      {% endif %}
-
-      {% if red_profile.exploits %}
         <div class="profile-section">
-          <h4>Exploits correlacionados</h4>
-          <ul class="exploit-list">
-            {% for exploit in red_profile.exploits|slice:":6" %}
-              <li>
-                <strong>{{ exploit.title|default:"Exploit" }}</strong>
-                <span class="muted">Fonte: {{ exploit.source|default:"?" }}</span>
-                {% if exploit.url %}<a href="{{ exploit.url }}" target="_blank" rel="noopener">Abrir</a>{% endif %}
-                {% if exploit.path %}<code>{{ exploit.path }}</code>{% endif %}
-              </li>
+          <h4>Heurísticas ATT&amp;CK</h4>
+          {% include "hunt/components/heuristic_chips.html" with heuristics=blue_heuristics %}
+          {% if not blue_heuristics %}
+            <p class="muted">Nenhuma heurística aplicada ainda.</p>
+          {% endif %}
+        </div>
+
+        <div class="profile-section">
+          <h4>Recomendações prioritárias</h4>
+          {% include "hunt/components/recommendation_list.html" with recommendations=blue_recommendations tone="blue" empty_message="Nenhuma recomendação Blue disponível." %}
+        </div>
+      </article>
+
+      <article class="profile-card profile-card--red">
+        <header class="profile-card__header">
+          <h3>Red Team</h3>
+          <span class="profile-tag">Ofensivo</span>
+        </header>
+        {% if red_summary_lines %}
+          <ul class="summary-list">
+            {% for line in red_summary_lines|slice:":8" %}
+              <li>{{ line }}</li>
             {% endfor %}
           </ul>
-        </div>
-      {% else %}
+        {% else %}
+          <p class="profile-summary">{{ red_profile.summary|default:"Sem resumo Red." }}</p>
+        {% endif %}
+
         <div class="profile-section">
           <h4>Exploits correlacionados</h4>
-          <p class="muted">Sem exploits mapeados.</p>
+          {% if red_profile.exploits %}
+            <ul class="exploit-list">
+              {% for exploit in red_profile.exploits|slice:":6" %}
+                <li>
+                  <strong>{{ exploit.title|default:"Exploit" }}</strong>
+                  <span class="muted">Fonte: {{ exploit.source|default:"?" }}</span>
+                  {% if exploit.url %}<a href="{{ exploit.url }}" target="_blank" rel="noopener">Abrir</a>{% endif %}
+                  {% if exploit.path %}<code>{{ exploit.path }}</code>{% endif %}
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="muted">Sem exploits mapeados.</p>
+          {% endif %}
         </div>
-      {% endif %}
 
-      <div class="profile-section">
-        <h4>Heurísticas ATT&amp;CK</h4>
-        {% include "hunt/components/heuristic_chips.html" with heuristics=red_heuristics %}
-        {% if not red_heuristics %}
-          <p class="muted">Nenhuma heurística aplicada ainda.</p>
-        {% endif %}
-      </div>
+        <div class="profile-section">
+          <h4>Heurísticas ATT&amp;CK</h4>
+          {% include "hunt/components/heuristic_chips.html" with heuristics=red_heuristics %}
+          {% if not red_heuristics %}
+            <p class="muted">Nenhuma heurística aplicada ainda.</p>
+          {% endif %}
+        </div>
 
-      <div class="profile-section">
-        <h4>Recomendações ofensivas</h4>
-        {% include "hunt/components/recommendation_list.html" with recommendations=red_recommendations tone="red" empty_message="Nenhuma recomendação Red disponível." %}
-      </div>
-    </article>
-  </div>
-</section>
+        <div class="profile-section">
+          <h4>Recomendações ofensivas</h4>
+          {% include "hunt/components/recommendation_list.html" with recommendations=red_recommendations tone="red" empty_message="Nenhuma recomendação Red disponível." %}
+        </div>
+      </article>
+    </div>
+  </section>
 
-<section class="panel insight-panel">
-  <header class="panel-header">
-    <div>
+  <section class="finding-section">
+    <header class="finding-section__header">
       <h2>Contexto adicional</h2>
-      <p class="muted">Evidências e enriquecimentos utilizados para gerar os perfis.</p>
+      <p class="muted">Evidências, enriquecimentos e logs que sustentam o cenário deste finding.</p>
+    </header>
+    <div class="context-grid">
+      <div>
+        <h3>Enriquecimentos recentes</h3>
+        <ul class="enrichment-list">
+          {% for item in enrichments %}
+            <li>
+              <header>
+                <strong>{{ item.get_source_display }}</strong>
+                {% if item.updated_at %}<span>{{ item.updated_at|date:"d/m/Y H:i" }}</span>{% endif %}
+              </header>
+              <p>Status: <span class="status-tag status-{{ item.status|default:'unknown' }}">{{ item.get_status_display }}</span></p>
+            </li>
+          {% empty %}
+            <li class="muted">Nenhum enriquecimento registrado.</li>
+          {% endfor %}
+        </ul>
+      </div>
+      <div>
+        <h3>Logs operacionais</h3>
+        <ul class="log-list">
+          {% for entry in recent_logs %}
+            <li>
+              <header>
+                <span class="timestamp">{{ entry.timestamp|date:"d/m/Y H:i" }}</span>
+                <strong>{{ entry.event_type }}</strong>
+              </header>
+              <p>{{ entry.message }}</p>
+            </li>
+          {% empty %}
+            <li class="muted">Nenhum log recente relacionado.</li>
+          {% endfor %}
+        </ul>
+      </div>
     </div>
-  </header>
-  <div class="insight-columns">
-    <div>
-      <h3>Enriquecimentos mais recentes</h3>
-      <ul class="enrichment-list">
-        {% for item in enrichments %}
-          <li>
-            <header>
-              <strong>{{ item.get_source_display }}</strong>
-              {% if item.updated_at %}<span>{{ item.updated_at|date:"d/m/Y H:i" }}</span>{% endif %}
-            </header>
-            <p>Status: <span class="status-tag status-{{ item.status|default:'unknown' }}">{{ item.get_status_display }}</span></p>
-          </li>
-        {% empty %}
-          <li class="muted">Nenhum enriquecimento registrado.</li>
-        {% endfor %}
-      </ul>
-    </div>
-    <div>
-      <h3>Logs operacionais</h3>
-      <ul class="log-list">
-        {% for entry in recent_logs %}
-          <li>
-            <header>
-              <span class="timestamp">{{ entry.timestamp|date:"d/m/Y H:i" }}</span>
-              <strong>{{ entry.event_type }}</strong>
-            </header>
-            <p>{{ entry.message }}</p>
-          </li>
-        {% empty %}
-          <li class="muted">Nenhum log recente relacionado.</li>
-        {% endfor %}
-      </ul>
-    </div>
-  </div>
-</section>
+  </section>
 
-<section class="panel action-panel">
-  <header class="panel-header">
-    <div>
+  <section class="finding-section finding-section--actions">
+    <header class="finding-section__header">
       <h2>Ações rápidas</h2>
-      <p class="muted">Facilite integrações e acompanhe o ciclo completo deste finding.</p>
-    </div>
-  </header>
-  <ul class="action-list">
-    {% if project_url %}<li><a href="{{ project_url }}#hunt">Ver outros findings do projeto</a></li>{% endif %}
-    {% if vulnerability_url %}<li><a href="{{ vulnerability_url }}">Abrir sessão de vulnerabilidades relacionada</a></li>{% endif %}
-    {% if report_url %}<li><a href="{{ report_url }}" target="_blank" rel="noopener">Gerar relatório do projeto (API)</a></li>{% endif %}
-    <li><a href="{{ profiles_api_url }}" target="_blank" rel="noopener">Consultar API de perfis</a></li>
-    <li><a href="{{ recommendations_api_url }}?finding={{ finding.id }}" target="_blank" rel="noopener">Listar recomendações relacionadas (API)</a></li>
-  </ul>
+      <p class="muted">Gerencie integrações e acompanhe o ciclo completo deste achado.</p>
+    </header>
+    <ul class="action-links">
+      {% if project_url %}<li><a href="{{ project_url }}#hunt">Ver outros findings do projeto</a></li>{% endif %}
+      {% if vulnerability_url %}<li><a href="{{ vulnerability_url }}">Abrir sessão de vulnerabilidades relacionada</a></li>{% endif %}
+      {% if report_url %}<li><a href="{{ report_url }}" target="_blank" rel="noopener">Gerar relatório do projeto (API)</a></li>{% endif %}
+      <li><a href="{{ profiles_api_url }}" target="_blank" rel="noopener">Consultar API de perfis</a></li>
+      <li><a href="{{ recommendations_api_url }}?finding={{ finding.id }}" target="_blank" rel="noopener">Listar recomendações relacionadas (API)</a></li>
+    </ul>
+  </section>
 </section>
 
 {% endblock %}
