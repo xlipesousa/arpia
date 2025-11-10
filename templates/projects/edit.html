@@ -3,91 +3,106 @@
 {% block title %}{{ project.name|default:"Novo Projeto" }} — ARPIA{% endblock %}
 
 {% block content %}
-<div class="main" style="padding:1.25rem;max-width:900px;margin:0 auto;">
-  <h2 style="margin:0 0 1rem 0;color:var(--text)">{{ project.name|default:"Novo Projeto" }}</h2>
+<section class="project-edit">
+  <header class="project-edit__header">
+    <span class="project-edit__badge">Projeto ativo</span>
+    <h1>{{ project.name|default:"Novo Projeto" }}</h1>
+    <p>Atualize as configurações e recursos associados ao projeto para manter a cadência das operações.</p>
+  </header>
 
-  <form action="{% if project %}{% url 'projects_edit' project.id %}{% else %}{% url 'projects_create' %}{% endif %}" method="post" class="card" style="padding:1rem;display:flex;flex-direction:column;gap:.75rem;">
+  <form action="{% if project %}{% url 'projects_edit' project.id %}{% else %}{% url 'projects_create' %}{% endif %}" method="post" class="project-edit__form">
     {% csrf_token %}
-    <!-- básicos -->
-    <label style="font-weight:700;color:var(--muted)">Nome</label>
-    <input name="name" required placeholder="Nome do projeto" value="{{ project.name|default:form.name }}" style="padding:.5rem .6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);">
 
-    <label style="font-weight:700;color:var(--muted)">Descrição</label>
-    <textarea name="description" placeholder="Breve descrição" rows="3" style="padding:.6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);resize:vertical;">{{ project.description|default:form.description }}</textarea>
+    <div class="form-control form-control--full">
+      <label for="project-name">Nome do projeto <span>*</span></label>
+      <input id="project-name" name="name" required placeholder="Identificador principal" value="{{ project.name|default:form.name|default_if_none:'' }}">
+    </div>
 
-    <label style="font-weight:700;color:var(--muted)">Cliente</label>
-    <input name="client" type="text" placeholder="Nome da empresa contratante" value="{{ project.client|default:form.client }}" style="width:100%;padding:.45rem .6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);" />
+    <div class="form-control form-control--full">
+      <label for="project-description">Descrição</label>
+      <textarea id="project-description" name="description" rows="3" placeholder="Breve descrição do escopo, metas e restrições.">{{ project.description|default:form.description|default_if_none:'' }}</textarea>
+      <p class="helper-text">Compartilhe detalhes relevantes para o time entender contexto e premissas.</p>
+    </div>
 
-    <div style="display:flex;gap:.75rem;flex-wrap:wrap;">
-      <div style="flex:1;min-width:220px;">
-        <label style="font-weight:700;color:var(--muted)">Início</label>
-        <input name="start" id="proj-start" type="datetime-local" value="{{ project.start|default:form.start }}" style="width:100%;padding:.45rem .6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);">
+    <div class="project-edit__grid">
+      <div class="form-control">
+        <label for="project-client">Cliente / Unidade</label>
+        <input id="project-client" name="client" placeholder="Squad ou unidade de negócio" value="{{ project.client|default:form.client|default_if_none:'' }}">
       </div>
-      <div style="flex:1;min-width:220px;">
-        <label style="font-weight:700;color:var(--muted)">Término</label>
-        <input name="end" id="proj-end" type="datetime-local" value="{{ project.end|default:form.end }}" style="width:100%;padding:.45rem .6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);">
+      <div class="form-control">
+        <label for="project-hosts">Hosts alvo</label>
+        <input id="project-hosts" name="hosts" placeholder="ex: 10.0.0.5, app.example.com" value="{{ project.hosts|default:form.hosts|default_if_none:'' }}">
+        <p class="helper-text">Separe por vírgula; aceitamos IPs e FQDNs.</p>
+      </div>
+      <div class="form-control">
+        <label for="project-protected">Hosts protegidos</label>
+        <input id="project-protected" name="protected_hosts" placeholder="Recursos fora do escopo" value="{{ project.protected_hosts|default:form.protected_hosts|default_if_none:'' }}">
+      </div>
+      <div class="form-control">
+        <label for="project-networks">Redes (CIDR)</label>
+        <input id="project-networks" name="networks" placeholder="ex: 10.0.0.0/24, 192.168.0.0/16" value="{{ project.networks|default:form.networks|default_if_none:'' }}">
       </div>
     </div>
 
-    <!-- complementares -->
-    <h4 style="margin:.5rem 0 .25rem 0;color:var(--muted)">Dados complementares</h4>
-
-  <label style="font-weight:700;color:var(--muted)">Hosts Alvo (separados por vírgula)</label>
-  <input name="hosts" placeholder="ex: 10.0.0.5,example.com,192.168.1.2" value="{{ project.hosts|default:form.hosts }}" style="padding:.45rem .6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);">
-
-  <label style="font-weight:700;color:var(--muted)">Hosts Protegidos (separados por vírgula)</label>
-  <input name="protected_hosts" placeholder="ex: 10.0.0.5,example.com,192.168.1.2" value="{{ project.protected_hosts|default:form.protected_hosts }}" style="padding:.45rem .6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);">
-    
-    <label style="font-weight:700;color:var(--muted)">Networks (CIDR, vírgula separados)</label>
-    <input name="networks" placeholder="ex: 10.0.0.0/24,192.168.0.0/16" value="{{ project.networks|default:form.networks }}" style="padding:.45rem .6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);">
-
-    <label style="font-weight:700;color:var(--muted)">Portas de interesse (porta/protocolo, separadas por vírgula)</label>
-    <input name="ports" placeholder="ex: 22/tcp, 80/tcp, 53/udp" value="{{ project.ports|default:form.ports }}" style="padding:.45rem .6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);">
-    <p class="small-muted" style="margin:0;">Quando o protocolo for omitido, consideramos <strong>tcp</strong> automaticamente. Aceitamos apenas tcp ou udp.</p>
-    {% if errors.ports %}
-      <p class="form-error">{{ errors.ports }}</p>
-    {% endif %}
-
-    <!-- credenciais -->
-    <div style="border:1px solid rgba(255,255,255,0.03);padding:.6rem;border-radius:8px;background:rgba(255,255,255,0.005)">
-      <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;">
-        <label style="font-weight:700;color:var(--muted);margin-right:.5rem">Credenciais</label>
-        <select id="cred-type" style="padding:.35rem .5rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);">
-          <option value="userpass">username + password</option>
-          <option value="usrs_ssh">username + ssh (passphrase + private key)</option>
-          <option value="user">username only</option>
-          <option value="pass">password only</option>
-        </select>
+    <div class="project-edit__grid project-edit__grid--half">
+      <div class="form-control">
+        <label for="proj-start">Início</label>
+        <input id="proj-start" name="start" type="datetime-local" value="{{ project.start|default:form.start|default_if_none:'' }}">
       </div>
+      <div class="form-control">
+        <label for="proj-end">Término</label>
+        <input id="proj-end" name="end" type="datetime-local" value="{{ project.end|default:form.end|default_if_none:'' }}">
+      </div>
+      <div class="form-control">
+        <label for="project-ports">Portas de interesse</label>
+        <input id="project-ports" name="ports" placeholder="ex: 22/tcp, 80/tcp, 53/udp" value="{{ project.ports|default:form.ports|default_if_none:'' }}">
+        <p class="helper-text">Quando o protocolo for omitido, consideramos TCP automaticamente.</p>
+        {% if errors.ports %}
+          <p class="form-error">{{ errors.ports }}</p>
+        {% endif %}
+      </div>
+    </div>
 
-      <div id="cred-fields" style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.5rem;">
-        <!-- campos dinâmicos -->
-        <input id="cred-username" placeholder="username" style="display:none;padding:.4rem .6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);min-width:200px;">
-        <input id="cred-password" placeholder="password" style="display:none;padding:.4rem .6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);min-width:200px;">
-        <input id="cred-passphrase" placeholder="passphrase (opcional)" style="display:none;padding:.4rem .6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);min-width:200px;">
-        <textarea id="cred-pkey" placeholder="private key (PEM)" style="display:none;padding:.4rem .6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);min-width:300px;min-height:88px;"></textarea>
-
-        <div style="margin-left:auto;display:flex;gap:.5rem;align-items:center;">
-          <button type="button" id="cred-add" class="btn btn-primary compact">Adicionar</button>
+    <section class="credentials-card">
+      <header class="credentials-card__header">
+        <div>
+          <h2>Credenciais</h2>
+          <p>Armazene combinações para automações (SSH, integrações ou testes direcionados).</p>
         </div>
+        <div class="credentials-card__selector">
+          <label for="cred-type">Tipo</label>
+          <select id="cred-type">
+            <option value="userpass">username + password</option>
+            <option value="usrs_ssh">username + ssh (passphrase + private key)</option>
+            <option value="user">username only</option>
+            <option value="pass">password only</option>
+          </select>
+        </div>
+      </header>
+
+      <div id="cred-fields" class="credentials-card__fields">
+        <input id="cred-username" class="is-hidden" placeholder="username">
+        <input id="cred-password" class="is-hidden" placeholder="password" type="password">
+        <input id="cred-passphrase" class="is-hidden" placeholder="passphrase (opcional)" type="password">
+        <textarea id="cred-pkey" class="is-hidden" placeholder="private key (PEM)"></textarea>
+        <button type="button" id="cred-add" class="btn btn-primary btn-compact">Adicionar</button>
       </div>
 
-      <div id="cred-list-wrap" style="overflow:auto;">
-        <table style="width:100%;border-collapse:collapse;color:var(--muted);">
+      <div id="cred-list-wrap" class="credentials-card__table">
+        <table>
           <thead>
-            <tr style="text-align:left;font-weight:700;color:var(--muted);font-size:.85rem;">
-              <th style="width:160px;padding:.4rem">Tipo</th>
-              <th style="padding:.4rem">Campos</th>
-              <th style="width:80px;padding:.4rem;text-align:right">Ações</th>
+            <tr>
+              <th>Tipo</th>
+              <th>Resumo</th>
+              <th></th>
             </tr>
           </thead>
           <tbody id="cred-list">
-            {% comment %} se houver credenciais já associadas, renderize aqui via context.credentials {% endcomment %}
             {% for c in project.credentials|default:form.credentials %}
             <tr>
-              <td style="padding:.4rem;color:var(--text)">{{ c.type }}</td>
-              <td style="padding:.4rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ c.summary }}</td>
-              <td style="padding:.4rem;text-align:right"><button type="button" class="btn btn-ghost btn-sm cred-remove">Remover</button></td>
+              <td>{{ c.type }}</td>
+              <td>{{ c.summary }}</td>
+              <td class="credentials-card__actions"><button type="button" class="btn btn-ghost btn-compact cred-remove">Remover</button></td>
             </tr>
             {% endfor %}
           </tbody>
@@ -95,32 +110,295 @@
       </div>
 
       <input type="hidden" name="credentials_json" id="credentials_json" value='{{ project.credentials_json|default:form.credentials_json|default:"[]" }}'>
-    </div>
+    </section>
 
-    <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:.5rem;">
+    <footer class="form-actions">
       <a href="{% url 'projects_list' %}" class="btn btn-ghost">Cancelar</a>
-      <button type="submit" class="btn btn-primary">Salvar</button>
-    </div>
+      <button type="submit" class="btn btn-primary">Salvar alterações</button>
+    </footer>
   </form>
-</div>
+</section>
 
 <style>
-.card{ background:rgba(255,255,255,0.01); border-radius:10px; }
-.btn{ border-radius:8px; padding:.35rem .6rem; font-weight:700; cursor:pointer; color:var(--muted); background:transparent; border:1px solid rgba(255,255,255,0.03); text-decoration:none; display:inline-flex; align-items:center; gap:.4rem; }
-.btn-ghost{ background:transparent; color:var(--muted); border:1px solid rgba(255,255,255,0.03); }
-.btn-primary{ background:linear-gradient(90deg,#4fd1c5,var(--accent)); color:#021023; border:1px solid rgba(79,209,197,0.08); box-shadow:0 8px 26px rgba(4,18,42,0.06); }
-.btn.compact{ padding:.32rem .5rem; font-size:.95rem; }
-.small-muted{ color:var(--muted); font-size:.86rem; margin-right:.25rem; }
-.form-error{ color:#f87171; font-size:.86rem; margin:0; }
+.project-edit{
+  max-width:1040px;
+  margin:0 auto;
+  padding:2rem 1.5rem 3rem;
+}
+.project-edit__header{
+  display:flex;
+  flex-direction:column;
+  gap:.4rem;
+  margin-bottom:1.9rem;
+}
+.project-edit__badge{
+  align-self:flex-start;
+  padding:.2rem .55rem;
+  border-radius:999px;
+  border:1px solid rgba(79,209,197,0.32);
+  color:var(--accent);
+  font-size:.75rem;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+}
+.project-edit__header h1{
+  margin:0;
+  font-size:2.3rem;
+  letter-spacing:-0.01em;
+  color:var(--text);
+}
+.project-edit__header p{
+  margin:0;
+  color:var(--muted);
+  max-width:640px;
+}
+.project-edit__form{
+  background:linear-gradient(140deg,rgba(9,22,41,0.72),rgba(8,16,34,0.45));
+  border:1px solid rgba(79,209,197,0.12);
+  border-radius:18px;
+  padding:1.9rem;
+  display:flex;
+  flex-direction:column;
+  gap:1.45rem;
+  box-shadow:0 28px 52px -32px rgba(5,18,40,0.7);
+}
+.project-edit__grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:1.25rem;
+}
+.project-edit__grid--half{
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+}
+.form-control{
+  display:flex;
+  flex-direction:column;
+  gap:.45rem;
+}
+.form-control--full{
+  width:100%;
+}
+.form-control label{
+  font-weight:700;
+  color:var(--muted);
+  text-transform:uppercase;
+  font-size:.78rem;
+  letter-spacing:.15em;
+}
+.form-control label span{
+  color:var(--accent);
+}
+.form-control input,
+.form-control textarea{
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.06);
+  background:rgba(5,20,38,0.4);
+  color:var(--text);
+  padding:.75rem .95rem;
+  font-size:.95rem;
+  transition:border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+}
+.form-control textarea{
+  resize:vertical;
+  min-height:120px;
+}
+.form-control input:focus,
+.form-control textarea:focus{
+  outline:none;
+  border-color:var(--accent);
+  box-shadow:0 0 0 1px var(--accent);
+  background:rgba(6,32,55,0.6);
+  transform:translateY(-1px);
+}
+.helper-text{
+  margin:0;
+  color:rgba(200,225,255,0.6);
+  font-size:.82rem;
+}
+.form-error{
+  margin:0;
+  color:#f87171;
+  font-size:.88rem;
+  font-weight:600;
+}
+.credentials-card{
+  border:1px solid rgba(79,209,197,0.18);
+  border-radius:16px;
+  padding:1.45rem;
+  background:rgba(2,16,35,0.45);
+  display:flex;
+  flex-direction:column;
+  gap:1rem;
+}
+.credentials-card__header{
+  display:flex;
+  flex-wrap:wrap;
+  gap:1rem;
+  align-items:center;
+  justify-content:space-between;
+}
+.credentials-card__header h2{
+  margin:0;
+  color:var(--text);
+  font-size:1.35rem;
+}
+.credentials-card__header p{
+  margin:.35rem 0 0;
+  color:var(--muted);
+  font-size:.9rem;
+}
+.credentials-card__selector{
+  display:flex;
+  flex-direction:column;
+  gap:.35rem;
+}
+.credentials-card__selector label{
+  font-size:.75rem;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+.credentials-card__selector select{
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(6,26,46,0.55);
+  color:var(--text);
+  padding:.55rem .75rem;
+}
+.credentials-card__fields{
+  display:flex;
+  gap:.65rem;
+  flex-wrap:wrap;
+  align-items:flex-start;
+}
+.credentials-card__fields input,
+.credentials-card__fields textarea{
+  flex:1;
+  min-width:220px;
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(6,20,40,0.55);
+  color:var(--text);
+  padding:.6rem .75rem;
+}
+.credentials-card__fields textarea{
+  min-width:280px;
+  min-height:110px;
+  resize:vertical;
+}
+.credentials-card__fields button{
+  align-self:flex-end;
+  margin-left:auto;
+}
+.is-hidden{
+  display:none !important;
+}
+.credentials-card__table{
+  overflow:auto;
+}
+.credentials-card__table table{
+  width:100%;
+  border-collapse:collapse;
+  color:var(--muted);
+}
+.credentials-card__table th{
+  text-align:left;
+  font-size:.8rem;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  padding:.45rem;
+  color:rgba(200,225,255,0.55);
+}
+.credentials-card__table td{
+  padding:.45rem;
+  border-top:1px solid rgba(255,255,255,0.05);
+}
+.credentials-card__actions{
+  text-align:right;
+}
+.btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:.35rem;
+  padding:.55rem 1.1rem;
+  border-radius:10px;
+  font-weight:700;
+  text-decoration:none;
+  border:1px solid rgba(255,255,255,0.08);
+  transition:transform .15s ease, box-shadow .2s ease, background .2s ease;
+}
+.btn:hover{
+  transform:translateY(-1px);
+}
+.btn-ghost{
+  color:var(--muted);
+  background:rgba(255,255,255,0.02);
+}
+.btn-primary{
+  color:#021023;
+  background:linear-gradient(120deg,#4fd1c5 0%,#60efff 100%);
+  border-color:rgba(79,209,197,0.35);
+  box-shadow:0 18px 35px -18px rgba(79,209,197,0.65);
+}
+.btn-primary:active{
+  transform:translateY(0);
+}
+.btn-compact{
+  padding:.45rem .9rem;
+}
+.form-actions{
+  display:flex;
+  justify-content:flex-end;
+  gap:.85rem;
+  margin-top:.5rem;
+}
+
+@media (max-width:760px){
+  .project-edit{
+    padding:1.6rem 1rem 2.3rem;
+  }
+  .project-edit__form{
+    padding:1.45rem;
+  }
+  .credentials-card__fields{
+    flex-direction:column;
+  }
+  .credentials-card__fields textarea{
+    width:100%;
+  }
+}
 </style>
 
 <script>
 (function(){
-  // credenciais - gerência local (serializa em credentials_json)
-  let creds = [];
-  try{ creds = JSON.parse(document.getElementById('credentials_json').value || '[]'); }catch(e){ creds = []; }
-  const credList = document.getElementById('cred-list');
+  const startField = document.getElementById('proj-start');
+  const endField = document.getElementById('proj-end');
 
+  if(startField && endField){
+    startField.addEventListener('change', ()=>{
+      if(endField.value && startField.value && endField.value < startField.value){
+        endField.value = startField.value;
+      }
+      endField.min = startField.value || '';
+    });
+
+    endField.addEventListener('change', ()=>{
+      if(startField.value && endField.value < startField.value){
+        alert('A data de término não pode ser anterior ao início.');
+        endField.value = startField.value;
+      }
+    });
+  }
+
+  let creds = [];
+  try{
+    creds = JSON.parse(document.getElementById('credentials_json').value || '[]');
+  }catch(e){
+    creds = [];
+  }
+
+  const credList = document.getElementById('cred-list');
   const typeSel = document.getElementById('cred-type');
   const fUsername = document.getElementById('cred-username');
   const fPassword = document.getElementById('cred-password');
@@ -129,72 +407,137 @@
   const btnAdd = document.getElementById('cred-add');
   const hiddenInput = document.getElementById('credentials_json');
 
+  function hideAll(){
+    [fUsername,fPassword,fPassphrase,fPKey].forEach(field=>{
+      field.classList.add('is-hidden');
+    });
+  }
+
   function renderFieldsFor(type){
-    // esconder todos
-    [fUsername,fPassword,fPassphrase,fPKey].forEach(n=> n.style.display='none');
-    if(type === 'userpass'){ fUsername.style.display='inline-block'; fPassword.style.display='inline-block'; }
-    if(type === 'usrs_ssh'){ fUsername.style.display='inline-block'; fPassphrase.style.display='inline-block'; fPKey.style.display='inline-block'; }
-    if(type === 'user'){ fUsername.style.display='inline-block'; }
-    if(type === 'pass'){ fPassword.style.display='inline-block'; }
+    hideAll();
+    if(type === 'userpass'){
+      fUsername.classList.remove('is-hidden');
+      fPassword.classList.remove('is-hidden');
+    }
+    if(type === 'usrs_ssh'){
+      fUsername.classList.remove('is-hidden');
+      fPassphrase.classList.remove('is-hidden');
+      fPKey.classList.remove('is-hidden');
+    }
+    if(type === 'user'){
+      fUsername.classList.remove('is-hidden');
+    }
+    if(type === 'pass'){
+      fPassword.classList.remove('is-hidden');
+    }
+  }
+
+  function updateHidden(){
+    hiddenInput.value = JSON.stringify(creds);
   }
 
   function renderList(){
     credList.innerHTML = '';
     creds.forEach((c, idx)=>{
       const tr = document.createElement('tr');
-      const tdType = document.createElement('td'); tdType.style.padding='.4rem'; tdType.style.color='var(--text)'; tdType.innerText = c.type_label || c.type;
-      const tdFields = document.createElement('td'); tdFields.style.padding='.4rem'; tdFields.style.color='var(--muted)';
-      // criar resumo
+
+      const tdType = document.createElement('td');
+      tdType.innerText = c.type_label || c.type;
+      tr.appendChild(tdType);
+
+      const tdFields = document.createElement('td');
       const parts = [];
       if(c.username) parts.push('user: ' + c.username);
-      if(c.password) parts.push('pass: ' + (c.password.length>10? c.password.slice(0,10)+'…': c.password));
-      if(c.passphrase) parts.push('passphrase: ' + (c.passphrase.length>10? c.passphrase.slice(0,10)+'…': c.passphrase));
-      if(c.pkey) parts.push('pkey: ' + (c.pkey.length>30? c.pkey.slice(0,30)+'…': c.pkey));
+      if(c.password) parts.push('pass: ' + (c.password.length > 10 ? c.password.slice(0,10) + '…' : c.password));
+      if(c.passphrase) parts.push('passphrase: ' + (c.passphrase.length > 10 ? c.passphrase.slice(0,10) + '…' : c.passphrase));
+      if(c.pkey) parts.push('pkey: ' + (c.pkey.length > 30 ? c.pkey.slice(0,30) + '…' : c.pkey));
       tdFields.innerText = parts.join(' · ');
-      const tdActions = document.createElement('td'); tdActions.style.padding='.4rem'; tdActions.style.textAlign='right';
-      const btn = document.createElement('button'); btn.type='button'; btn.className='btn btn-ghost btn-sm'; btn.innerText='Remover';
-      btn.addEventListener('click', ()=> { creds.splice(idx,1); updateHidden(); renderList(); });
+      tr.appendChild(tdFields);
+
+      const tdActions = document.createElement('td');
+      tdActions.className = 'credentials-card__actions';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn-ghost btn-compact cred-remove';
+      btn.innerText = 'Remover';
+      btn.addEventListener('click', ()=>{
+        creds.splice(idx,1);
+        updateHidden();
+        renderList();
+      });
       tdActions.appendChild(btn);
-      tr.appendChild(tdType); tr.appendChild(tdFields); tr.appendChild(tdActions);
+      tr.appendChild(tdActions);
+
       credList.appendChild(tr);
     });
     updateHidden();
   }
 
-  function updateHidden(){ hiddenInput.value = JSON.stringify(creds); }
-
-  // inicializar campos e lista
   renderFieldsFor(typeSel.value);
   renderList();
 
-  typeSel.addEventListener('change', ()=> { renderFieldsFor(typeSel.value); });
+  typeSel.addEventListener('change', ()=>{
+    renderFieldsFor(typeSel.value);
+  });
 
   btnAdd.addEventListener('click', ()=>{
     const type = typeSel.value;
     const obj = { type: type, type_label: typeSel.options[typeSel.selectedIndex].text };
-    if(type === 'userpass'){ obj.username = fUsername.value.trim(); obj.password = fPassword.value; if(!obj.username || !obj.password){ alert('username e password são obrigatórios'); return; } }
-    if(type === 'usrs_ssh'){ obj.username = fUsername.value.trim(); obj.passphrase = fPassphrase.value; obj.pkey = fPKey.value; if(!obj.username || !obj.pkey){ alert('username e private key são obrigatórios'); return; } }
-    if(type === 'user'){ obj.username = fUsername.value.trim(); if(!obj.username){ alert('username é obrigatório'); return; } }
-    if(type === 'pass'){ obj.password = fPassword.value; if(!obj.password){ alert('password é obrigatório'); return; } }
+
+    if(type === 'userpass'){
+      obj.username = fUsername.value.trim();
+      obj.password = fPassword.value;
+      if(!obj.username || !obj.password){
+        alert('username e password são obrigatórios');
+        return;
+      }
+    }
+
+    if(type === 'usrs_ssh'){
+      obj.username = fUsername.value.trim();
+      obj.passphrase = fPassphrase.value;
+      obj.pkey = fPKey.value;
+      if(!obj.username || !obj.pkey){
+        alert('username e private key são obrigatórios');
+        return;
+      }
+    }
+
+    if(type === 'user'){
+      obj.username = fUsername.value.trim();
+      if(!obj.username){
+        alert('username é obrigatório');
+        return;
+      }
+    }
+
+    if(type === 'pass'){
+      obj.password = fPassword.value;
+      if(!obj.password){
+        alert('password é obrigatório');
+        return;
+      }
+    }
 
     creds.push(obj);
-    // limpar inputs relevantes
-    [fUsername,fPassword,fPassphrase,fPKey].forEach(n=> n.value = '');
+    [fUsername,fPassword,fPassphrase,fPKey].forEach(field=> field.value = '');
     renderList();
   });
 
-  // delegação para remover itens se usuário usar botões gerados server-side
-  document.addEventListener('click', (ev)=>{
-    const rm = ev.target.closest('.cred-remove');
+  document.addEventListener('click', event=>{
+    const rm = event.target.closest('.cred-remove');
     if(!rm) return;
     const tr = rm.closest('tr');
-    const idx = Array.from(credList.children).indexOf(tr);
-    if(idx >= 0){ creds.splice(idx,1); renderList(); }
+    const index = Array.from(credList.children).indexOf(tr);
+    if(index >= 0){
+      creds.splice(index,1);
+      renderList();
+    }
   });
 
-  // garantir serialização ao submeter (caso algo não atualizado)
-  document.querySelector('form')?.addEventListener('submit', ()=> updateHidden());
-
+  document.querySelector('.project-edit__form')?.addEventListener('submit', ()=>{
+    updateHidden();
+  });
 })();
 </script>
 {% endblock %}
