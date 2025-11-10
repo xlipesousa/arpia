@@ -178,6 +178,29 @@ class _PdfCanvasWriter:
 		if self.y < self.margin + 20:
 			self._new_page()
 
+	def draw_centered_image(self, path: str, *, width: float, height: float, spacing_after: float = 18.0) -> None:
+		if not path or not width or not height:
+			return
+		required = float(height) + float(spacing_after)
+		self._ensure_space(extra=required)
+		x = (self.width - width) / 2
+		y = self.y - height
+		try:
+			self.canvas.drawImage(
+				path,
+				x=x,
+				y=y,
+				width=width,
+				height=height,
+				preserveAspectRatio=True,
+				mask="auto",
+			)
+		except Exception:
+			return
+		self.y = y - spacing_after
+		if self.y < self.margin + 20:
+			self._new_page()
+
 	def draw_heading(self, text: str, *, level: int = 1) -> None:
 		if not text:
 			return
@@ -1142,10 +1165,18 @@ def _build_project_consolidated_pdf(*, project: Project, context: dict[str, Any]
 		header_title=header_title,
 		header_right=header_right,
 		footer_left=footer_left,
-		header_logo_path=logo_path,
-		header_logo_width=logo_width,
-		header_logo_height=logo_height,
+		header_logo_path=None,
+		header_logo_width=None,
+		header_logo_height=None,
 	)
+
+	if logo_path and logo_width and logo_height:
+		writer.draw_centered_image(
+			logo_path,
+			width=logo_width,
+			height=logo_height,
+			spacing_after=24.0,
+		)
 
 	owner_name = project.owner_display if hasattr(project, "owner_display") else _coerce_string(project.owner)
 	responsible_user = getattr(user, "get_full_name", lambda: "")() or user.get_username()
