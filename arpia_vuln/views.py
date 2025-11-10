@@ -33,7 +33,7 @@ def _user_projects(user):
 	return (
 		Project.objects.filter(Q(owner=user) | Q(memberships__user=user))
 		.distinct()
-		.order_by("name")
+		.order_by("-created")
 	)
 
 

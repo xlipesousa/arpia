@@ -93,6 +93,18 @@ class ScanDashboardViewTests(TestCase):
         self.assertTrue(script_cards)
         self.assertTrue(all(card["enabled"] for card in script_cards))
 
+    def test_projects_sorted_by_most_recent_first(self):
+        older = Project.objects.create(owner=self.user, name="Projeto Antigo", slug="projeto-antigo")
+        newer = Project.objects.create(owner=self.user, name="Projeto Recente", slug="projeto-recente")
+
+        self.client.login(username="tester", password="pass1234")
+        response = self.client.get(reverse("arpia_scan:dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        projects = response.context["projects"]
+        self.assertGreaterEqual(len(projects), 2)
+        self.assertEqual([project.pk for project in projects[:2]], [newer.pk, older.pk])
+
     def test_dashboard_hides_excluded_nse_scripts_from_flow(self):
         project = Project.objects.create(owner=self.user, name="Projeto Epsilon", slug="projeto-epsilon")
         sync_default_scripts()

@@ -119,8 +119,12 @@ def _resolve_accessible_projects(user):
 	if not getattr(user, "is_authenticated", False):
 		return Project.objects.none()
 	if getattr(user, "is_superuser", False):
-		return Project.objects.all().order_by()
-	return Project.objects.filter(Q(owner=user) | Q(memberships__user=user)).distinct().order_by()
+		return Project.objects.all().order_by("-created")
+	return (
+		Project.objects.filter(Q(owner=user) | Q(memberships__user=user))
+		.distinct()
+		.order_by("-created")
+	)
 
 
 def _resolve_export_limit(value: str | None) -> int:

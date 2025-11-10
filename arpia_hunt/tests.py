@@ -965,6 +965,17 @@ class HuntDashboardViewTests(TestCase):
         self.assertContains(response, detail_url)
         self.assertContains(response, "Abrir detalhe")
 
+    def test_projects_sorted_by_most_recent_first(self):
+        newer_project = Project.objects.create(owner=self.user, name="Projeto Recente", slug="projeto-recente")
+
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("arpia_hunt:dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        projects = response.context["projects"]
+        self.assertGreaterEqual(len(projects), 2)
+        self.assertEqual([project.pk for project in projects[:2]], [newer_project.pk, self.project.pk])
+
     def test_dashboard_context_includes_latest_findings(self):
         base_time = timezone.now()
         older_vuln = self._create_vulnerability(

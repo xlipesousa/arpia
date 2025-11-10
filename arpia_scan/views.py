@@ -464,7 +464,7 @@ class ScanDashboardView(LoginRequiredMixin, TemplateView):
         return (
             Project.objects.filter(Q(owner=user) | Q(memberships__user=user))
             .distinct()
-            .order_by("name")
+            .order_by("-created")
         )
 
     def _resolve_selected_project(self, projects):

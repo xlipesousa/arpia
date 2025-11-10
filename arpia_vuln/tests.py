@@ -141,6 +141,17 @@ class VulnViewsSmokeTests(TestCase):
 		response = self.client.get(url, {"project": "00000000-0000-0000-0000-000000000000"})
 		self.assertEqual(response.status_code, 404)
 
+	def test_dashboard_projects_sorted_by_most_recent_first(self):
+		newer = Project.objects.create(owner=self.owner, name="Projeto mais novo", slug="projeto-mais-novo")
+
+		self.client.force_login(self.owner)
+		response = self.client.get(reverse("arpia_vuln:dashboard"))
+
+		self.assertEqual(response.status_code, 200)
+		projects = response.context["projects"]
+		self.assertGreaterEqual(len(projects), 2)
+		self.assertEqual([project.pk for project in projects[:2]], [newer.pk, self.project.pk])
+
 
 class HuntSyncIntegrationTests(TestCase):
 	def setUp(self):
