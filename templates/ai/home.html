@@ -57,7 +57,6 @@
             <h2>Pronto para ajudar</h2>
             <p class="muted">Pergunte sobre vulnerabilidades, exploracao controlada ou planos de mitigacao.</p>
           </div>
-          <article id="ai-answer" class="ai-message ai-message-assistant hidden"></article>
         </section>
 
         <form id="ai-form" class="ai-chat-form">
@@ -146,6 +145,76 @@
   const chatFeed = document.getElementById("ai-chat-feed");
   const chatPlaceholder = document.getElementById("ai-chat-placeholder");
 
+  function appendMessage(role, text) {
+    if (!chatFeed) {
+      return null;
+    }
+    const article = document.createElement("article");
+    article.className = `ai-message ai-message-${role}`;
+    article.textContent = text;
+    chatFeed.appendChild(article);
+    chatFeed.scrollTop = chatFeed.scrollHeight;
+    return article;
+  }
+
+  function renderAssistantAnswer(article, payload) {
+    if (!article) {
+      return;
+    }
+    article.dataset.role = "assistant";
+    article.innerHTML = "";
+    const mainContent = document.createElement("p");
+    mainContent.textContent = payload.answer;
+    article.appendChild(mainContent);
+
+    const metadata = payload.metadata || {};
+    if (metadata.status && metadata.status !== "ok") {
+      const note = document.createElement("p");
+      note.className = "ai-message-note";
+      note.textContent = metadata.message || "Resumo interno exibido devido a erro no provedor.";
+
+      if (metadata.detail === "openai-quota-exceeded") {
+        note.textContent += " Verifique o limite de creditos/quota no painel OpenAI.";
+      }
+
+      article.appendChild(note);
+    }
+
+    if (chatFeed) {
+      chatFeed.scrollTop = chatFeed.scrollHeight;
+    }
+  }
+
+  function renderAssistantError(article, message) {
+    if (!article) {
+      return;
+    }
+    article.classList.add("ai-message-error");
+    article.textContent = message;
+    if (chatFeed) {
+      chatFeed.scrollTop = chatFeed.scrollHeight;
+    }
+  }
+
+  async function readErrorMessage(response) {
+    try {
+      const payload = await response.json();
+      if (payload && typeof payload === "object") {
+        return payload.error || payload.message || "Nao foi possivel obter resposta.";
+      }
+    } catch (parseError) {
+      try {
+        const text = await response.text();
+        if (text.trim()) {
+          return text.trim();
+        }
+      } catch (_) {
+        /* ignore */
+      }
+    }
+    return `Nao foi possivel obter resposta (HTTP ${response.status}).`;
+  }
+
   if (form) {
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -168,20 +237,8 @@
         chatPlaceholder.classList.add("hidden");
       }
 
-      const userMessage = document.createElement("article");
-      userMessage.className = "ai-message ai-message-user";
-      userMessage.textContent = question;
-      if (chatFeed) {
-        chatFeed.appendChild(userMessage);
-      }
-
-      if (answerBox) {
-        answerBox.classList.remove("hidden");
-        answerBox.textContent = "Gerando resposta...";
-        if (chatFeed && answerBox.parentElement !== chatFeed) {
-          chatFeed.appendChild(answerBox);
-        }
-      }
+      appendMessage("user", question);
+      const pendingAnswer = appendMessage("assistant", "Gerando resposta...");
 
       try {
         const response = await fetch("{{ assist_url }}", {
@@ -193,43 +250,19 @@
         });
 
         if (!response.ok) {
-          const payload = await response.json();
-          if (answerBox) {
-            answerBox.textContent = payload.error || "Nao foi possivel obter resposta.";
-          }
+          const message = await readErrorMessage(response);
+          renderAssistantError(pendingAnswer, message);
+          questionField.focus();
           return;
         }
 
         const payload = await response.json();
-        if (answerBox) {
-          answerBox.classList.remove("hidden");
-          answerBox.innerHTML = "";
-
-          const mainContent = document.createElement("p");
-          mainContent.textContent = payload.answer;
-          answerBox.appendChild(mainContent);
-
-          const metadata = payload.metadata || {};
-          if (metadata.status && metadata.status !== "ok") {
-            const note = document.createElement("p");
-            note.className = "ai-message-note";
-            note.textContent = metadata.message || "Resumo interno exibido devido a erro no provedor.";
-
-            if (metadata.detail === "openai-quota-exceeded") {
-              note.textContent += " Verifique o limite de creditos/quota no painel OpenAI.";
-            }
-
-            answerBox.appendChild(note);
-          }
-        }
-        form.reset();
-        if (chatFeed) {
-          chatFeed.scrollTop = chatFeed.scrollHeight;
-        }
+        renderAssistantAnswer(pendingAnswer, payload);
+        questionField.value = "";
+        questionField.focus();
       } catch (error) {
-        if (answerBox) {
-          answerBox.textContent = "Erro inesperado ao consultar o assistente.";
-        }
+        renderAssistantError(pendingAnswer, "Erro inesperado ao consultar o assistente.");
+        questionField.focus();
       }
     });
   }
@@ -448,6 +481,10 @@
   margin-top: 0.6rem;
   font-size: 0.85rem;
   opacity: 0.85;
+}
+.ai-message-error {
+  border: 1px solid rgba(255, 102, 102, 0.4);
+  background: rgba(255, 102, 102, 0.12);
 }
 .ai-message.hidden { display: none; }
 
