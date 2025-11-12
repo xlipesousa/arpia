@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Optional
 
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -13,6 +13,8 @@ from django.views.decorators.http import require_GET, require_POST
 from django.views.generic import TemplateView
 
 from arpia_core.models import Project
+from arpia_log.models import LogEntry
+from arpia_log.services import log_event
 
 from .models import ChatSession, Provider, ProviderCredential
 from .services import (
@@ -27,6 +29,56 @@ from .services.context import build_project_context
 
 
 logger = logging.getLogger(__name__)
+
+
+def _log_ai_event(
+    *,
+    request,
+    component: str,
+    event_type: str,
+    message: str,
+    severity: str = LogEntry.Severity.INFO,
+    project: Optional[Project] = None,
+    provider: Optional[Provider] = None,
+    details: Optional[dict[str, Any]] = None,
+    tags: Optional[list[str]] = None,
+) -> None:
+    context: dict[str, Any] = {}
+    correlation: dict[str, Any] = {}
+    if project is not None:
+        context["project"] = {
+            "id": str(project.pk),
+            "name": project.name,
+            "slug": project.slug,
+        }
+        correlation["project_id"] = str(project.pk)
+    if provider is not None:
+        context["provider"] = {
+            "slug": provider.slug,
+            "name": provider.name,
+        }
+        details = dict(details or {})
+        details.setdefault("provider_slug", provider.slug)
+        details.setdefault("provider_name", provider.name)
+        details_payload = details
+    else:
+        details_payload = dict(details or {})
+    _tags = list(tags or [])
+    if "ai" not in _tags:
+        _tags.append("ai")
+
+    log_event(
+        source_app="arpia_ai",
+        component=component,
+        event_type=event_type,
+        message=message,
+        severity=severity,
+        details=details_payload,
+        context=context,
+        correlation=correlation,
+        tags=_tags,
+        request=request,
+    )
 
 
 class AIHomeView(LoginRequiredMixin, TemplateView):
@@ -52,6 +104,17 @@ class AIHomeView(LoginRequiredMixin, TemplateView):
                 "register_openai_url": reverse("arpia_ai:provider_openai_credential"),
                 "chat_history": self._get_chat_history(selected_project=selected_project),
             }
+        )
+        _log_ai_event(
+            request=self.request,
+            component="ui.home",
+            event_type="ai.home.view",
+            message="Usuário acessou o painel do assistente de IA.",
+            project=selected_project,
+            details={
+                "projects_total": len(projects),
+                "has_context": bool(project_context),
+            },
         )
         return context
 
@@ -101,12 +164,47 @@ def assist_request(request):
     if project_id:
         project = get_object_or_404(Project, pk=project_id)
         if project.owner != request.user and not project.memberships.filter(user=request.user).exists():
+            _log_ai_event(
+                request=request,
+                component="assist",
+                event_type="ai.assist.project.denied",
+                message="Usuário tentou acionar o assistente para projeto sem permissão.",
+                project=project,
+                severity=LogEntry.Severity.WARNING,
+                details={"project_id": project_id},
+            )
             return JsonResponse({"error": "Acesso negado ao projeto selecionado."}, status=403)
+
+    _log_ai_event(
+        request=request,
+        component="assist",
+        event_type="ai.assist.request.received",
+        message="Comando do assistente IA recebido.",
+        project=project,
+        details={
+            "question_length": len(question or ""),
+            "has_project": bool(project),
+        },
+    )
 
     advisor_result: AdvisorResponse = generate_advisor_response(
         user=request.user,
         project=project,
         question=question,
+    )
+
+    _log_ai_event(
+        request=request,
+        component="assist",
+        event_type="ai.assist.response.generated",
+        message="Resposta do assistente IA gerada.",
+        project=project,
+        provider=advisor_result.provider,
+        details={
+            "answer_length": len(advisor_result.answer or ""),
+            "context_keys": sorted((advisor_result.context or {}).keys()),
+            "metadata": advisor_result.metadata,
+        },
     )
 
     if project:
@@ -121,20 +219,52 @@ def assist_request(request):
                 credential=advisor_result.credential,
                 metadata=advisor_result.metadata,
             )
-        except Exception:  # pragma: no cover - falha nao deve interromper resposta
+        except Exception as exc:  # pragma: no cover - falha nao deve interromper resposta
             logger.exception("Falha ao registrar historico do assistente.")
+            _log_ai_event(
+                request=request,
+                component="assist",
+                event_type="ai.assist.history.error",
+                message="Falha ao registrar histórico do assistente.",
+                project=project,
+                provider=advisor_result.provider,
+                severity=LogEntry.Severity.ERROR,
+                details={"error": str(exc)},
+            )
+        else:
+            _log_ai_event(
+                request=request,
+                component="assist",
+                event_type="ai.assist.history.recorded",
+                message="Interação do assistente IA registrada com sucesso.",
+                project=project,
+                provider=advisor_result.provider,
+            )
 
-    return JsonResponse(
-        {
-            "answer": advisor_result.answer,
-            "context": advisor_result.context,
-            "provider": {
-                "slug": advisor_result.provider.slug,
-                "name": advisor_result.provider.name,
-            },
-            "metadata": advisor_result.metadata,
-        }
+    response_payload = {
+        "answer": advisor_result.answer,
+        "context": advisor_result.context,
+        "provider": {
+            "slug": advisor_result.provider.slug,
+            "name": advisor_result.provider.name,
+        },
+        "metadata": advisor_result.metadata,
+    }
+
+    _log_ai_event(
+        request=request,
+        component="assist",
+        event_type="ai.assist.response.sent",
+        message="Resposta do assistente IA entregue ao cliente web.",
+        project=project,
+        provider=advisor_result.provider,
+        details={
+            "answer_length": len(advisor_result.answer or ""),
+            "metadata_keys": sorted((advisor_result.metadata or {}).keys()),
+        },
     )
+
+    return JsonResponse(response_payload)
 
 
 @login_required
@@ -171,6 +301,17 @@ def list_providers(request):
             }
         )
 
+    _log_ai_event(
+        request=request,
+        component="providers",
+        event_type="ai.providers.list",
+        message="Usuário consultou provedores de IA disponíveis.",
+        details={
+            "providers_total": len(entries),
+            "providers_with_credentials": sum(1 for item in entries if item.get("has_credentials")),
+        },
+    )
+
     return JsonResponse({"providers": entries})
 
 
@@ -181,6 +322,14 @@ def register_openai_credential(request):
     label = (request.POST.get("label") or "default").strip() or "default"
 
     if not api_key:
+        _log_ai_event(
+            request=request,
+            component="providers",
+            event_type="ai.provider.openai.invalid",
+            message="Tentativa de registrar credencial OpenAI sem chave informada.",
+            severity=LogEntry.Severity.WARNING,
+            details={"label": label},
+        )
         return JsonResponse({"error": "Informe uma chave de API valida."}, status=400)
 
     provider = ensure_openai_provider()
@@ -209,6 +358,19 @@ def register_openai_credential(request):
         credential.api_key = api_key
         credential.metadata = metadata
         credential.save(update_fields=["api_key", "metadata", "updated_at"])
+
+    _log_ai_event(
+        request=request,
+        component="providers",
+        event_type="ai.provider.openai.registered",
+        message="Credencial OpenAI cadastrada ou atualizada.",
+        provider=provider,
+        details={
+            "label": credential.label,
+            "created": created,
+            "validation": validation,
+        },
+    )
 
     return JsonResponse(
         {

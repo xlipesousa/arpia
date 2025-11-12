@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import copy
 import json
 import os
 import re
@@ -25,9 +26,11 @@ from .forms import ScriptForm, ToolForm, WordlistForm
 from .models import Project, ProjectMembership, Script, Tool, Wordlist
 from .project_logging import (
     log_project_created,
+    log_project_deleted,
     log_project_member_added,
     log_project_member_removed,
     log_project_member_updated,
+    log_project_updated,
 )
 from .script_registry import get_default_by_slug, get_default_catalog
 from .utils import safe_filename
@@ -1281,6 +1284,8 @@ def projects_share(request, pk):
 def projects_delete(request, pk):
     project = _get_accessible_project(request.user, pk, owner_only=True)
     project_name = project.name
+    member_count = project.memberships.count()
+    log_project_deleted(project, request=request, extra={"member_count": member_count})
     project.delete()
     messages.success(request, f"Projeto '{project_name}' excluído com sucesso.")
     return redirect("projects_list")
@@ -1423,6 +1428,21 @@ def projects_edit(request, pk):
         return redirect("projects_list")
 
     errors = {}
+    original_snapshot = {
+        "name": project.name,
+        "description": project.description,
+        "client_name": project.client_name,
+        "start_at": project.start_at,
+        "end_at": project.end_at,
+        "hosts": project.hosts,
+        "protected_hosts": project.protected_hosts,
+        "networks": project.networks,
+        "ports": project.ports,
+        "credentials_json": copy.deepcopy(project.credentials_json or []),
+        "metadata_credentials_display": copy.deepcopy(
+            (project.metadata or {}).get("credentials_display") if isinstance(project.metadata, dict) else None
+        ),
+    }
 
     def summarize_credentials(creds):
         summary = []
@@ -1503,6 +1523,34 @@ def projects_edit(request, pk):
             errors["ports"] = "Entradas de porta inválidas: " + ", ".join(invalid_ports)
 
         if not errors:
+            changes = {}
+            if form["name"] != original_snapshot["name"]:
+                changes["name"] = (original_snapshot["name"], form["name"])
+            if form["description"] != original_snapshot["description"]:
+                changes["description"] = (original_snapshot["description"], form["description"])
+            if form["client"] != original_snapshot["client_name"]:
+                changes["client_name"] = (original_snapshot["client_name"], form["client"])
+            if dt_start != original_snapshot["start_at"]:
+                changes["start_at"] = (original_snapshot["start_at"], dt_start)
+            if dt_end != original_snapshot["end_at"]:
+                changes["end_at"] = (original_snapshot["end_at"], dt_end)
+            if form["hosts"] != original_snapshot["hosts"]:
+                changes["hosts"] = (original_snapshot["hosts"], form["hosts"])
+            if form["protected_hosts"] != original_snapshot["protected_hosts"]:
+                changes["protected_hosts"] = (original_snapshot["protected_hosts"], form["protected_hosts"])
+            if form["networks"] != original_snapshot["networks"]:
+                changes["networks"] = (original_snapshot["networks"], form["networks"])
+            if ports_normalized != (original_snapshot["ports"] or ""):
+                changes["ports"] = (original_snapshot["ports"], ports_normalized)
+            if credentials_payload != original_snapshot["credentials_json"]:
+                changes["credentials_json"] = (original_snapshot["credentials_json"], credentials_payload)
+            new_credentials_display = summarize_credentials(credentials_payload)
+            if new_credentials_display != original_snapshot["metadata_credentials_display"]:
+                changes["metadata.credentials_display"] = (
+                    original_snapshot["metadata_credentials_display"],
+                    new_credentials_display,
+                )
+
             project.name = form["name"]
             project.description = form["description"]
             project.client_name = form["client"]
@@ -1515,9 +1563,11 @@ def projects_edit(request, pk):
             project.credentials_json = credentials_payload
             project.metadata = {
                 **(project.metadata or {}),
-                "credentials_display": summarize_credentials(credentials_payload),
+                "credentials_display": new_credentials_display,
             }
             project.save()
+            if changes:
+                log_project_updated(project, changes=changes, request=request)
             messages.success(request, "Projeto atualizado com sucesso.")
             return redirect("projects_edit", pk=project.pk)
 

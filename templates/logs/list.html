@@ -41,51 +41,55 @@
         aria-hidden="{% if forloop.first %}false{% else %}true{% endif %}"
       >
         <form class="log-filters" data-filter-form="{{ app.slug }}">
-          <div class="field">
-            <label for="severity-{{ app.slug }}">Severidade</label>
-            <select id="severity-{{ app.slug }}" name="severity">
-              <option value="">Todas</option>
-              {% for opt in severity_options %}
-                <option value="{{ opt.value }}">{{ opt.label }}</option>
-              {% endfor %}
-            </select>
+          <div class="filters-row filters-row-top">
+            <div class="field field-severity">
+              <label for="severity-{{ app.slug }}">Severidade</label>
+              <select id="severity-{{ app.slug }}" name="severity">
+                <option value="">Todas</option>
+                {% for opt in severity_options %}
+                  <option value="{{ opt.value }}">{{ opt.label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="field field-event">
+              <label for="event-{{ app.slug }}">Evento</label>
+              <input type="text" id="event-{{ app.slug }}" name="event_type" placeholder="Ex: SCAN_DONE">
+            </div>
+            <div class="field field-component">
+              <label for="component-{{ app.slug }}">Componente</label>
+              <input type="text" id="component-{{ app.slug }}" name="component" placeholder="Ex: scheduler">
+            </div>
+            <div class="field field-project">
+              <label for="project-{{ app.slug }}">Projeto</label>
+              <input type="text" id="project-{{ app.slug }}" name="project" placeholder="Ref. de projeto">
+            </div>
           </div>
-          <div class="field">
-            <label for="event-{{ app.slug }}">Evento</label>
-            <input type="text" id="event-{{ app.slug }}" name="event_type" placeholder="Ex: SCAN_DONE">
+          <div class="filters-row filters-row-bottom">
+            <div class="field field-asset">
+              <label for="asset-{{ app.slug }}">Ativo</label>
+              <input type="text" id="asset-{{ app.slug }}" name="asset" placeholder="Host, IP...">
+            </div>
+            <div class="field field-user">
+              <label for="user-{{ app.slug }}">Usuário</label>
+              <input type="text" id="user-{{ app.slug }}" name="user" placeholder="Usuário relacionado">
+            </div>
+            <div class="field field-channel">
+              <label for="channel-{{ app.slug }}">Canal</label>
+              <select id="channel-{{ app.slug }}" name="channel">
+                <option value="">Todos</option>
+                {% for opt in channel_options %}
+                  <option value="{{ opt.value }}">{{ opt.label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="field field-range">
+              <label>Período</label>
+              <input type="datetime-local" name="since" aria-label="Data inicial">
+              <span>—</span>
+              <input type="datetime-local" name="until" aria-label="Data final">
+            </div>
           </div>
-          <div class="field">
-            <label for="component-{{ app.slug }}">Componente</label>
-            <input type="text" id="component-{{ app.slug }}" name="component" placeholder="Ex: scheduler">
-          </div>
-          <div class="field">
-            <label for="project-{{ app.slug }}">Projeto</label>
-            <input type="text" id="project-{{ app.slug }}" name="project" placeholder="Ref. de projeto">
-          </div>
-          <div class="field">
-            <label for="asset-{{ app.slug }}">Ativo</label>
-            <input type="text" id="asset-{{ app.slug }}" name="asset" placeholder="Host, IP...">
-          </div>
-          <div class="field">
-            <label for="user-{{ app.slug }}">Usuário</label>
-            <input type="text" id="user-{{ app.slug }}" name="user" placeholder="Usuário relacionado">
-          </div>
-          <div class="field">
-            <label for="channel-{{ app.slug }}">Canal</label>
-            <select id="channel-{{ app.slug }}" name="channel">
-              <option value="">Todos</option>
-              {% for opt in channel_options %}
-                <option value="{{ opt.value }}">{{ opt.label }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="field field-range">
-            <label>Período</label>
-            <input type="datetime-local" name="since" aria-label="Data inicial">
-            <span>—</span>
-            <input type="datetime-local" name="until" aria-label="Data final">
-          </div>
-          <div class="field field-actions">
+          <div class="filters-actions field-actions">
             <button type="submit" class="btn btn-primary">Aplicar</button>
             <button type="button" class="btn btn-ghost" data-action="reset" aria-label="Limpar filtros">Limpar</button>
           </div>
@@ -178,14 +182,17 @@
 .logs-tabs .tab-btn.active{background:linear-gradient(90deg,#4fd1c5,var(--accent));color:#021023;box-shadow:0 6px 18px rgba(79,209,197,0.22);}
 .tab-panel{display:none;flex-direction:column;gap:1rem;padding:1.1rem;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.03);}
 .tab-panel.active{display:flex;}
-.log-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;align-items:end;background:rgba(255,255,255,0.018);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:1rem;}
+.log-filters{display:flex;flex-direction:column;gap:1rem;align-items:stretch;background:rgba(255,255,255,0.018);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:1rem;}
+.log-filters .filters-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1rem;align-items:end;padding-bottom:.5rem;}
+.log-filters .filters-row:last-of-type{padding-bottom:0;}
+.log-filters .field{min-width:0;max-width:420px;}
 .log-filters label{display:block;font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:.25rem;}
-.log-filters input,.log-filters select{width:100%;border-radius:8px;border:1px solid rgba(255,255,255,0.08);background:rgba(5,19,30,0.55);color:var(--text);padding:.55rem .75rem;}
+.log-filters input,.log-filters select{width:100%;min-width:0;border-radius:8px;border:1px solid rgba(255,255,255,0.08);background:rgba(5,19,30,0.55);color:var(--text);padding:.55rem .75rem;}
 .log-filters input:focus,.log-filters select:focus{outline:2px solid rgba(79,209,197,0.3);outline-offset:0;}
-.log-filters .field-range{display:flex;align-items:center;gap:.4rem;}
-.log-filters .field-range input{flex:1;}
+.log-filters .field-range{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;}
+.log-filters .field-range input{flex:1 1 140px;min-width:0;}
 .log-filters .field-range span{color:var(--muted);}
-.log-filters .field-actions{display:flex;gap:.6rem;justify-content:flex-end;}
+.log-filters .filters-actions{display:flex;gap:.6rem;justify-content:flex-end;flex-wrap:wrap;padding-top:.5rem;}
 .table-wrapper{overflow:auto;border-radius:12px;border:1px solid rgba(255,255,255,0.03);background:rgba(4,18,32,0.65);}
 .logs-table{width:100%;border-collapse:collapse;min-width:960px;}
 .logs-table th,.logs-table td{padding:.65rem .85rem;text-align:left;border-bottom:1px solid rgba(255,255,255,0.05);color:var(--muted);vertical-align:top;}
@@ -222,10 +229,17 @@
 .log-toast{position:fixed;bottom:1.5rem;right:1.5rem;padding:.8rem 1.1rem;border-radius:10px;background:rgba(5,19,30,0.88);border:1px solid rgba(79,209,197,0.3);color:var(--text);font-weight:600;box-shadow:0 10px 24px rgba(5,19,30,0.4);}
 .log-toast[data-type="error"]{border-color:rgba(255,107,107,0.35);color:#ff9a9a;}
 .log-toast[data-type="warn"]{border-color:rgba(255,196,101,0.35);color:#ffd899;}
-@media (max-width:1080px){
-  .log-filters{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));}
+@media (max-width:1280px){
+  .log-filters .filters-row{grid-template-columns:repeat(3,minmax(0,1fr));}
+}
+@media (max-width:960px){
+  .log-filters .filters-row{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .log-filters .filters-actions{justify-content:flex-start;}
   .logs-table{min-width:100%;}
   .tab-panel{padding:1rem;}
+}
+@media (max-width:640px){
+  .log-filters .filters-row{grid-template-columns:minmax(0,1fr);}
 }
 </style>
 

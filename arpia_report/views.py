@@ -3,7 +3,7 @@ import os
 import xml.etree.ElementTree as ET
 from collections import Counter
 from io import BytesIO
-from typing import Any, Iterable
+from typing import Any, Iterable, Optional
 
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -20,6 +20,8 @@ from django.db.models import Q
 from arpia_core.models import Project
 from arpia_core.views import build_project_macros
 from arpia_scan.models import ScanSession, ScanTask
+from arpia_log.models import LogEntry
+from arpia_log.services import log_event
 
 from .services import ReportAggregator, SectionData
 
@@ -27,6 +29,54 @@ from .services import ReportAggregator, SectionData
 SEVERITY_ORDER = ["critical", "high", "medium", "low", "info", "unknown"]
 OPEN_STATUS_KEYS = {"open", "new", "ack", "in_progress"}
 RESOLVED_STATUS_KEYS = {"resolved", "closed", "remediated", "done"}
+
+
+def _log_report_event(
+	*,
+	request,
+	component: str,
+	event_type: str,
+	message: str,
+	project: Optional[Project] = None,
+	session: Optional[ScanSession] = None,
+	severity: str = LogEntry.Severity.INFO,
+	details: Optional[dict[str, Any]] = None,
+	tags: Optional[Iterable[str]] = None,
+) -> None:
+	context: dict[str, Any] = {}
+	if project is not None:
+		context["project"] = {
+			"id": str(project.pk),
+			"name": project.name,
+			"slug": project.slug,
+		}
+	correlation: dict[str, Any] = {}
+	if project is not None:
+		correlation["project_id"] = str(project.pk)
+	if session is not None:
+		context["session"] = {
+			"id": str(session.pk),
+			"reference": session.reference,
+			"status": session.status,
+		}
+		correlation["scan_session_id"] = str(session.pk)
+	details_payload = dict(details or {})
+	tags_payload = list(tags or [])
+	if "report" not in tags_payload:
+		tags_payload.append("report")
+
+	log_event(
+		source_app="arpia_report",
+		component=component,
+		event_type=event_type,
+		message=message,
+		severity=severity,
+		details=details_payload,
+		context=context,
+		correlation=correlation,
+		tags=tags_payload,
+		request=request,
+	)
 
 
 def _truncate_text(text: Any, max_chars: int = 420) -> str:
@@ -615,11 +665,33 @@ class ReportLandingView(LoginRequiredMixin, TemplateView):
 				project=project,
 				session=session,
 			)
+			_log_report_event(
+				request=self.request,
+				component="ui.landing",
+				event_type="report.project.consolidated.view",
+				message="Usuário visualizou o relatório consolidado do projeto.",
+				project=project,
+				session=session,
+				details={
+					"has_session_filter": bool(session),
+					"has_report": bool(consolidated_context.get("has_report")),
+					"scan_findings": len(consolidated_context.get("scan_findings", []) or []),
+					"vuln_findings": len(consolidated_context.get("vuln_findings", []) or []),
+					"hunt_indicators": len(consolidated_context.get("hunt_indicators", []) or []),
+				},
+			)
 			context.update(consolidated_context)
 			return context
 
 		if not project and not session:
 			project_listing = _build_project_reports_listing(self.request.user)
+			_log_report_event(
+				request=self.request,
+				component="ui.landing",
+				event_type="report.landing.list",
+				message="Usuário acessou a listagem de relatórios disponíveis.",
+				details={"projects_available": len(project_listing)},
+			)
 			context.update(
 				{
 					"project_reports_listing": project_listing,
@@ -654,6 +726,20 @@ class ReportLandingView(LoginRequiredMixin, TemplateView):
 		scan_snapshot_json = json.dumps(scan_snapshot, indent=2, ensure_ascii=False) if scan_snapshot else ""
 
 		consolidated_url = reverse("arpia_report:project_consolidated", args=[project.pk]) if project else None
+		_log_report_event(
+			request=self.request,
+			component="ui.landing",
+			event_type="report.session.view" if session else "report.project.view",
+			message="Usuário acessou o painel de relatório consolidado em modo detalhado.",
+			project=project,
+			session=session,
+			details={
+				"sections_total": len(sections or {}),
+				"scan_findings": len(scan_findings or []),
+				"status_chart_points": len(status_chart or []),
+				"report_payload": bool(project_report_payload_json),
+			},
+		)
 
 		context.update(
 			{
@@ -697,6 +783,16 @@ class ReportLandingView(LoginRequiredMixin, TemplateView):
 		)
 
 		if not _user_has_access(self.request.user, session.project):
+			_log_report_event(
+				request=self.request,
+				component="ui.landing",
+				event_type="report.session.access.denied",
+				message="Usuário não possui acesso ao relatório de sessão solicitado.",
+				project=session.project,
+				session=session,
+				severity=LogEntry.Severity.WARNING,
+				details={"requested_session_id": str(session.pk)},
+			)
 			raise Http404("Sessão não encontrada")
 
 		return session
@@ -709,6 +805,15 @@ class ReportLandingView(LoginRequiredMixin, TemplateView):
 			return None
 		project = get_object_or_404(Project, pk=project_id)
 		if not _user_has_access(self.request.user, project):
+			_log_report_event(
+				request=self.request,
+				component="ui.landing",
+				event_type="report.project.access.denied",
+				message="Usuário não possui acesso ao relatório do projeto solicitado.",
+				project=project,
+				severity=LogEntry.Severity.WARNING,
+				details={"requested_project_id": str(project.pk)},
+			)
 			raise Http404("Projeto não encontrado")
 		return project
 
@@ -721,6 +826,16 @@ def api_session_report(request, pk):
 		pk=pk,
 	)
 	if not _user_has_access(request.user, session.project):
+		_log_report_event(
+			request=request,
+			component="api.session",
+			event_type="report.session.api.denied",
+			message="Usuário sem permissão tentou acessar relatório de sessão via API.",
+			project=session.project,
+			session=session,
+			severity=LogEntry.Severity.WARNING,
+			details={"requested_session_id": str(session.pk)},
+		)
 		return JsonResponse({"error": "Usuário não possui acesso a este projeto."}, status=403)
 	report = session.report_snapshot or {}
 	aggregator = ReportAggregator(project=session.project, session=session)
@@ -742,6 +857,18 @@ def api_session_report(request, pk):
 		"sections": sections,
 		"project_report": project_report,
 	}
+	_log_report_event(
+		request=request,
+		component="api.session",
+		event_type="report.session.api.success",
+		message="Relatório de sessão entregue via API.",
+		project=session.project,
+		session=session,
+		details={
+			"sections_total": len(sections or {}),
+			"report_keys": list(sorted(report.keys())) if isinstance(report, dict) else [],
+		},
+	)
 	return JsonResponse(response, json_dumps_params={"ensure_ascii": False, "indent": 2})
 
 
@@ -750,12 +877,32 @@ def api_session_report(request, pk):
 def api_project_report(request, pk):
 	project = get_object_or_404(Project.objects.select_related("owner"), pk=pk)
 	if not _user_has_access(request.user, project):
+		_log_report_event(
+			request=request,
+			component="api.project",
+			event_type="report.project.api.denied",
+			message="Usuário sem permissão tentou acessar relatório de projeto via API.",
+			project=project,
+			severity=LogEntry.Severity.WARNING,
+			details={"requested_project_id": str(project.pk)},
+		)
 		return JsonResponse({"error": "Usuário não possui acesso a este projeto."}, status=403)
 
 	aggregator = ReportAggregator(project=project)
 	sections = _serialize_sections(aggregator.build_sections())
 	project_report = aggregator.build_project_report()
 
+	_log_report_event(
+		request=request,
+		component="api.project",
+		event_type="report.project.api.success",
+		message="Relatório de projeto entregue via API.",
+		project=project,
+		details={
+			"sections_total": len(sections or {}),
+			"has_project_report": bool(project_report),
+		},
+	)
 	return JsonResponse(
 		{
 			"project": {
@@ -1630,11 +1777,28 @@ class ProjectConsolidatedReportView(LoginRequiredMixin, TemplateView):
 			pk=kwargs.get("pk"),
 		)
 		if not _user_has_access(request.user, self.project):
+			_log_report_event(
+				request=request,
+				component="ui.consolidated",
+				event_type="report.project.access.denied",
+				message="Usuário tentou acessar relatório consolidado de projeto sem permissão.",
+				project=self.project,
+				severity=LogEntry.Severity.WARNING,
+				details={"requested_project_id": str(self.project.pk)},
+			)
 			raise Http404("Projeto não encontrado")
 		return super().dispatch(request, *args, **kwargs)
 
 	def get(self, request, *args, **kwargs):  # type: ignore[override]
 		if request.GET.get("format") == "pdf":
+			_log_report_event(
+				request=request,
+				component="ui.consolidated",
+				event_type="report.project.consolidated.pdf.requested",
+				message="Usuário solicitou exportação em PDF do relatório consolidado.",
+				project=self.project,
+				details={"query_params": dict(request.GET.items())},
+			)
 			context = _build_project_consolidated_context(
 				request=request,
 				project=self.project,
@@ -1647,10 +1811,31 @@ class ProjectConsolidatedReportView(LoginRequiredMixin, TemplateView):
 					user=request.user,
 				)
 			except RuntimeError as exc:
+				_log_report_event(
+					request=request,
+					component="ui.consolidated",
+					event_type="report.project.consolidated.pdf.failed",
+					message="Falha ao gerar PDF do relatório consolidado.",
+					project=self.project,
+					severity=LogEntry.Severity.ERROR,
+					details={"error": str(exc)},
+				)
 				return HttpResponse(str(exc), content_type="text/plain", status=503)
 			filename = f"arpia-relatorio-{getattr(self.project, 'slug', None) or self.project.pk}.pdf"
 			response = HttpResponse(pdf_bytes, content_type="application/pdf")
 			response["Content-Disposition"] = f'attachment; filename="{filename}"'
+			_log_report_event(
+				request=request,
+				component="ui.consolidated",
+				event_type="report.project.consolidated.pdf.generated",
+				message="Relatório consolidado exportado em PDF com sucesso.",
+				project=self.project,
+				details={
+					"filename": filename,
+					"pdf_bytes": len(pdf_bytes),
+					"has_report": bool(context.get("has_report")),
+				},
+			)
 			return response
 		return super().get(request, *args, **kwargs)
 
