@@ -6,7 +6,7 @@ from django.utils import timezone
 from arpia_core.models import Project
 from arpia_scan.models import ScanSession
 from .models import ProjectReport, ScanReportEntry
-from .views import ReportLandingView
+from .views import ReportLandingView, _build_project_consolidated_context
 
 
 class ReportModuleTests(TestCase):
@@ -23,6 +23,14 @@ class ReportModuleTests(TestCase):
 		)
 		self.project = Project.objects.create(owner=self.owner, name="Projeto Relatório", slug="projeto-relatorio")
 		self.session = ScanSession.objects.create(project=self.project, owner=self.owner, title="Sessão relatório")
+		self.nmap_xml = (
+			"<?xml version='1.0'?><nmaprun>"
+			"<host><status state='up'/><address addr='10.0.0.5' addrtype='ipv4'/>"
+			"<hostnames><hostname name='srv-app'/></hostnames>"
+			"<ports><port protocol='tcp' portid='80'><state state='open'/></port></ports>"
+			"<os><osmatch name='Linux 5.x' accuracy='90'/></os></host>"
+			"</nmaprun>"
+		)
 		self.snapshot = {
 			"version": 1,
 			"timing": {
@@ -108,6 +116,18 @@ class ReportModuleTests(TestCase):
 			],
 			"summary": {
 				"message": "Scan parcial devido à falha na etapa Nmap.",
+				"artifacts": {
+					"nmap": self.nmap_xml,
+				},
+				"connectivity": [
+					{
+						"host": "10.0.0.5",
+						"reachable": True,
+						"ports": [
+							{"port": 80, "status": "open"},
+						],
+					},
+				],
 			},
 		}
 		self.session.report_snapshot = self.snapshot
@@ -221,3 +241,22 @@ class ReportModuleTests(TestCase):
 		payload = response.json()
 		self.assertEqual(payload["session"]["id"], str(self.session.pk))
 		self.assertEqual(payload["report"]["stats"]["total_tasks"], 3)
+
+	def test_consolidated_context_exposes_operating_system_from_nmap(self):
+		request = self.factory.get(
+			reverse("arpia_report:project_consolidated", args=[self.project.pk])
+		)
+		request.user = self.owner
+		context = _build_project_consolidated_context(
+			request=request,
+			project=self.project,
+			session=self.session,
+		)
+		host_entries = context.get("scan_host_entries") or []
+		self.assertTrue(host_entries)
+		self.assertEqual(host_entries[0].get("operating_system"), "Linux 5.x")
+		os_summary = context.get("scan_operating_systems") or []
+		self.assertTrue(os_summary)
+		self.assertEqual(os_summary[0]["label"], "Linux 5.x")
+		self.assertIn("10.0.0.5", os_summary[0]["hosts"])
+		self.assertIsNotNone(context.get("scan_item"))

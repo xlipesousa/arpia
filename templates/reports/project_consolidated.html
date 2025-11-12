@@ -298,6 +298,22 @@
           <div><span class="metric-value">{{ scan_stats.total_findings|default:0 }}</span><span class="metric-label">Achados</span></div>
         </div>
         {% endif %}
+        {% if scan_operating_systems %}
+        <div class="os-overview">
+          <h4>Sistemas operacionais detectados</h4>
+          <ul class="token-list">
+            {% for item in scan_operating_systems|slice:":6" %}
+              <li>
+                <strong>{{ item.label }}</strong>
+                {% if item.count %}<span class="muted"> — {{ item.count }} host(s)</span>{% endif %}
+                {% if item.hosts %}
+                  <span class="muted"> · {{ item.hosts|slice:":3"|join:", " }}{% if item.hosts|length > 3 %} e +{{ item.hosts|length|add:"-3" }}{% endif %}</span>
+                {% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
         {% if scan_highlights %}
         <ul class="highlight-list">
           {% for highlight in scan_highlights|slice:":4" %}
@@ -327,6 +343,7 @@
               <th>Host</th>
               <th>Alcançável</th>
               <th>Portas abertas</th>
+              <th>Sistema Operacional</th>
               <th>Observações</th>
             </tr>
           </thead>
@@ -336,6 +353,7 @@
               <td>{{ host.host|default:"—" }}</td>
               <td>{% if host.reachable %}<span class="status-pill status-active">Sim</span>{% else %}<span class="status-pill status-archived">Não</span>{% endif %}</td>
               <td>{% if host.open_ports %}{{ host.open_ports|join:", " }}{% else %}<span class="muted">—</span>{% endif %}</td>
+              <td>{% if host.operating_system %}{{ host.operating_system }}{% else %}<span class="muted">—</span>{% endif %}</td>
               <td>{{ host.notes|default:"" }}</td>
             </tr>
             {% endfor %}

@@ -1,4 +1,5 @@
 import json
+import tempfile
 from datetime import timedelta
 from pathlib import Path
 from unittest import mock
@@ -375,6 +376,64 @@ class ScanScriptTaskTests(TestCase):
         self.assertTrue(output_logs.exists())
 
 
+class ScanScriptArtifactTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="runner",
+            email="runner@example.com",
+            password="pass1234",
+        )
+        self.project = Project.objects.create(owner=self.user, name="Projeto Script", slug="projeto-script")
+        self.session = ScanSession.objects.create(
+            project=self.project,
+            owner=self.user,
+            title="Sessão script",
+            macros_snapshot={"PROJECT_NAME": self.project.name},
+        )
+        self.task = ScanTask.objects.create(
+            session=self.session,
+            order=2,
+            kind=ScanTask.Kind.SCRIPT,
+            name="Nmap full",
+        )
+        self.script, _ = Script.objects.get_or_create(
+            owner=None,
+            slug="nmap-full-tcp",
+            defaults={
+                "name": "Nmap — Full TCP",
+                "description": "Varredura completa TCP",
+                "filename": "nmap_full_tcp.sh",
+                "content": "#!/bin/sh\necho placeholder",
+                "kind": Script.Kind.DEFAULT,
+                "tags": ["nmap"],
+                "required_tool_slug": "nmap",
+            },
+        )
+
+    def test_ingests_nmap_output_into_summary(self):
+        orchestrator = ScanOrchestrator(self.session)
+        summary_data: dict = {}
+        with tempfile.TemporaryDirectory() as tmpdir:
+            xml_path = Path(tmpdir) / "nmap_full_tcp_10.0.0.5.xml"
+            xml_path.write_text(
+                """<?xml version='1.0'?><nmaprun><host><status state='up'/><address addr='10.0.0.5' addrtype='ipv4'/><ports><port protocol='tcp' portid='22'><state state='open'/><service name='ssh' product='OpenSSH' version='8.4'/></port></ports><os><osmatch name='Linux 5.x' accuracy='90'/></os></host></nmaprun>""",
+                encoding="utf-8",
+            )
+            self.task.started_at = timezone.now() - timedelta(seconds=1)
+            self.task.save(update_fields=["started_at"])
+            stdout = f"[INFO] Resultados em {tmpdir}"
+            orchestrator._ingest_script_artifacts(
+                task=self.task,
+                script=self.script,
+                stdout=stdout,
+                summary_data=summary_data,
+            )
+
+        artifact = summary_data.get("artifacts", {}).get("nmap")
+        self.assertIsNotNone(artifact)
+        self.assertIn("Linux 5.x", artifact)
+
+
 class ScanObservationPersistenceTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(
@@ -519,6 +578,7 @@ class ScanApiTests(TestCase):
 
         session = ScanSession.objects.get(pk=payload["id"])
         self.assertEqual(session.owner, self.owner)
+
         self.assertIn("notes", session.config_snapshot)
 
     def test_non_owner_cannot_create_session(self):

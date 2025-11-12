@@ -7,6 +7,7 @@ import selectors
 import subprocess
 import tempfile
 import time
+import xml.etree.ElementTree as ET
 from contextlib import closing, suppress
 from dataclasses import dataclass
 from pathlib import Path
@@ -961,7 +962,76 @@ class ScanOrchestrator:
             }
         )
 
+        self._ingest_script_artifacts(
+            task=task,
+            script=script,
+            stdout=result_stdout,
+            summary_data=summary_data,
+        )
+
         return lines
+
+    def _ingest_script_artifacts(
+        self,
+        *,
+        task: ScanTask,
+        script: Script,
+        stdout: str,
+        summary_data: dict,
+    ) -> None:
+        if not script:
+            return
+        slug = getattr(script, "slug", "") or ""
+        if slug != "nmap-full-tcp":
+            return
+
+        output_dir = self._resolve_script_output_dir(stdout)
+        if not output_dir:
+            return
+
+        artifact = self._collect_nmap_artifact(output_dir=output_dir, task=task)
+        if artifact:
+            summary_data.setdefault("artifacts", {})["nmap"] = artifact
+
+    def _resolve_script_output_dir(self, stdout: str) -> Path | None:
+        marker = "Resultados em "
+        for line in reversed(stdout.splitlines()):
+            if marker in line:
+                candidate = line.split(marker, 1)[1].strip()
+                if candidate:
+                    path = Path(candidate).expanduser()
+                    if not path.is_absolute():
+                        path = Path.cwd() / path
+                    return path
+        project_name = getattr(self.session.project, "name", "") or "scan"
+        fallback = Path.cwd() / "recon" / project_name.replace(" ", "_")
+        return fallback
+
+    def _collect_nmap_artifact(self, *, output_dir: Path, task: ScanTask) -> str | None:
+        if not output_dir.exists():
+            return None
+
+        fragments: list[str] = []
+        cutoff = task.started_at
+        for xml_file in sorted(output_dir.glob("nmap_full_tcp_*.xml")):
+            try:
+                if cutoff and xml_file.stat().st_mtime < cutoff.timestamp():
+                    continue
+            except OSError:
+                continue
+            try:
+                tree = ET.parse(xml_file)
+            except (ET.ParseError, OSError):
+                continue
+            root = tree.getroot()
+            for host_node in root.findall("host"):
+                fragments.append(ET.tostring(host_node, encoding="unicode"))
+
+        if not fragments:
+            return None
+
+        joined_hosts = "\n".join(fragments)
+        return "<?xml version=\"1.0\"?>\n<nmaprun>\n" + joined_hosts + "\n</nmaprun>"
 
     def _simulate_rustscan(self, task: ScanTask, summary_data: dict) -> List[str]:
         lines = ["[STEP] Rustscan discovery (simulado)"]

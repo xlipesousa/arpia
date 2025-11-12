@@ -19,7 +19,40 @@ if [[ -z "${HOSTS//[[:space:]]/}" ]]; then
   exit 1
 fi
 
+sanitize_port_spec(){
+  local raw="$1"
+  local tokens=()
+  local token
+  local cleaned="${raw//[\n\r\t;]/,}"
+  IFS=',' read -r -a tokens <<<"$cleaned"
+  local result=()
+  for token in "${tokens[@]}"; do
+    token="${token// /}"
+    [[ -z "$token" ]] && continue
+    local proto=""
+    local port="$token"
+    if [[ "$token" == */* ]]; then
+      proto="${token##*/}"
+      port="${token%%/*}"
+    fi
+    if [[ ! "$port" =~ ^[0-9]+(-[0-9]+)?$ ]]; then
+      continue
+    fi
+    proto="${proto,,}"
+    if [[ "$proto" == "udp" || "$proto" == "u" ]]; then
+      continue
+    fi
+    result+=("${port}")
+  done
+  local joined="${result[*]}"
+  echo "${joined// /,}"
+}
+
 PORT_SPEC="${PORT_SPEC:-{{TARGET_PORTS}}}"
+PORT_SPEC="$(sanitize_port_spec "$PORT_SPEC")"
+if [[ -z "$PORT_SPEC" ]]; then
+  PORT_SPEC="1-65535"
+fi
 OUTPUT_DIR="${OUTPUT_DIR:-./recon/${PROJECT_NAME// /_}}"
 mkdir -p "$OUTPUT_DIR"
 

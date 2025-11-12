@@ -1,5 +1,6 @@
 import json
 import os
+import xml.etree.ElementTree as ET
 from collections import Counter
 from io import BytesIO
 from typing import Any, Iterable
@@ -70,6 +71,69 @@ def _coerce_string(value: Any, empty_placeholder: str = "—") -> str:
 		return ", ".join(items) if items else empty_placeholder
 	text = str(value).strip()
 	return text or empty_placeholder
+
+
+def _extract_nmap_os_map(artifacts: Any) -> dict[str, str]:
+	if not isinstance(artifacts, dict):
+		return {}
+	xml_blob = artifacts.get("nmap")
+	if isinstance(xml_blob, dict):
+		xml_blob = xml_blob.get("content") or xml_blob.get("data") or xml_blob.get("value")
+	if isinstance(xml_blob, bytes):
+		xml_blob = xml_blob.decode("utf-8", errors="ignore")
+	if not isinstance(xml_blob, str):
+		xml_blob = str(xml_blob) if xml_blob is not None else ""
+	xml_blob = xml_blob.strip()
+	if not xml_blob:
+		return {}
+	try:
+		root = ET.fromstring(xml_blob)
+	except ET.ParseError:
+		return {}
+	host_map: dict[str, str] = {}
+	for host in root.findall("host"):
+		identifiers: list[str] = []
+		for addr_node in host.findall("address"):
+			addr = (addr_node.get("addr") or "").strip()
+			if addr:
+				identifiers.append(addr)
+		for hostname_node in host.findall("hostnames/hostname"):
+			name = (hostname_node.get("name") or "").strip()
+			if name:
+				identifiers.append(name)
+		if not identifiers:
+			continue
+		best_label: str | None = None
+		best_accuracy = -1
+		for osmatch in host.findall("os/osmatch"):
+			name = (osmatch.get("name") or "").strip()
+			try:
+				accuracy = int(osmatch.get("accuracy") or 0)
+			except (TypeError, ValueError):
+				accuracy = 0
+			if name and accuracy >= best_accuracy:
+				best_label = name
+				best_accuracy = accuracy
+		if not best_label:
+			for osclass in host.findall("os/osclass"):
+				family = (osclass.get("osfamily") or osclass.get("type") or "").strip()
+				generation = (osclass.get("osgen") or "").strip()
+				if family:
+					label = f"{family} {generation}".strip()
+					if label:
+						best_label = label
+						break
+		if not best_label:
+			continue
+		for identifier in identifiers:
+			if not identifier:
+				continue
+			if identifier not in host_map:
+				host_map[identifier] = best_label
+			lower_id = identifier.lower()
+			if lower_id not in host_map:
+				host_map[lower_id] = best_label
+	return host_map
 
 
 def _wrap_text(text: str, font: str, size: int, max_width: float) -> list[str]:
@@ -279,10 +343,13 @@ class _PdfCanvasWriter:
 
 
 def _summarize_scan_payload(scan_summary: dict, scan_services: dict, scan_hosts: list[str]) -> tuple[list[dict], list[dict], int]:
-	artifacts = []
+	artifacts: Any = {}
 	if isinstance(scan_summary, dict):
 		artifacts = scan_summary.get("artifacts", {}) or {}
+	if not isinstance(artifacts, dict):
+		artifacts = {}
 	connectivity_entries = artifacts.get("connectivity") if isinstance(artifacts, dict) else []
+	nmap_os_map = _extract_nmap_os_map(artifacts)
 	if not connectivity_entries and isinstance(scan_summary, dict):
 		connectivity_entries = scan_summary.get("connectivity", [])
 	host_entries: list[dict] = []
@@ -296,15 +363,28 @@ def _summarize_scan_payload(scan_summary: dict, scan_services: dict, scan_hosts:
 		open_ports = [port.get("port") for port in ports if isinstance(port, dict) and port.get("status") == "open"]
 		closed_ports = [port.get("port") for port in ports if isinstance(port, dict) and port.get("status") != "open"]
 		total_open_ports += len(open_ports)
+		os_guess = ""
+		if host:
+			os_guess = nmap_os_map.get(host) or nmap_os_map.get(host.lower(), "")
+		if not os_guess and ports:
+			first_port = ports[0]
+			if isinstance(first_port, dict):
+				addr = (first_port.get("host") or first_port.get("ip") or "").strip()
+				if addr:
+					os_guess = nmap_os_map.get(addr) or nmap_os_map.get(addr.lower(), "")
+		resolved_host = host or (
+			scan_hosts[0] if not host and scan_hosts else ""
+		)
+		if not os_guess and resolved_host:
+			os_guess = nmap_os_map.get(resolved_host) or nmap_os_map.get(resolved_host.lower(), "")
 		host_entries.append(
 			{
-				"host": host or (
-					scan_hosts[0] if not host and scan_hosts else ""
-				),
+				"host": resolved_host,
 				"reachable": reachable,
 				"open_ports": open_ports,
 				"closed_ports": closed_ports,
 				"notes": entry.get("notes") or entry.get("error") or "",
+				"operating_system": os_guess or "",
 			}
 		)
 	host_entries.sort(key=lambda item: (not item.get("reachable", False), -(len(item.get("open_ports", []))), item.get("host") or ""))
@@ -971,6 +1051,23 @@ def _build_project_consolidated_context(*, request, project: Project, session: S
 	status_chart = _build_status_chart(scan_stats)
 	scan_observations = scan_summary.get("observations") if isinstance(scan_summary, dict) else {}
 	processed_scan_hosts, processed_scan_services, total_open_ports = _summarize_scan_payload(scan_summary, scan_services, scan_hosts)
+	operating_system_map: dict[str, dict[str, Any]] = {}
+	for host_entry in processed_scan_hosts:
+		os_label = (host_entry.get("operating_system") or "").strip()
+		host_identifier = (host_entry.get("host") or "").strip() or "—"
+		if not os_label:
+			continue
+		record = operating_system_map.setdefault(
+			os_label,
+			{"label": os_label, "count": 0, "hosts": []},
+		)
+		record["count"] += 1
+		if host_identifier not in record["hosts"]:
+			record["hosts"].append(host_identifier)
+	scan_operating_systems = sorted(
+		operating_system_map.values(),
+		key=lambda item: (-item.get("count", 0), item.get("label", "")),
+	)
 	scan_display_findings = _prepare_scan_findings(scan_findings)
 
 	vuln_section = sections.get("vuln")
@@ -1039,6 +1136,7 @@ def _build_project_consolidated_context(*, request, project: Project, session: S
 		"sections": sections,
 		"scan_section": scan_section,
 		"scan_entry": scan_item,
+		"scan_item": scan_item,
 		"scan_snapshot": scan_payload,
 		"scan_payload": scan_payload,
 		"scan_metadata": scan_metadata,
@@ -1056,6 +1154,7 @@ def _build_project_consolidated_context(*, request, project: Project, session: S
 		"scan_attachments": scan_attachments,
 		"scan_snapshot_json": scan_snapshot_json,
 		"scan_host_entries": processed_scan_hosts,
+		"scan_operating_systems": scan_operating_systems,
 		"scan_service_entries": processed_scan_services,
 		"scan_display_findings": scan_display_findings,
 		"report_json": scan_payload,
@@ -1356,6 +1455,22 @@ def _build_project_consolidated_pdf(*, project: Project, context: dict[str, Any]
 				stats_lines.append(f"{label}: {scan_stats.get(key)}")
 		if stats_lines:
 			writer.draw_bullet_list(stats_lines)
+	scan_operating_systems = context.get("scan_operating_systems") or []
+	if scan_operating_systems:
+		writer.draw_paragraph("Sistemas operacionais detectados:")
+		os_lines: list[str] = []
+		for entry in scan_operating_systems[:8]:
+			label = entry.get("label") or "—"
+			count = entry.get("count", 0)
+			hosts = entry.get("hosts") or []
+			hosts_preview = ", ".join(str(host) for host in hosts[:5]) if hosts else ""
+			line = f"{label} · {count} host(s)"
+			if hosts_preview:
+				line += f" · Hosts: {hosts_preview}"
+			if len(hosts) > 5:
+				line += f" (+{len(hosts) - 5} outros)"
+			os_lines.append(line)
+		writer.draw_bullet_list(os_lines)
 	if scan_highlights:
 		writer.draw_paragraph("Observações do scan:")
 		highlights_lines: list[str] = []
@@ -1375,8 +1490,11 @@ def _build_project_consolidated_pdf(*, project: Project, context: dict[str, Any]
 			reachable = "Sim" if host.get("reachable") else "Não"
 			open_ports = host.get("open_ports") or []
 			notes = host.get("notes") or ""
+			operating_system = host.get("operating_system") or "—"
 			open_repr = ", ".join(str(port) for port in open_ports) if open_ports else "Nenhuma"
 			line = f"{host_id} · Alcançável: {reachable} · Portas abertas: {open_repr}"
+			if operating_system and operating_system != "—":
+				line += f" · SO: {operating_system}"
 			if notes:
 				line += f" · Observações: {notes}"
 			host_lines.append(line)
